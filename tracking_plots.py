@@ -14,14 +14,16 @@ import matplotlib.pyplot as plt
 # define the outcome keyword to search for
 outcome_keyword = 'all'
 # define the condition keyword to search for
-condition_keyword = 'dark'
+condition_keyword = ''
 condition_list = ['dark', 'vr']
 # load the data
-base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
+# base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
+base_path = r'E:\Prey_capture\Pre_processed'
 file_path = [join(base_path, f) for f in listdir(base_path) if isfile(join(base_path, f[:-4]+'.csv'))]
 
 # define the figure save path
-figure_save = r'C:\Users\drguggiana\Dropbox\Bonhoeffer_things\Presentations\Figures'
+# figure_save = r'C:\Users\drguggiana\Dropbox\Bonhoeffer_things\Presentations\Figures'
+figure_save = r'C:\Users\Drago\Dropbox\Bonhoeffer_things\Presentations\Figures'
 
 # filter the results by outcome
 if outcome_keyword != 'all':
@@ -62,6 +64,7 @@ for animal in animal_data:
     cricket_acceleration = np.diff(cricket_speed)
 
     mouse_speed = np.linalg.norm(np.diff(animal[:, [0, 1]], axis=0), axis=1) * m_px / webcam_perFrame
+    mouse_speed[mouse_speed > 1.5] = 0
     mouse_acceleration = np.diff(mouse_speed)
 
     kinematic_list.append(np.vstack((mouse_speed, np.hstack((0, mouse_acceleration)),
@@ -102,7 +105,7 @@ ax = fig.add_subplot(111)
 # for all the animals
 for animal in kinematic_list:
     ax.plot(animal[:, -1], animal[:, 0])
-ax.legend(range(len(animal_data)))
+# ax.legend(range(len(animal_data)))
 plt.title('Mouse speed [m/s]')
 fig.savefig(join(figure_save, 'mouseSpeedTraces_'+outcome_keyword+'_'+condition_keyword+'.png'), bbox_inches='tight')
 
@@ -148,13 +151,26 @@ plt.xlabel('Cricket acceleration [m/s^2]')
 # plt.subplots_adjust(hspace=0.4)
 fig.savefig(join(figure_save, 'cricketKinematicHistograms_'+outcome_keyword+'_'+condition_keyword+'.png'), bbox_inches='tight')
 
-
-# TODO: plot performance
-# TODO: plot time to capture
-# TODO: plot latency to initiation
+# # plot heading angles between mouse and cricket
+# # allocate memory to store the headings
+# heading_list = []
+#
+# # for all the animals
+# for animal in animal_data:
+#     # get the mouse heading
+#     mouse_heading = np.deg2rad(animal[:, 5]) - np.pi
+#
+#     # calculate the angle between the cricket position and the mouse
+#     # reference the (x,z) position of the cricket to the position of the mouse
+#     corrected_cricket = animal[:, [7, 9]] - animal[:, [1, 3]]
+#     # calculate the angle of the cricket with respect to the absolute coordinate system, and subtract the mouse heading
+#     cricket_angle = np.arctan2(corrected_cricket[:, 1], corrected_cricket[:, 0])
+#
+#     # relative heading
+#     relative_heading = cricket_angle-mouse_heading
 # TODO: plot distance triggered average
-# TODO: remove points before both animals are tracked validly (within bounds)
 # TODO: incorporate motive traces for the VR cricket
+# TODO: remove arbitrary threshold in mouse speed
 
 plt.show()
 print('yay')
