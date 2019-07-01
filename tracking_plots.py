@@ -17,13 +17,13 @@ outcome_keyword = 'all'
 condition_keyword = ''
 condition_list = ['dark', 'vr']
 # load the data
-# base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
-base_path = r'E:\Prey_capture\Pre_processed'
+base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
+# base_path = r'E:\Prey_capture\Pre_processed'
 file_path = [join(base_path, f) for f in listdir(base_path) if isfile(join(base_path, f[:-4]+'.csv'))]
 
 # define the figure save path
-# figure_save = r'C:\Users\drguggiana\Dropbox\Bonhoeffer_things\Presentations\Figures'
-figure_save = r'C:\Users\Drago\Dropbox\Bonhoeffer_things\Presentations\Figures'
+figure_save = r'C:\Users\drguggiana\Dropbox\Bonhoeffer_things\Presentations\Figures'
+# figure_save = r'C:\Users\Drago\Dropbox\Bonhoeffer_things\Presentations\Figures'
 
 # filter the results by outcome
 if outcome_keyword != 'all':

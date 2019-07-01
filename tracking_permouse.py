@@ -5,22 +5,23 @@ from os.path import isfile, join, basename
 import matplotlib.pyplot as plt
 from datetime import datetime
 from scipy.ndimage.measurements import label
+from sklearn.preprocessing import minmax_scale
 import matplotlib.colors as colors
 
 
 # define the outcome keyword to search for
 outcome_keyword = 'all'
 # define the condition keyword to search for
-condition_keyword = 'dark'
+condition_keyword = ''
 condition_list = ['dark', 'vr']
 # load the data
-# base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
-base_path = r'E:\Prey_capture\Pre_processed'
+base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
+# base_path = r'E:\Prey_capture\Pre_processed'
 file_path = [join(base_path, f) for f in listdir(base_path) if isfile(join(base_path, f[:-4]+'.csv'))]
 # file_path = [r'E:\Prey_capture\Pre_processed\05_24_2019_16_34_35_DG_190417_c_succ_preproc.csv']
 # define the figure save path
-# figure_save = r'C:\Users\drguggiana\Dropbox\Bonhoeffer_things\Presentations\Figures'
-figure_save = r'C:\Users\Drago\Dropbox\Bonhoeffer_things\Presentations\Figures'
+figure_save = r'C:\Users\drguggiana\Dropbox\Bonhoeffer_things\Presentations\Figures'
+# figure_save = r'C:\Users\Drago\Dropbox\Bonhoeffer_things\Presentations\Figures'
 
 
 def density_map(occ_array, bin_num, bin_ranges):
@@ -127,7 +128,7 @@ for animal in performance_list:
 plt.xticks(date_label, date_label, rotation=45)
 plt.ylabel('Performance [a.u.]')
 plt.xlabel('Days')
-fig.savefig(join(figure_save, 'performanceMouse_'+condition_keyword+'.png'), bbox_inches='tight')
+fig.savefig(join(figure_save, 'performanceMouse_'+outcome_keyword+'_'+condition_keyword+'.png'), bbox_inches='tight')
 
 # calculate latency to attack and time to capture
 # define the length constant (measured approximately from the data)
@@ -322,6 +323,9 @@ plt.yticks(range(bin_number), np.round(biny, 2))
 
 plt.xlabel('Distance to prey [m]')
 plt.ylabel('Mouse speed [m/s]')
+plt.tight_layout()
+fig.savefig(join(figure_save, 'density_'+outcome_keyword+'_'+condition_keyword+'.png'), bbox_inches='tight')
+
 
 # isolate attacks by distance
 # define the number of positions to capture per encounter (split evenly)
@@ -344,20 +348,40 @@ for animal in speed_distance_list:
         # for all the trials
         for trials in dates[1]:
             # identify the regions with encounters
-            [encounter_idx, encounter_number] = label(trials[:, 0] < encounter_distance)
+            [encounter_idx, encounter_number] = label(trials[:, 0] < 0.02)
             # for all the encounters
-            for encounters in range(encounter_number):
+            for encounters in range(1, encounter_number):
                 # get the first coordinate of the encounter and grab the surroundings
                 encounter_start = np.nonzero(encounter_idx == encounters)[0][0]
                 # get the vector of actual indexes
                 encounter_indexes = np.linspace(encounter_start-encounter_positions/2,
-                                                encounter_start+encounter_positions/2 - 1, encounter_positions)
+                                                encounter_start+encounter_positions/2 - 1, encounter_positions, dtype=int)
+                if np.max(encounter_indexes) >= trials.shape[0]:
+                    continue
                 # store the distance and the speed around the encounter
                 encounter_pertrial.append(np.array([trials[encounter_indexes, :]]))
             # map_permouse, binx, biny = density_map(trials, bin_number, extrema_list)
             # map_list.append(map_permouse)
         encounter_perdate.append(np.vstack(encounter_pertrial))
     encounter_matrix.append(encounter_perdate)
+
+# plot the averages
+
+fig = plt.figure()
+distance_plot = fig.add_subplot(211)
+speed_plot = fig.add_subplot(212)
+plot_list = [distance_plot, speed_plot]
+# for all the animals
+for animal in encounter_matrix:
+    # for all the dates
+    for date in animal:
+        # for both plot types
+        for idx, plots in enumerate(plot_list):
+            # for all the encounters
+            # for encounter in range(date.shape[0]):
+            #     plots.plot(date[encounter, :, idx])
+            plots.plot(np.nanmean(minmax_scale(date[:, :, idx]), axis=0))
+
 
 # TODO: remove arbitrary mouse speed threshold (i.e. fix preprocessing)
 

@@ -29,8 +29,8 @@ root.call('wm', 'attributes', '.', '-topmost', True)
 
 
 # define the save path
-# save_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
-save_path = r'D:\Prey_capture\Pre_processed'
+save_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
+# save_path = r'D:\Prey_capture\Pre_processed'
 # define the base loading path
 base_path_bonsai = r'J:\Drago Guggiana Nilo\Prey_capture\Bonsai'
 # select the files to process
