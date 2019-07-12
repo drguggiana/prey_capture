@@ -262,11 +262,11 @@ for animal in unique_animals:
             if not list(trial):
                 # trial_perdate[idx, :] = np.array([np.nan, np.nan, np.nan])
                 continue
-            webcam_perFrame = np.diff(trial[:, 4])
+            webcam_perFrame = np.diff(trial[:, 4])[1:]
             # calculate the distance vector
-            distance_vector = np.array([np.linalg.norm(el[[0, 1]] - el[[2, 3]]) for el in trial])[1:] * m_px
+            distance_vector = np.array([np.linalg.norm(el[[0, 1]] - el[[2, 3]]) for el in trial])[2:] * m_px
             # calculate the mouse speed
-            mouse_speed_vector = np.linalg.norm(np.diff(trial[:, [0, 1]], axis=0), axis=1) * m_px / webcam_perFrame
+            mouse_speed_vector = np.linalg.norm(np.diff(trial[:, [0, 1]], axis=0, n=2), axis=1) * m_px / webcam_perFrame
             mouse_speed_vector[mouse_speed_vector > 1.5] = np.nan
             # store the two
             trial_perdate.append(np.vstack((distance_vector, mouse_speed_vector)).T)
@@ -355,7 +355,8 @@ for animal in speed_distance_list:
                 encounter_start = np.nonzero(encounter_idx == encounters)[0][0]
                 # get the vector of actual indexes
                 encounter_indexes = np.linspace(encounter_start-encounter_positions/2,
-                                                encounter_start+encounter_positions/2 - 1, encounter_positions, dtype=int)
+                                                encounter_start+encounter_positions/2 - 1,
+                                                encounter_positions, dtype=int)
                 if np.max(encounter_indexes) >= trials.shape[0]:
                     continue
                 # store the distance and the speed around the encounter
