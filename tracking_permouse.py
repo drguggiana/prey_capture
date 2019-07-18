@@ -5,6 +5,7 @@ from os.path import isfile, join, basename
 import matplotlib.pyplot as plt
 from datetime import datetime
 from scipy.ndimage.measurements import label
+from scipy.stats import sem
 from sklearn.preprocessing import minmax_scale
 import matplotlib.colors as colors
 
@@ -322,14 +323,14 @@ plt.xticks(range(bin_number), np.round(binx, 2), rotation=45)
 plt.yticks(range(bin_number), np.round(biny, 2))
 
 plt.xlabel('Distance to prey [m]')
-plt.ylabel('Mouse speed [m/s]')
+plt.ylabel('Mouse acceleration [m/s2]')
 plt.tight_layout()
 fig.savefig(join(figure_save, 'density_'+outcome_keyword+'_'+condition_keyword+'.png'), bbox_inches='tight')
 
 
 # isolate attacks by distance
 # define the number of positions to capture per encounter (split evenly)
-encounter_positions = 10
+encounter_positions = 50
 # allocate memory for the encounters
 encounter_matrix = []
 # for all the animals
@@ -372,18 +373,39 @@ fig = plt.figure()
 distance_plot = fig.add_subplot(211)
 speed_plot = fig.add_subplot(212)
 plot_list = [distance_plot, speed_plot]
-# for all the animals
-for animal in encounter_matrix:
-    # for all the dates
-    for date in animal:
-        # for both plot types
-        for idx, plots in enumerate(plot_list):
+title_list = ['Distance to prey [m]', 'Mouse acceleration [m/s2]']
+# for all the plots
+for idx, plots in enumerate(plot_list):
+    # allocate memory to store the trajectories for averaging
+    trajectory_list = []
+    # for all the animals
+    for animal in encounter_matrix:
+        # for all the dates
+        for date in animal:
+
+            # for both plot types
+            # for idx, plots in enumerate(plot_list):
             # for all the encounters
             # for encounter in range(date.shape[0]):
             #     plots.plot(date[encounter, :, idx])
-            plots.plot(np.nanmean(minmax_scale(date[:, :, idx]), axis=0))
-
-
+            # plots.plot(np.nanmean(minmax_scale(date[:, :, idx]), axis=0))
+            # trajectory_list.append(np.nanmean(minmax_scale(date[:, :, idx]), axis=0))
+            trajectory_list.append(np.nanmean(date[:, :, idx], axis=0))
+    trajectory_list = np.array(trajectory_list)
+    mean_trace = np.nanmean(trajectory_list, axis=0)
+    x_trace = range(mean_trace.shape[0])
+    plots.plot(x_trace, mean_trace)
+    # calculate the error trace
+    # error_trace = sem(trajectory_list)
+    error_trace = np.nanstd(trajectory_list, axis=0)/np.sqrt(trajectory_list.shape[0])
+    plots.fill_between(x_trace, mean_trace-error_trace, mean_trace+error_trace, alpha=0.5)
+    plots.set_xlabel('Time')
+    plots.set_ylabel(title_list[idx])
+    plots.plot([encounter_positions/2, encounter_positions/2], plots.get_ylim())
+    # plt.xlabel('Time')
+    # plt.ylabel(title_list[idx])
+plt.tight_layout()
+fig.savefig(join(figure_save, 'huntTriggeredAverage_'+outcome_keyword+'_'+condition_keyword+'.png'), bbox_inches='tight')
 # TODO: remove arbitrary mouse speed threshold (i.e. fix preprocessing)
 
 # fig=plt.figure()
