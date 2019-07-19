@@ -13,7 +13,7 @@ import matplotlib.colors as colors
 # define the outcome keyword to search for
 outcome_keyword = 'all'
 # define the condition keyword to search for
-condition_keyword = ''
+condition_keyword = 'vr'
 condition_list = ['dark', 'vr']
 # load the data
 base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
@@ -330,7 +330,7 @@ fig.savefig(join(figure_save, 'density_'+outcome_keyword+'_'+condition_keyword+'
 
 # isolate attacks by distance
 # define the number of positions to capture per encounter (split evenly)
-encounter_positions = 50
+encounter_positions = 500
 # allocate memory for the encounters
 encounter_matrix = []
 # for all the animals
@@ -364,6 +364,8 @@ for animal in speed_distance_list:
                 encounter_pertrial.append(np.array([trials[encounter_indexes, :]]))
             # map_permouse, binx, biny = density_map(trials, bin_number, extrema_list)
             # map_list.append(map_permouse)
+        if not encounter_pertrial:
+            continue
         encounter_perdate.append(np.vstack(encounter_pertrial))
     encounter_matrix.append(encounter_perdate)
 
@@ -407,6 +409,7 @@ for idx, plots in enumerate(plot_list):
 plt.tight_layout()
 fig.savefig(join(figure_save, 'huntTriggeredAverage_'+outcome_keyword+'_'+condition_keyword+'.png'), bbox_inches='tight')
 # TODO: remove arbitrary mouse speed threshold (i.e. fix preprocessing)
+# TODO: correct for frame rates in the acceleration calculations
 
 # fig=plt.figure()
 # ax = fig.add_subplot(111)
