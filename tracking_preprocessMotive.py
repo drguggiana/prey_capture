@@ -19,13 +19,13 @@ outcome_keyword = 'succ'
 condition_keyword = ''
 condition_list = ['dark', 'vr']
 # load the data
-# base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
-base_path = r'E:\Prey_capture\Pre_processed'
-# file_path = [join(base_path, f) for f in listdir(base_path) if isfile(join(base_path, f[:-4]+'.csv'))]
-file_path = [r'E:\Prey_capture\Pre_processed\05_24_2019_16_34_35_DG_190417_c_succ_preproc.csv']
+base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
+# base_path = r'E:\Prey_capture\Pre_processed'
+file_path = [join(base_path, f) for f in listdir(base_path) if isfile(join(base_path, f[:-4]+'.csv'))]
+# file_path = [r'E:\Prey_capture\Pre_processed\05_24_2019_16_34_35_DG_190417_c_succ_preproc.csv']
 # define the figure save path
-# figure_save = r'C:\Users\drguggiana\Dropbox\Bonhoeffer_things\Presentations\Figures'
-figure_save = r'C:\Users\Drago\Dropbox\Bonhoeffer_things\Presentations\Figures'
+figure_save = r'C:\Users\drguggiana\Dropbox\Bonhoeffer_things\Presentations\Figures'
+# figure_save = r'C:\Users\Drago\Dropbox\Bonhoeffer_things\Presentations\Figures'
 
 
 def load_preprocessed(file_path_in):
@@ -69,7 +69,7 @@ bonsai_data = load_preprocessed(file_path)
 # define loading path and select file
 # base_path = r'C:\Users\drguggiana\Documents\Motive_test1\etc'
 # file_path = filedialog.askopenfilenames(initialdir=base_path, filetypes=(("text files", "*.txt"), ))
-file_path_motive = [r'E:\Prey_capture\Motive\20190524T163441_DG_190417_c_succ.txt']
+# file_path_motive = [r'E:\Prey_capture\Motive\20190524T163441_DG_190417_c_succ.txt']
 
 
 # parse the file
