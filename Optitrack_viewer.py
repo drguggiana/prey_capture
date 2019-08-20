@@ -47,7 +47,7 @@ for animal in file_path:
     print('Frame rate motive:' + str(1 / np.mean(np.diff(timestamp))) + ' fps')
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    ax.plot(np.diff(timestamp )[0:1000])
+    ax.plot(np.diff(timestamp ))
 
     # 2D mouse movement
     fig = plt.figure()
