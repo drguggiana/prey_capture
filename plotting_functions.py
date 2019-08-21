@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib import animation
 
 
-def plot_2d(data_in, rows=1, columns=1, labels=None):
+def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None):
     # create a new figure window
     fig = plt.figure()
     # initialize a plot counter
@@ -15,12 +15,17 @@ def plot_2d(data_in, rows=1, columns=1, labels=None):
             # add the subplot
             ax = fig.add_subplot(str(rows)+str(columns)+str(plot_counter))
             # for all the lines in the list
-            for lines in data_in[plot_counter-1]:
+            for count, lines in enumerate(data_in[plot_counter-1]):
                 # plot x,y ot just y depending on the size of the data
                 if len(lines.shape) == 2:
-                    ax.plot(lines[:, 0], lines[:, 1], marker='.')
+                    line2d = ax.plot(lines[:, 0], lines[:, 1])
                 else:
-                    ax.plot(lines, marker='.')
+                    line2d = ax.plot(lines)
+                # change the marker if provided, otherwise use dots
+                if markers is not None:
+                    line2d[0].set_marker(markers[plot_counter-1][count])
+                else:
+                    line2d[0].set_marker('.')
             # add labels if provided
             if labels is not None:
                 plt.legend(labels[plot_counter-1])

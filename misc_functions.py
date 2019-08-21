@@ -40,3 +40,9 @@ def add_edges(data_in, points=10):
     end_vector = np.arange(data_in[-1] + average_interval, data_in[-1] + average_interval * (points+1), average_interval)
     expanded_vector = np.concatenate((start_vector, data_in, end_vector))
     return expanded_vector
+
+
+def error_logger(error_log, msg):
+    error_log.append(msg + '\r\n')
+    print(msg)
+    return None
