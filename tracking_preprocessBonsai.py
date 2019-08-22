@@ -18,21 +18,17 @@ from scipy.ndimage.measurements import label
 import datetime
 from os import path
 import csv
+from paths import *
+from misc_functions import *
 # rc('animation', html='html5')
 
-
-# Create Tk root
-root = Tk()
-# Hide the main window
-root.withdraw()
-root.call('wm', 'attributes', '.', '-topmost', True)
-
+# get rid of the tk main window
+tk_killwindow()
 
 # define the save path
-save_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
-# save_path = r'D:\Prey_capture\Pre_processed'
+save_path = pre_processed_path
 # define the base loading path
-base_path_bonsai = r'J:\Drago Guggiana Nilo\Prey_capture\Bonsai'
+base_path_bonsai = bonsai_path
 # select the files to process
 file_path_bonsai = filedialog.askopenfilenames(initialdir=base_path_bonsai, filetypes=(("csv files", "*.csv"), ))
 # define loading path and select file

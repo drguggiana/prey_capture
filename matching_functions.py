@@ -6,7 +6,8 @@ from plotting_functions import *
 from misc_functions import add_edges
 
 
-def align_traces_motive(frame_rate_1, frame_rate_2, data_1, data_2, sign_vector, frame_times, cricket, z=1):
+def align_traces_maxrate(frame_rate_1, frame_rate_2, data_1, data_2, sign_vector, frame_times, cricket, z=1):
+    """Align traces temporally based on whichever one has the fastest frame rate"""
     # determine which rate is highest
     max_rate = np.argmax([frame_rate_1, frame_rate_2])
     # select it as the target for interpolation
@@ -44,7 +45,28 @@ def align_traces_motive(frame_rate_1, frame_rate_2, data_1, data_2, sign_vector,
     return np.int(np.round(np.argmax(acor) - len(y2))), y_motive, y_bonsai, g, y_cricket, height, target_frames
 
 
+def align_traces_motive(data_1, data_2, sign_vector, frame_times, cricket, z=1):
+    """Align traces temporally based on the data_1, which is expected to be from motive"""
+    # interpolate the bonsai trace
+    # expand the frames to interpolate from
+    target_frames = add_edges(frame_times[0], points=100)
+    y_motive = sign_vector[2] * data_1[:, sign_vector[0]]
+    y_bonsai = interp_motive(sign_vector[3] * data_2[:, sign_vector[1]], frame_times[1], target_frames)
+    y_cricket = interp_motive(sign_vector[3] * cricket[:, sign_vector[1]], frame_times[1], target_frames)
+    if z == 1:
+        height = data_1[:, 2]
+    else:
+        height = None
+    y1 = scale(y_motive)
+    y2 = scale(y_bonsai)
+    # calculate the cross-correlation for analysis
+    acor = np.correlate(y1, y2, mode='full')
+    # return the shift, the matched traces and the rate
+    return np.int(np.round(np.argmax(acor) - len(y2))), y_motive, y_bonsai, y_cricket, height, frame_times[0]
+
+
 def interp_motive(position, frame_times, target_times):
+    """Interpolate a trace by building an interpolant"""
     # filter the values so the interpolant is trained only on sorted frame times
     sorted_frames = np.hstack((True, np.invert(frame_times[1:] <= frame_times[:-1])))
     frame_times = frame_times[sorted_frames]
@@ -59,6 +81,7 @@ def interp_motive(position, frame_times, target_times):
 
 
 def normalize_matrix(matrix, target=None):
+    """Normalize a matrix by the max and min, so to the range 0-1"""
     # normalize between 0 and 1
     out_matrix = (matrix - np.nanmin(matrix.flatten())) / (np.nanmax(matrix.flatten()) - np.nanmin(matrix.flatten()))
     # normalize to the range of a target matrix if provided
@@ -68,6 +91,7 @@ def normalize_matrix(matrix, target=None):
 
 
 def homography(from_data, to_data, target_data):
+    """Compute the homography transformation between the data sets via opencv"""
     # find the homography transformation
     h, mask = cv2.findHomography(from_data, to_data, method=cv2.LMEDS)
     # make the transformed data homogeneous for multiplication with the affine
@@ -77,6 +101,7 @@ def homography(from_data, to_data, target_data):
 
 
 def partialaffine(from_data, to_data, target_data):
+    """Compute the partial 2D affine transformation between the data sets via opencv"""
     # calculate an approximate affine
     affine_matrix, inliers = cv2.estimateAffinePartial2D(from_data, to_data, ransacReprojThreshold=1,
                                                          maxIters=20000, refineIters=100, method=cv2.LMEDS)
@@ -89,6 +114,7 @@ def partialaffine(from_data, to_data, target_data):
 
 
 def affine(from_data, to_data, target_data):
+    """Compute the 2D affine transformation between the data sets via opencv"""
     # calculate an approximate affine
     affine_matrix, inliers = cv2.estimateAffine2D(from_data, to_data, ransacReprojThreshold=3,
                                                   maxIters=20000, refineIters=100, method=cv2.LMEDS)
@@ -100,6 +126,7 @@ def affine(from_data, to_data, target_data):
 
 
 def undistort(data_2d, data_3d, target_data):
+    """Undistort points from a 2D camera based on matching 3D data via opencv"""
     # use the calibrateCamera function to get the camera matrix
     test_constant = (cv2.CALIB_USE_INTRINSIC_GUESS | cv2.CALIB_FIX_ASPECT_RATIO |
                      cv2.CALIB_FIX_K1 | cv2.CALIB_FIX_K2 | cv2.CALIB_FIX_K3 |
@@ -112,7 +139,9 @@ def undistort(data_2d, data_3d, target_data):
     return np.squeeze(cv2.undistortPoints(np.expand_dims(target_data, 1), mtx, dist))
 
 
-def match_traces(data_3d, data_2d, fr_3d, fr_2d, frame_time_list, coordinate_list, cricket):
+def match_traces(data_3d, data_2d, frame_time_list, coordinate_list, cricket):
+    """Match the traces given from motive and bonsai by aligning them temporally and then spatially, also providing
+    the transformed cricket position data"""
     # allocate memory for the aligned traces
     aligned_traces = []
     # allocate memory for the cricket traces
@@ -121,65 +150,34 @@ def match_traces(data_3d, data_2d, fr_3d, fr_2d, frame_time_list, coordinate_lis
     first_shift_idx = 1000
     # for all the coordinate sets (i.e. dimensions)
     for count, sets in enumerate(coordinate_list):
-        shift_idx, ya, yb, g, cr, h, t = align_traces_motive(fr_3d, fr_2d,
-                                                             data_3d, data_2d, sets, frame_time_list, cricket, 1-count)
+        shift_idx, ya, yb, cr, h, t = align_traces_motive(data_3d, data_2d, sets, frame_time_list, cricket, 1-count)
         if count == 0:
             first_shift_idx = shift_idx
         # print('Temporal shift:' + str(shift_idx))
         # save the shifted traces
-        # shift_3d = first_shift_idx
 
         # depending on the sign of the shift, choose which trace to shift
         if first_shift_idx > 0:
-            # ya = ya[first_shift_idx:-first_shift_idx]
-            # yb = yb[:-first_shift_idx]
-            # shifted_time = frame_time_list[0][first_shift_idx:-first_shift_idx]
+
             ya = ya[first_shift_idx:]
             if count == 0:
                 y = h[first_shift_idx:]
             shifted_time = t[first_shift_idx:]
         else:
-            # ya = ya[:first_shift_idx]
-            # yb = yb[-first_shift_idx:first_shift_idx]
-            # shifted_time = frame_time_list[0][:first_shift_idx]
+
             yb = yb[-first_shift_idx:]
             cr = cr[-first_shift_idx:]
             if count == 0:
                 y = h
             shifted_time = t
 
-        assert np.sign(first_shift_idx) == np.sign(shift_idx), 'shifts are different sign'
+        assert np.sign(first_shift_idx) == np.sign(shift_idx), 'shifts have a different sign'
         aligned_traces.append([ya, yb])
         aligned_cricket.append(cr)
-    # # check that the alignment shifts are not too different from each other
-    # assert (np.abs(first_shift_idx - shift_idx) < 10)
 
-    # define the third dimension for the motive data
-    # if shift_3d > 0:
-    #     if fr_3d != g:
-    #         y = interp_motive(data_3d[:, 2], frame_time_list[0], frame_time_list[0])[shift_3d:-shift_3d]
-    #     else:
-    #         y = data_3d[:, 2][shift_3d:-shift_3d]
-    # else:
-    #     if fr_3d != g:
-    #         y = interp_motive(data_3d[:, 2], frame_time_list[0], frame_time_list[0])[:shift_3d]
-    #     else:
-    #         y = data_3d[:, 2][:shift_3d]
-    # if shift_3d > 0:
-    #     if fr_3d != g:
-    #         y = interp_motive(data_3d[:, 2], frame_time_list[0], shifted_time)[shift_3d:]
-    #     else:
-    #         y = data_3d[:, 2][shift_3d:]
-    # else:
-    #     if fr_3d != g:
-    #         y = interp_motive(data_3d[:, 2], frame_time_list[0], frame_time_list[0])
-    #     else:
-    #         y = data_3d[:, 2]
-    # assert y.shape[0] == aligned_traces[0][0].shape[0], "y was a different shape"
     # use open cv to obtain a transformation matrix of the aligned traces
     # assemble the data to use for the calculation
     opencv_3d = np.array([aligned_traces[0][0], aligned_traces[1][0], y]).astype('float32')
-    # motive_opencv = np.vstack((motive_opencv, y1))
     opencv_2d = np.array([aligned_traces[0][1], aligned_traces[1][1]]).astype('float32')
     opencv_cricket = np.array(aligned_cricket).astype('float32')
     # match their sizes

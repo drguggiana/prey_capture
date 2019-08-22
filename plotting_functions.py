@@ -4,6 +4,7 @@ from matplotlib import animation
 
 
 def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None):
+    """Wrapper for 2D plotting data into subplots"""
     # create a new figure window
     fig = plt.figure()
     # initialize a plot counter
@@ -35,6 +36,7 @@ def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None):
 
 
 def plot_3d(data_in):
+    """Wrapper for 3D plotting data"""
     # create a new figure window
     fig = plt.figure()
     # add the subplot
@@ -46,6 +48,8 @@ def plot_3d(data_in):
 
 
 def animation_plotter(motivedata, bonsaidata, cricket_data, xlim, ylim, interval=10):
+    """Plot animations from the motive, bonsai and cricket"""
+    # TODO: generalize function to any number of lines to plot
     # First set up the figure, the axis, and the plot element we want to animate
     fig0 = plt.figure()
     ax0 = plt.axes(xlim=xlim, ylim=ylim)
@@ -79,6 +83,7 @@ def animation_plotter(motivedata, bonsaidata, cricket_data, xlim, ylim, interval
 
 
 def histogram(data_in, rows=1, columns=1, bins=50):
+    """Wrapper for the histogram function in subplots"""
     # create a new figure window
     fig = plt.figure()
     # initialize a plot counter

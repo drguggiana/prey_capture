@@ -1,6 +1,5 @@
 # imports
 from tkinter import filedialog
-from tkinter import Tk
 import datetime
 from sklearn.metrics import mean_squared_error as mse
 from os.path import join, basename
@@ -10,43 +9,32 @@ from matching_functions import *
 from io_functions import *
 from plotting_functions import *
 from misc_functions import *
+from paths import *
 
-# Create Tk root
-root = Tk()
-# Hide the main window
-root.withdraw()
-root.call('wm', 'attributes', '.', '-topmost', True)
+
+# prevent the appearance of the tk main window
+tk_killwindow()
 
 # define the outcome keyword to search for
 outcome_keyword = 'all'
 # define the condition keyword to search for
 condition_keyword = 'all'
-condition_list = ['dark', 'vr']
 # load the data
-base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
-# file_path = [r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed\05_24_2019_16_34_35_DG_190417_c_succ_preproc.csv']
-# file_path = [r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed\08_01_2019_20_48_47_DG_190416_a_succ_preproc.csv']
+base_path = pre_processed_path
+
 file_path = filedialog.askopenfilenames(initialdir=base_path, filetypes=(("preproc files", "*.csv"),))
 
 # define the figure save path
-# figure_save = r'C:\Users\drguggiana\Dropbox\Bonhoeffer_things\Presentations\Figures'
-figure_save = r'J:\Drago Guggiana Nilo\Prey_capture\Aligned traces'
+output_save = aligned_path
 
-# filter the results by outcome (only use all for performance plot though)
-if outcome_keyword != 'all':
-    file_path = [file for file in file_path if outcome_keyword in file]
-
-# filter the files by the desired condition
-if condition_keyword == '':
-    file_path = [file for file in file_path if sum([1 for word in condition_list if word in file]) == 0]
-elif condition_keyword != 'all':
-    file_path = [file for file in file_path if condition_keyword in file]
+# parse the file names for the desired trait
+file_parser(file_path, outcome_keyword, condition_keyword)
 
 # actually load the data
 bonsai_data_all = load_preprocessed(file_path)
 # find the matching motive files
 # get the list of files in the motive folder
-motive_path = r'J:\Drago Guggiana Nilo\Prey_capture\Motive'
+motive_path = motive_path
 motive_files = listdir(motive_path)
 # get the times at which the files were produced
 motive_times = [datetime.datetime.strptime(el[:14], '%Y%m%dT%H%M%S') for el in motive_files]
@@ -63,7 +51,7 @@ for file_idx, files in enumerate(bonsai_data_all):
         assert np.all(np.isnan(files[:, 2])) == 0, 'Cricket was not tracked'
         assert files.shape[0] > 100, 'Too few data points'
     except AssertionError as e:
-        error_logger(error_log, basename(file_path[file_idx]) + '_Bonsai error_' + str(e.args))
+        error_logger(error_log, basename(file_path[file_idx])[:-4] + '_Bonsai error_' + str(e.args))
         continue
     # get the creation time of the bonsai file
     bonsai_create_time = datetime.datetime.strptime(basename(file_path[file_idx])[:18], '%m_%d_%Y_%H_%M_%S')
@@ -76,7 +64,7 @@ for file_idx, files in enumerate(bonsai_data_all):
         assert motive_idx is not np.ndarray, 'More than 1 matching file found'
         assert delta_withmotive[motive_idx].seconds < 100, 'Delay too long, probably unmatched file'
     except AssertionError as e:
-        error_logger(error_log, basename(file_path[file_idx]) + '_File matching problem_' + str(e.args))
+        error_logger(error_log, basename(file_path[file_idx])[:-4] + '_File matching problem_' + str(e.args))
         continue
     animal = motive_files[motive_idx]
 
@@ -110,6 +98,7 @@ for file_idx, files in enumerate(bonsai_data_all):
 
     # get the motive data
     motive_data = target_data[:, [1, 3, 2]]
+    motive_angles = target_data[:, [4, 6, 5]]
 
     # get the bonsai time
     bonsai_time = files[:, 4]
@@ -149,12 +138,12 @@ for file_idx, files in enumerate(bonsai_data_all):
         ols_window = 50
         average_window = 100
         fr_change = rolling_ols(rolling_average(np.diff(motive_time), average_window), ols_window)
-        time_plot = plot_2d([[motive_time]])
+        # time_plot = plot_2d([[motive_time]])
         # find the peaks that are not at the edges
         peak_list, properties = find_peaks(np.abs(fr_change), distance=average_window, prominence=(0.00002, 0.0007))
         # eliminate peaks at the beginning and end of the trace
         peak_list = peak_list[(peak_list > 300) & (peak_list < fr_change.shape[0] - 300)]
-        fig = plot_2d([[fr_change, np.array([peak_list, fr_change[peak_list]]).T]], markers=[['.', '*']])
+        # fig = plot_2d([[fr_change, np.array([peak_list, fr_change[peak_list]]).T]], markers=[['.', '*']])
         # run the transformation on a loop, taking segments of the trace instead of the whole thing
         # define the number of segments
         n_segments = peak_list.shape[0] + 1
@@ -164,8 +153,8 @@ for file_idx, files in enumerate(bonsai_data_all):
     transformed_data = []
     # allocate memory for the original motive data
     original_motive = []
-    # allocate memory for the original bonsai data
-    original_bonsai = []
+    # # allocate memory for the original bonsai data
+    # original_bonsai = []
     # allocate memory for the time
     time_vector = []
     # allocate an index for the segments
@@ -176,7 +165,6 @@ for file_idx, files in enumerate(bonsai_data_all):
     for seg in range(n_segments):
         # get the segment range
         if seg + 1 < n_segments:
-            # segment = np.int(np.floor(motive_data.shape[0] * (seg + 1) / n_segments))
             segment = peak_list[seg]
         else:
             segment = motive_data.shape[0]
@@ -188,14 +176,14 @@ for file_idx, files in enumerate(bonsai_data_all):
             # match the bonsai and motive data temporally
             motive_opencv, bonsai_opencv, shifted_time, cricket_opencv = match_traces(
                 motive_data[segment_index:segment, :],
-                bonsai_use[:, :2], frame_rate_motive,
-                frame_rate_bonsai, frame_time_list,
+                bonsai_use[:, :2], frame_time_list,
                 coordinate_list,
                 bonsai_use[:, 2:])
             assert motive_opencv.any(), 'motive_opencv is empty'
             assert bonsai_opencv.any(), 'bonsai_opencv is empty'
         except AssertionError as e:
-            error_logger(error_log, basename(animal)[:-4] + "_Fragment skipped alignment was not possible_" + str(e.args))
+            error_logger(error_log, basename(file_path[file_idx])[:-4] +
+                         "_Fragment skipped alignment was not possible_" + str(e.args))
             continue
 
         # align traces spatially using opencv
@@ -204,13 +192,14 @@ for file_idx, files in enumerate(bonsai_data_all):
         try:
             transformed_opencv = partialaffine(bonsai_opencv, motive_opencv[:, :2], bonsai_opencv)
         except AssertionError as e:
-            error_logger(error_log, basename(animal)[:-4] + "_Fragment skipped transform was not possible_" + str(e.args))
+            error_logger(error_log, basename(file_path[file_idx])[:-4] +
+                         "_Fragment skipped transform was not possible_" + str(e.args))
             continue
         transformed_cricket = partialaffine(bonsai_opencv, motive_opencv[:, :2], cricket_opencv)
 
         # assemble the original, interpolated traces
         original_motive.append(motive_opencv)
-        original_bonsai.append(bonsai_opencv)
+        # original_bonsai.append(bonsai_opencv)
         transformed_data.append(np.hstack((transformed_opencv, transformed_cricket)))
         time_vector.append(shifted_time)
         # update the index
@@ -219,10 +208,10 @@ for file_idx, files in enumerate(bonsai_data_all):
         # concatenate the segments
         transformed_data = np.concatenate(transformed_data)
         motive_opencv = np.concatenate(original_motive)
-        bonsai_opencv = np.concatenate(original_bonsai)
+        # bonsai_opencv = np.concatenate(original_bonsai)
         time_opencv = np.concatenate(time_vector)
     except ValueError as e:
-        error_logger(error_log, basename(animal)[:-4] + '_Concatenation error_' + str(e.args))
+        error_logger(error_log, basename(file_path[file_idx])[:-4] + '_Concatenation error_' + str(e.args))
         continue
 
     # calculate the quality of the fit
@@ -243,22 +232,21 @@ for file_idx, files in enumerate(bonsai_data_all):
     # anim = animation_plotter(motive_opencv, transformed_data[:, :2], transformed_data[:, 2:],
     #                         (-0.6, 0.6), (-0.35, 0.25), interval=0.5)
     # save the figures
-    top_projection.savefig(join(figure_save, basename(animal)[:-4] +
+    top_projection.savefig(join(output_save, basename(file_path[file_idx])[:-4] +
                                 '_mse' + str(fit_mse)[:6] + '.png'), bbox_inches='tight')
     plt.close(fig='all')
     # plt.show()
 
     # save the data
     # assemble the file name
-    save_file = join(figure_save, basename(animal)[:-4] + '_mse' + str(fit_mse)[:6] + '_aligned.csv')
+    save_file = join(output_save, basename(file_path[file_idx])[:-4] + '_mse' + str(fit_mse)[:6] + '_aligned.csv')
     with open(save_file, mode='w', newline='') as f:
         file_writer = csv.writer(f, delimiter=',')
-        for m, b, d, t in zip(motive_opencv, bonsai_opencv, transformed_data, time_opencv):
-            file_writer.writerow(np.hstack((m, b, b, t)))
+        for m, b, d, t in zip(motive_opencv, motive_angles, transformed_data, time_opencv):
+            file_writer.writerow(np.hstack((m, b, d, t)))
 
 
 # save the error log
-error_file = join(figure_save, str(datetime.datetime.now().strftime('%Y%m%d_%H%M%S')) + '_errorlog.txt')
+error_file = join(output_save, str(datetime.datetime.now().strftime('%Y%m%d_%H%M%S')) + '_errorlog.txt')
 with open(error_file, mode='w', newline='') as f:
     f.writelines(error_log)
-

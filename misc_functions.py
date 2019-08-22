@@ -1,12 +1,15 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression as ols
+from tkinter import Tk
 
 
 def rolling_average(data_in, window_size):
+    """Perform rolling average"""
     return np.convolve(data_in, np.ones((window_size,))/window_size, mode='same')
 
 
 def rolling_ols(data_in, window_size):
+    """Perform OLS regression on a rolling window"""
     # allocate memory for the output
     data_out = np.zeros_like(data_in)
     # get the subtraction to get to the bottom of the window
@@ -27,12 +30,14 @@ def rolling_ols(data_in, window_size):
 
 
 def closest_point(highres_array, lowres_array):
+    """Finds the closest point in a high resolution array to the ones in a low resolution one"""
     close_idx = np.array([(np.argmin(np.abs(el-highres_array)), count)
                          for count, el in enumerate(lowres_array)])
     return close_idx
 
 
 def add_edges(data_in, points=10):
+    """Adds interpolation edges to a time trace, using the average framerate as the interval and N points"""
     # calculate the average spacing between points
     average_interval = np.mean(np.diff(data_in))
     # use it to expand the original vector in both directions by points
@@ -43,6 +48,17 @@ def add_edges(data_in, points=10):
 
 
 def error_logger(error_log, msg):
+    """Logs errors and their arguments on a list and also prints them to the console"""
     error_log.append(msg + '\r\n')
     print(msg)
+    return None
+
+
+def tk_killwindow():
+    """Prevents the appearance of the tk main window when using other GUI components"""
+    # Create Tk root
+    root = Tk()
+    # Hide the main window
+    root.withdraw()
+    root.call('wm', 'attributes', '.', '-topmost', True)
     return None
