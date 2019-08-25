@@ -19,6 +19,7 @@ tk_killwindow()
 outcome_keyword = 'all'
 # define the condition keyword to search for
 condition_keyword = 'all'
+
 # load the data
 base_path = pre_processed_path
 
@@ -214,7 +215,7 @@ for file_idx, files in enumerate(bonsai_data_all):
         error_logger(error_log, basename(file_path[file_idx])[:-4] + '_Concatenation error_' + str(e.args))
         continue
 
-    # calculate the quality of the fit
+    # calculate the quality of the fit. Save all files anyway to know what to fix
     fit_mse = mse(transformed_data[:, :2].flatten(), motive_opencv[:, :2].flatten())
 
     plot_data = motive_opencv
@@ -232,14 +233,14 @@ for file_idx, files in enumerate(bonsai_data_all):
     # anim = animation_plotter(motive_opencv, transformed_data[:, :2], transformed_data[:, 2:],
     #                         (-0.6, 0.6), (-0.35, 0.25), interval=0.5)
     # save the figures
-    top_projection.savefig(join(output_save, basename(file_path[file_idx])[:-4] +
+    top_projection.savefig(join(output_save, basename(file_path[file_idx])[:-12] +
                                 '_mse' + str(fit_mse)[:6] + '.png'), bbox_inches='tight')
     plt.close(fig='all')
     # plt.show()
 
     # save the data
     # assemble the file name
-    save_file = join(output_save, basename(file_path[file_idx])[:-4] + '_mse' + str(fit_mse)[:6] + '_aligned.csv')
+    save_file = join(output_save, basename(file_path[file_idx])[:-12] + '_mse' + str(fit_mse)[:6] + '_aligned.csv')
     with open(save_file, mode='w', newline='') as f:
         file_writer = csv.writer(f, delimiter=',')
         for m, b, d, t in zip(motive_opencv, motive_angles, transformed_data, time_opencv):

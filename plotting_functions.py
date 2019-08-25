@@ -1,9 +1,11 @@
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib import animation
+import numpy as np
+from misc_functions import normalize_matrix
 
 
-def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None):
+def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-'):
     """Wrapper for 2D plotting data into subplots"""
     # create a new figure window
     fig = plt.figure()
@@ -14,9 +16,9 @@ def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None):
         # for all the columns
         for col in range(columns):
             # add the subplot
-            ax = fig.add_subplot(str(rows)+str(columns)+str(plot_counter))
+            ax = fig.add_subplot(str(rows) + str(columns) + str(plot_counter))
             # for all the lines in the list
-            for count, lines in enumerate(data_in[plot_counter-1]):
+            for count, lines in enumerate(data_in[plot_counter - 1]):
                 # plot x,y ot just y depending on the size of the data
                 if len(lines.shape) == 2:
                     line2d = ax.plot(lines[:, 0], lines[:, 1])
@@ -24,12 +26,14 @@ def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None):
                     line2d = ax.plot(lines)
                 # change the marker if provided, otherwise use dots
                 if markers is not None:
-                    line2d[0].set_marker(markers[plot_counter-1][count])
+                    line2d[0].set_marker(markers[plot_counter - 1][count])
                 else:
                     line2d[0].set_marker('.')
+                if linestyle is not '-':
+                    line2d[0].set_linestyle(linestyle[plot_counter - 1][count])
             # add labels if provided
             if labels is not None:
-                plt.legend(labels[plot_counter-1])
+                plt.legend(labels[plot_counter - 1])
             # update the plot counter
             plot_counter += 1
     return fig
@@ -100,4 +104,73 @@ def histogram(data_in, rows=1, columns=1, bins=50):
                 ax.hist(lines, bins=bins)
             # update the plot counter
             plot_counter += 1
+    return fig
+
+
+def plot_arrow(trajectory, centers, heading, head, cricket, angles, angles2):
+    """Draw the animal trajectory and the heading"""
+    # create a new figure window
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(trajectory[:, 0], trajectory[:, 1])
+
+    ax.plot(cricket[:, 0], cricket[:, 1], linestyle='None', marker='o')
+    plt.quiver(centers[:, 0], centers[:, 1], heading[:, 0], heading[:, 1], angles=angles, pivot='mid')
+    plt.quiver(centers[:, 0], centers[:, 1], heading[:, 0], heading[:, 1], angles=angles2, pivot='mid', color='r')
+
+    plt.axis('equal')
+
+    return fig
+
+
+def animate_hunt(trajectory, heading, head, cricket, xlim, ylim, interval=10):
+    """Animate the full hunting sequence, including movement and head direction"""
+    # First set up the figure, the axis, and the plot element we want to animate
+    fig0 = plt.figure()
+    ax0 = plt.axes(xlim=xlim, ylim=ylim)
+    line0, = ax0.plot([], [], lw=2)
+    line1, = ax0.plot([], [], lw=2)
+
+    # initialization function: plot the background of each frame
+    def init():
+        line0.set_data([], [])
+        line1.set_data([], [])
+        line2 = ax0.quiver(trajectory[0, 0], trajectory[0, 1], np.ones_like(trajectory[0, 0]),
+                           np.ones_like(trajectory[0, 0]),
+                           angles=heading[0], pivot='mid')
+        line3 = ax0.quiver(trajectory[0, 0], trajectory[0, 1], np.ones_like(trajectory[0, 0]),
+                           np.ones_like(trajectory[0, 0]),
+                           angles=head[0], pivot='tail', color='r')
+        return line0, line1, line2, line3
+
+    # animation function.  This is called sequentially
+    def animate(i):
+        line0.set_data(trajectory[:i, 0], trajectory[:i, 1])
+        line1.set_data(cricket[:i, 0], cricket[:i, 1])
+        # line2.set_data(trajectory[i, 0], trajectory[i, 1])
+        # line2.set_marker((3, 0, heading[i]))
+        # line2.set_markersize(20)
+        line2 = ax0.quiver(trajectory[i, 0], trajectory[i, 1], np.ones_like(trajectory[i, 0]),
+                           np.ones_like(trajectory[i, 0]),
+                           angles=heading[i], pivot='mid')
+        line3 = ax0.quiver(trajectory[i, 0], trajectory[i, 1], np.ones_like(trajectory[i, 0]),
+                           np.ones_like(trajectory[i, 0]),
+                           angles=head[i], pivot='tail', color='r')
+
+        return line0, line1, line2, line3
+
+    # call the animator.  blit=True means only re-draw the parts that have changed.
+    anim = animation.FuncAnimation(fig0, animate, init_func=init,
+                                   frames=trajectory.shape[0], interval=interval, blit=True)
+    return anim
+
+
+def plot_polar(data_in, fig=None):
+    """Make a polar plot"""
+    if fig is None:
+        fig = plt.figure()
+    ax = fig.add_subplot(111, projection='polar')
+    array_len = list(range(data_in.shape[0])) + [0]
+    array_len = np.array(array_len)
+    plt.polar(np.deg2rad(data_in[array_len, 0]), data_in[array_len, 1])
     return fig

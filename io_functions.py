@@ -25,7 +25,7 @@ def parse_line(single_line):
     return parsed_line
 
 
-def file_parser(file_path, outcome_keyword, condition_keyword):
+def file_parser(file_path, outcome_keyword, condition_keyword, mse_threshold=None):
     """Parse the file path to include or exclude desired terms"""
     # define the possible conditions
     condition_list = ['dark', 'vr']
@@ -39,4 +39,7 @@ def file_parser(file_path, outcome_keyword, condition_keyword):
         file_path = [file for file in file_path if sum([1 for word in condition_list if word in file]) == 0]
     elif condition_keyword != 'all':
         file_path = [file for file in file_path if condition_keyword in file]
-    return None
+    # if an mse threshold is provided, filter the files further
+    if mse_threshold is not None:
+        file_path = [file for file in file_path if np.float(file[file.find('mse')+3:file.find('mse')+9]) < mse_threshold]
+    return file_path

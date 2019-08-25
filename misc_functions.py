@@ -62,3 +62,20 @@ def tk_killwindow():
     root.withdraw()
     root.call('wm', 'attributes', '.', '-topmost', True)
     return None
+
+
+def normalize_matrix(matrix, target=None, axis=None):
+    """Normalize a matrix by the max and min, so to the range 0-1"""
+    if axis is None:
+        # normalize between 0 and 1
+        out_matrix = (matrix - np.nanmin(matrix.flatten())) / (np.nanmax(matrix.flatten()) - np.nanmin(matrix.flatten()))
+        # normalize to the range of a target matrix if provided
+        if target is not None:
+            out_matrix = out_matrix * (np.nanmax(target.flatten()) - np.nanmin(target.flatten())) + np.nanmin(
+                target.flatten())
+    else:
+        assert target is None, "can't normalize to target when using a specific axis"
+        # normalize to 0-1 range along the desired dimension
+        out_matrix = (matrix - np.nanmin(matrix, axis=axis).reshape(-1, 1)) / (
+                    np.nanmax(matrix, axis=axis).reshape(-1, 1) - np.nanmin(matrix, axis=axis).reshape(-1, 1))
+    return out_matrix

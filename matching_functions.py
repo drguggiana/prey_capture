@@ -80,16 +80,6 @@ def interp_motive(position, frame_times, target_times):
     return interpolant(target_times)
 
 
-def normalize_matrix(matrix, target=None):
-    """Normalize a matrix by the max and min, so to the range 0-1"""
-    # normalize between 0 and 1
-    out_matrix = (matrix - np.nanmin(matrix.flatten())) / (np.nanmax(matrix.flatten()) - np.nanmin(matrix.flatten()))
-    # normalize to the range of a target matrix if provided
-    if target is not None:
-        out_matrix = out_matrix * (np.nanmax(target.flatten()) - np.nanmin(target.flatten())) + np.nanmin(target.flatten())
-    return out_matrix
-
-
 def homography(from_data, to_data, target_data):
     """Compute the homography transformation between the data sets via opencv"""
     # find the homography transformation
