@@ -23,7 +23,7 @@ file_path = filedialog.askopenfilenames(initialdir=base_path, filetypes=(("align
 # file_path = test_aligned
 
 # define the figure save path
-save_path = heading_path
+save_path = kinematics_path
 
 # parse the file names for the desired trait
 file_path = file_parser(file_path, outcome_keyword, condition_keyword, mse_threshold=mse_threshold)
@@ -37,29 +37,51 @@ for file_idx, data in enumerate(data_all):
     # TODO: clean up preprocessing so skipping frames at this level is not necessary
     data = data[50:, :]
     # get the heading angle
-    mouse_heading = wrap(np.concatenate(([0], heading_calculation(data[1:, :2], data[:-1, :2]))))
+    mouse_heading = wrap(np.concatenate((heading_calculation(data[1:, :2], data[:-1, :2]), [0])))
     # zero the NaNs and unwrap
     mouse_heading[np.isnan(mouse_heading)] = 0
 
     # get the head direction around the vertical axis
     head_direction = data[:, 5]
+    # correct the angle trace for large jumps
+    # define the jump threshold
+    jump_threshold = 10
+    head_direction = wrap(jump_killer(head_direction, jump_threshold))
 
     # get the offset to correct the head direction due to the center of mass of the tracker (to single degree accuracy)
-    angle_histogram = np.histogram(wrap(head_direction - mouse_heading), bins=72)
-    angle_offset = np.round(angle_histogram[1][np.argmax(angle_histogram[0])])
+    # angle_histogram = np.histogram(wrap(head_direction - mouse_heading, bound=360), bins=72)
+    # angle_offset = np.round(angle_histogram[1][np.argmax(angle_histogram[0])])
 
+    # get offset via correlation
+    angle_offset = np.argmax([np.corrcoef(np.vstack((wrap(head_direction - el), mouse_heading)))[0][1]
+                              for el in range(360)])
+
+    # plot_coord = bin_angles(mouse_heading)
+    # plot_polar(plot_coord)
+    # plot_coord = bin_angles(head_direction)
+    # plot_polar(plot_coord)
+    # plot_2d([[data[:, 5], head_direction]])
+    # plot_coord = bin_angles(wrap(head_direction - mouse_heading))
+    # plot_polar(plot_coord)
+    # plot_2d([[wrap(mouse_heading, bound=180), wrap(head_direction, bound=180),
+    #           wrap(head_direction - mouse_heading, bound=180)]])
     print(angle_offset)
 
     head_direction = head_direction - angle_offset
-
+    print(np.corrcoef(np.vstack((head_direction, mouse_heading)))[0][1])
+    # plot_2d([[wrap(head_direction - mouse_heading, bound=180)]])
+    # plot_2d([[wrap(mouse_heading, bound=360), wrap(head_direction, bound=360),
+    #           wrap(head_direction - mouse_heading, bound=360)]])
+    # plot_coord = bin_angles(wrap(head_direction - mouse_heading))
+    # plot_polar(plot_coord)
     # # prepare the polar heading plot
     # binned_angles = bin_angles(wrap(head_direction - mouse_heading))
     # plot_polar(binned_angles)
 
     # # calculate the arrow centers
     arrow_centers = np.vstack((data[0, 0:2], (data[1:, 0:2] + data[:-1, 0:2]) / 2))
-    quiver_fig = plot_arrow(data[:, :2], arrow_centers, np.ones_like(arrow_centers), np.ones_like(arrow_centers) * 0.5, data[:,
-               8:10], angles=mouse_heading, angles2=head_direction)
+    quiver_fig = plot_arrow(data[:, :2], arrow_centers, np.ones_like(arrow_centers), np.ones_like(arrow_centers) * 0.5,
+                            data[:, 8:10], angles=mouse_heading, angles2=head_direction)
     # animate_hunt(data[:, :2], mouse_heading, head_direction, data[:, 8:10], (-0.7, 0.6), (-0.35, 0.35),
     #              interval=80)
 
@@ -73,18 +95,29 @@ for file_idx, data in enumerate(data_all):
     cricket_heading[np.isnan(cricket_heading)] = 0
 
     # get the delta angle
-    delta_angle = cricket_heading - mouse_heading
+    delta_heading = cricket_heading - mouse_heading
+    delta_head = cricket_heading - head_direction
     # binned_angles = bin_angles(wrap(delta_angle))
     # plot_polar(binned_angles)
 
     # get the mouse-cricket distance
     mouse_cricket_distance = distance_calculation(cricket_coord, data[:, 6:8])
-    mouse_speed = np.concatenate(([0], distance_calculation(data[1:, :2], data[:-1, :2])/(data[1:, -1] - data[0, -1])))
+    mouse_speed = np.concatenate(
+        ([0], distance_calculation(data[1:, :2], data[:-1, :2]) / (data[1:, -1] - data[:-1, -1])))
     mouse_acceleration = np.concatenate(([0], np.diff(mouse_speed)))
 
+    cricket_speed = np.concatenate(([0], distance_calculation(cricket_coord[1:, :], cricket_coord[:-1, :])
+                                    / (data[1:, -1] - data[:-1, -1])))
+    cricket_acceleration = np.concatenate(([0], np.diff(cricket_speed)))
+
+    # pack time on a variable
+    time_vector = data[:, -1]
     # save the traces to a variable
-    angle_traces = np.concatenate((mouse_heading, head_direction, cricket_heading, delta_angle))
-    kinematic_traces = np.concatenate((mouse_cricket_distance, mouse_speed, mouse_acceleration))
+    angle_traces = np.vstack((mouse_heading, head_direction, cricket_heading, delta_heading, delta_head)).T
+    kinematic_traces = np.vstack((mouse_cricket_distance, mouse_speed, mouse_acceleration,
+                                  cricket_speed, cricket_acceleration, data[:, 2], time_vector)).T
+    # replace infinity values with NaNs (in the kinematic traces)
+    kinematic_traces[np.isinf(kinematic_traces)] = np.nan
 
     # save the data to file
     # assemble the file name
@@ -97,3 +130,4 @@ for file_idx, data in enumerate(data_all):
     # save the quiver plot
     quiver_fig.savefig(join(save_path, basename(file_path[file_idx])[:-12] + '.png'), bbox_inches='tight')
     plt.close(fig='all')
+# plt.show()

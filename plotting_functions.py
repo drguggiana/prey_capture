@@ -5,25 +5,54 @@ import numpy as np
 from misc_functions import normalize_matrix
 
 
-def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-'):
+def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-', color=None,
+            xerr=None, yerr=None, fig=None):
     """Wrapper for 2D plotting data into subplots"""
     # create a new figure window
-    fig = plt.figure()
+    if fig is None:
+        fig = plt.figure()
     # initialize a plot counter
     plot_counter = 1
     # for all the rows
     for row in range(rows):
         # for all the columns
         for col in range(columns):
+            # if there's no plot in this position, skip it
+            if len(data_in) < plot_counter:
+                continue
             # add the subplot
-            ax = fig.add_subplot(str(rows) + str(columns) + str(plot_counter))
+            ax = fig.add_subplot(rows, columns, plot_counter)
             # for all the lines in the list
             for count, lines in enumerate(data_in[plot_counter - 1]):
+                if color is None:
+                    c = 'b'
+                elif color == '':
+                    c = 'b'
+                else:
+                    c = color[plot_counter - 1]
                 # plot x,y ot just y depending on the size of the data
                 if len(lines.shape) == 2:
                     line2d = ax.plot(lines[:, 0], lines[:, 1])
                 else:
-                    line2d = ax.plot(lines)
+                    if xerr is not None:
+                        if yerr is not None:
+                            line2d = ax.errorbar(range(lines.shape[0]), lines, xerr=xerr[plot_counter - 1][count]
+                                                 , yerr=yerr[plot_counter - 1][count])
+                        else:
+                            line2d = ax.errorbar(range(lines.shape[0]), lines, xerr=xerr[plot_counter - 1][count]
+                                                 , yerr=None)
+                    else:
+                        if yerr is not None:
+                            # line2d = ax.errorbar(range(lines.shape[0]), lines, xerr=None
+                            #                      , yerr=yerr[plot_counter - 1][count])
+
+                            line2d = ax.plot(range(lines.shape[0]), lines, color=c)
+                            y_error = yerr[plot_counter - 1][count]
+                            ax.fill_between(range(lines.shape[0]), lines-y_error, lines+y_error, alpha=0.5, color=c)
+                        else:
+                            line2d = ax.errorbar(range(lines.shape[0]), lines, xerr=None
+                                                 , yerr=None)
+
                 # change the marker if provided, otherwise use dots
                 if markers is not None:
                     line2d[0].set_marker(markers[plot_counter - 1][count])
@@ -39,10 +68,11 @@ def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-'
     return fig
 
 
-def plot_3d(data_in):
+def plot_3d(data_in, fig=None):
     """Wrapper for 3D plotting data"""
     # create a new figure window
-    fig = plt.figure()
+    if fig is None:
+        fig = plt.figure()
     # add the subplot
     ax = fig.add_subplot(111, projection='3d')
     # for all the lines in the list
@@ -86,10 +116,11 @@ def animation_plotter(motivedata, bonsaidata, cricket_data, xlim, ylim, interval
     return anim
 
 
-def histogram(data_in, rows=1, columns=1, bins=50):
+def histogram(data_in, rows=1, columns=1, bins=50, fig=None, color=None):
     """Wrapper for the histogram function in subplots"""
     # create a new figure window
-    fig = plt.figure()
+    if fig is None:
+        fig = plt.figure()
     # initialize a plot counter
     plot_counter = 1
     # for all the rows
@@ -97,20 +128,27 @@ def histogram(data_in, rows=1, columns=1, bins=50):
         # for all the columns
         for col in range(columns):
             # add the subplot
-            ax = fig.add_subplot(str(rows) + str(columns) + str(plot_counter))
+            ax = fig.add_subplot(rows, columns, plot_counter)
             # for all the lines in the list
             for lines in data_in[plot_counter - 1]:
+                if color is None:
+                    fc = 'b'
+                elif color[plot_counter - 1] == '':
+                    fc = 'b'
+                else:
+                    fc = color[plot_counter - 1]
                 # plot the histogram of the data
-                ax.hist(lines, bins=bins)
+                ax.hist(lines, bins=bins, density=True, alpha=0.5, fc=fc)
             # update the plot counter
             plot_counter += 1
     return fig
 
 
-def plot_arrow(trajectory, centers, heading, head, cricket, angles, angles2):
+def plot_arrow(trajectory, centers, heading, head, cricket, angles, angles2, fig=None):
     """Draw the animal trajectory and the heading"""
     # create a new figure window
-    fig = plt.figure()
+    if fig is None:
+        fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(trajectory[:, 0], trajectory[:, 1])
 
@@ -165,12 +203,16 @@ def animate_hunt(trajectory, heading, head, cricket, xlim, ylim, interval=10):
     return anim
 
 
-def plot_polar(data_in, fig=None):
+def plot_polar(data_in, fig=None, color=None):
     """Make a polar plot"""
     if fig is None:
         fig = plt.figure()
     ax = fig.add_subplot(111, projection='polar')
     array_len = list(range(data_in.shape[0])) + [0]
     array_len = np.array(array_len)
-    plt.polar(np.deg2rad(data_in[array_len, 0]), data_in[array_len, 1])
+    if color is None:
+        color = 'b'
+    else:
+        color = color
+    plt.polar(np.deg2rad(data_in[array_len, 0]), data_in[array_len, 1], color=color)
     return fig

@@ -1,15 +1,17 @@
 import numpy as np
+import scipy.stats as st
+from matching_functions import interp_motive
 
 
-def wrap(angles):
+def wrap(angles, bound=360):
     """wrap angles to the range 0 to 360 deg"""
     # modified from https://stackoverflow.com/questions/15927755/opposite-of-numpy-unwrap
-    return angles % 360
+    return angles % bound
 
 
-def unwrap(angles):
+def unwrap(angles, discont=3.141592653589793, axis=0):
     """unwrap angles in degrees"""
-    return np.rad2deg(np.unwrap(np.deg2rad(angles)))
+    return np.rad2deg(np.unwrap(np.deg2rad(angles), discont=discont, axis=axis))
 
 
 def heading_calculation(data_target, data_origin):
@@ -41,3 +43,58 @@ def bin_angles(angles, number_angles=36):
 def distance_calculation(data_1, data_2):
     """Calculate the euclidean distance between corresponding points in the 2 input data sets"""
     return np.array([np.linalg.norm(point_1 - point_2) for point_1, point_2 in zip(data_1, data_2)])
+
+
+def circmean_deg(data_in, axis=0):
+    """Wrapper in degrees for the scipy circmean function"""
+    return np.rad2deg(circmean(np.deg2rad(data_in), axis=axis))
+
+
+def circstd_deg(data_in, axis=0):
+    """Wrapper in degrees for the scipy circstd function"""
+    return np.rad2deg(circstd(np.deg2rad(data_in), axis=axis))
+
+
+def circmean(samples, high=2*np.pi, low=0, axis=None, ):
+    samples, ang = _circfuncs_common(samples, high, low)
+    S = np.nansum(np.sin(ang), axis=axis)
+    C = np.nansum(np.cos(ang), axis=axis)
+    res = np.arctan2(S, C)
+    mask = res < 0
+    if mask.ndim > 0:
+        res[mask] += 2 * np.pi
+    elif mask:
+        res += 2 * np.pi
+    return res * (high - low) / 2.0 / np.pi + low
+
+
+def circstd(samples, high=2*np.pi, low=0, axis=None):
+    samples, ang = _circfuncs_common(samples, high, low)
+    S = np.mean(np.sin(ang), axis=axis)
+    C = np.mean(np.cos(ang), axis=axis)
+    R = np.hypot(S, C)
+    return ((high - low)/2.0/np.pi) * np.sqrt(-2*np.log(R))
+
+
+def _circfuncs_common(samples, high, low):
+    samples = np.asarray(samples)
+    if samples.size == 0:
+        return np.nan, np.nan
+
+    ang = (samples - low)*2.*np.pi / (high - low)
+    return samples, ang
+
+
+def jump_killer(data_in, jump_threshold):
+    # unwrap the trace
+    data_in = unwrap(data_in)
+    # id the large jumps
+    smooth_map = np.concatenate(([1], np.abs(np.diff(data_in)) < jump_threshold)) == 1
+    # generate a vector with indexes
+    index_vector = np.array(np.arange(data_in.shape[0]))
+    # use interp_motive to interpolate
+    interp_points = interp_motive(data_in[smooth_map], index_vector[smooth_map], index_vector[~smooth_map])
+    # replace the target points in the data
+    data_out = data_in.copy()
+    data_out[index_vector[~smooth_map]] = interp_points
+    return data_out

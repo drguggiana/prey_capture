@@ -1,5 +1,7 @@
 import numpy as np
 import csv
+from os.path import basename
+import datetime
 
 
 def load_preprocessed(file_path_in):
@@ -43,3 +45,9 @@ def file_parser(file_path, outcome_keyword, condition_keyword, mse_threshold=Non
     if mse_threshold is not None:
         file_path = [file for file in file_path if np.float(file[file.find('mse')+3:file.find('mse')+9]) < mse_threshold]
     return file_path
+
+
+def get_file_date(filename):
+    """Extract the file date and time from a bonsai filename"""
+    file_date = datetime.datetime.strptime(basename(filename)[:18], '%m_%d_%Y_%H_%M_%S')
+    return file_date

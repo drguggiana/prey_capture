@@ -11,9 +11,9 @@ import matplotlib.colors as colors
 
 
 # define the outcome keyword to search for
-outcome_keyword = 'all'
+outcome_keyword = 'succ'
 # define the condition keyword to search for
-condition_keyword = 'vr'
+condition_keyword = ''
 condition_list = ['dark', 'vr']
 # load the data
 base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
@@ -266,9 +266,10 @@ for animal in unique_animals:
             webcam_perFrame = np.diff(trial[:, 4])[1:]
             # calculate the distance vector
             distance_vector = np.array([np.linalg.norm(el[[0, 1]] - el[[2, 3]]) for el in trial])[2:] * m_px
+            distance_vector[distance_vector > 1.96] = np.nan
             # calculate the mouse speed
             mouse_speed_vector = np.linalg.norm(np.diff(trial[:, [0, 1]], axis=0, n=2), axis=1) * m_px / webcam_perFrame
-            mouse_speed_vector[mouse_speed_vector > 1.5] = np.nan
+            mouse_speed_vector[mouse_speed_vector > 1.42] = np.nan
             # store the two
             trial_perdate.append(np.vstack((distance_vector, mouse_speed_vector)).T)
             # get the extrema
