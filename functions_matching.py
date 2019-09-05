@@ -2,8 +2,8 @@ from sklearn.preprocessing import scale
 from scipy.interpolate import interp1d
 import numpy as np
 import cv2
-from plotting_functions import *
-from misc_functions import add_edges
+from functions_plotting import *
+from functions_misc import add_edges
 
 
 def align_traces_maxrate(frame_rate_1, frame_rate_2, data_1, data_2, sign_vector, frame_times, cricket, z=1):

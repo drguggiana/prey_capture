@@ -1,10 +1,10 @@
 # imports
 from tkinter import filedialog
 from os.path import join, basename
-from io_functions import *
-from plotting_functions import *
-from misc_functions import *
-from kinematics_functions import *
+from functions_io import *
+from functions_plotting import *
+from functions_misc import *
+from functions_kinematic import *
 from paths import *
 
 # prevent the appearance of the tk main window
@@ -102,6 +102,7 @@ for file_idx, data in enumerate(data_all):
 
     # get the mouse-cricket distance
     mouse_cricket_distance = distance_calculation(cricket_coord, data[:, 6:8])
+
     mouse_speed = np.concatenate(
         ([0], distance_calculation(data[1:, :2], data[:-1, :2]) / (data[1:, -1] - data[:-1, -1])))
     mouse_acceleration = np.concatenate(([0], np.diff(mouse_speed)))
@@ -110,6 +111,10 @@ for file_idx, data in enumerate(data_all):
                                     / (data[1:, -1] - data[:-1, -1])))
     cricket_acceleration = np.concatenate(([0], np.diff(cricket_speed)))
 
+    # TODO: clean up preprocessing so this is not needed
+    mouse_cricket_distance[mouse_cricket_distance > 2] = np.nan
+    mouse_speed[mouse_speed > 20] = np.nan
+    cricket_speed[cricket_speed > 200] = np.nan
     # pack time on a variable
     time_vector = data[:, -1]
     # save the traces to a variable

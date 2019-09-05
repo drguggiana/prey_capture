@@ -19,7 +19,7 @@ import datetime
 from os import path
 import csv
 from paths import *
-from misc_functions import *
+from functions_misc import *
 # rc('animation', html='html5')
 
 # get rid of the tk main window

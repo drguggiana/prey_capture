@@ -1,13 +1,10 @@
-# TODO: set up file loading
-# TODO: plot average heading towards cricket, make it a function of distance
-# TODO: plot the time sequence of the acceleration, speed of mouse and cricket
 # imports
 from tkinter import filedialog
 from os.path import join, basename
-from io_functions import *
-from plotting_functions import *
-from misc_functions import *
-from kinematics_functions import *
+from functions_io import *
+from functions_plotting import *
+from functions_misc import *
+from functions_kinematic import *
 from paths import *
 from scipy.stats import sem
 from scipy.ndimage.measurements import label
@@ -18,7 +15,7 @@ import h5py
 tk_killwindow()
 
 # define the outcome keyword to search for
-outcome_keyword = 'all'
+outcome_keyword = 'succ'
 # define the condition keyword to search for
 condition_keyword = 'dark'
 

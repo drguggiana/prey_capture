@@ -3,26 +3,25 @@ import csv
 from os import listdir
 from os.path import isfile, join, basename
 import matplotlib.pyplot as plt
+import matplotlib
 from datetime import datetime
 from scipy.ndimage.measurements import label
 from scipy.stats import sem
 from sklearn.preprocessing import minmax_scale
 import matplotlib.colors as colors
+from paths import *
 
 
 # define the outcome keyword to search for
-outcome_keyword = 'succ'
+outcome_keyword = 'all'
 # define the condition keyword to search for
 condition_keyword = ''
 condition_list = ['dark', 'vr']
 # load the data
-base_path = r'J:\Drago Guggiana Nilo\Prey_capture\Pre_processed'
-# base_path = r'E:\Prey_capture\Pre_processed'
+base_path = pre_processed_path
 file_path = [join(base_path, f) for f in listdir(base_path) if isfile(join(base_path, f[:-4]+'.csv'))]
-# file_path = [r'E:\Prey_capture\Pre_processed\05_24_2019_16_34_35_DG_190417_c_succ_preproc.csv']
 # define the figure save path
-figure_save = r'C:\Users\drguggiana\Dropbox\Bonhoeffer_things\Presentations\Figures'
-# figure_save = r'C:\Users\Drago\Dropbox\Bonhoeffer_things\Presentations\Figures'
+figure_save = performance_path
 
 
 def density_map(occ_array, bin_num, bin_ranges):
@@ -68,6 +67,54 @@ def load_preprocessed(file_path_in):
     return animal_data
 
 
+def break_axis(x, y, x_lims, d=0.015, fig=None, marker='o', label=''):
+    # TODO: make it so the axis can be chosen
+    if fig is None:
+        fig, (ax, ax2) = plt.subplots(1, 2, sharey='True', facecolor='w')
+    else:
+        ax = fig.add_subplot(1, 2, 1, facecolor='w')
+        ax2 = fig.add_subplot(1, 2, 2, sharey=ax, facecolor='w')
+
+    # plot the same data on both axes
+    ax.plot(x, y, marker=marker)
+    line = ax2.plot(x, y, marker=marker)
+    line[0].set_label(label)
+
+    ax.set_xlim(x_lims[0][0], x_lims[0][1])
+    ax2.set_xlim(x_lims[1][0], x_lims[1][1])
+
+    # hide the spines between ax and ax2
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['left'].set_visible(False)
+    ax.yaxis.tick_left()
+    ax.tick_params(labelright=False)
+    ax2.tick_params(labelright=False, labelleft=False, left=False)
+
+    # ax2.yaxis.tick_right()
+
+    # This looks pretty good, and was fairly painless, but you can get that
+    # cut-out diagonal lines look with just a bit more work. The important
+    # thing to know here is that in axes coordinates, which are always
+    # between 0-1, spine endpoints are at these locations (0,0), (0,1),
+    # (1,0), and (1,1).  Thus, we just need to put the diagonals in the
+    # appropriate corners of each of our axes, and so long as we use the
+    # right transform and disable clipping.
+
+    # d = .015  # how big to make the diagonal lines in axes coordinates
+    # arguments to pass plot, just so we don't keep repeating them
+    kwargs = dict(transform=ax.transAxes, color='k', clip_on=False)
+    ax.plot((1 - d, 1 + d), (-d, +d), **kwargs)
+    # ax.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs)
+
+    kwargs.update(transform=ax2.transAxes)  # switch to the bottom axes
+    # ax2.plot((-d, +d), (1 - d, 1 + d), **kwargs)
+    ax2.plot((-d, +d), (-d, +d), **kwargs)
+    return fig
+
+
 # filter the results by outcome (only use all for performance plot though)
 if outcome_keyword != 'all':
     file_path = [file for file in file_path if outcome_keyword in file]
@@ -86,6 +133,10 @@ animal_dates = np.array(['_'.join([str(el[el2]) for el2 in [2, 0, 1]]) for el in
 
 unique_animals, idx_animals, inv_animals = np.unique(animal_names, return_index=True, return_inverse=True)
 unique_dates, idx_dates, inv_dates = np.unique(animal_dates, return_index=True, return_inverse=True)
+
+# define the day limits
+# TODO: automate this
+day_lims = [[-0.5, 23], [73, 86]]
 
 # count the successes per animal and per date
 # allocate memory for the result
@@ -109,8 +160,12 @@ for animal in unique_animals:
     performance_list.append([animal, np.array(performance_perdate)])
 
 # plot the performance per animal
-fig = plt.figure()
-ax = fig.add_subplot(111)
+font = {'family': 'arial',
+        'weight': 'normal',
+        'size': 20}
+matplotlib.rc('font', **font)
+fig = plt.figure(dpi=300)
+# ax = fig.add_subplot(111)
 # initialize an accumulator
 date_label = []
 # for all the animals
@@ -118,19 +173,21 @@ for animal in performance_list:
     performance_vector = animal[1][:, 1].astype(float)
     # find the last not nan element and skip the remaining ones
     nonnan_idx = np.nonzero(~np.isnan(performance_vector))[0][-1]
-    performance_vector = performance_vector[:nonnan_idx]
+    performance_vector = performance_vector[:nonnan_idx]*100
     date_vector = [datetime.strptime(el, '%Y_%m_%d') for el in animal[1][:nonnan_idx, 0]]
     date_vector = [(el - date_vector[0]).days for el in date_vector]
-    ax.plot(date_vector, performance_vector, label=animal[0], marker='o')
+    # ax.plot(date_vector, performance_vector, label=animal[0], marker='o')
+    break_axis(date_vector, performance_vector, day_lims, fig=fig, label=animal[0])
     # ax.legend()
     if len(date_label) < len(date_vector):
         date_label = date_vector
 
-plt.xticks(date_label, date_label, rotation=45)
-plt.ylabel('Performance [a.u.]')
-plt.xlabel('Days')
+# plt.xticks(date_label, date_label, rotation=45)
+fig.axes[0].set_ylabel('Performance [% prey captured]')
+fig.axes[0].set_xlabel('Days', position=[1.1, 0.0])
+plt.legend(fontsize=12, loc='lower right')
 fig.savefig(join(figure_save, 'performanceMouse_'+outcome_keyword+'_'+condition_keyword+'.png'), bbox_inches='tight')
-
+# plt.show()
 # calculate latency to attack and time to capture
 # define the length constant (measured approximately from the data)
 m_px = 1 / 445
@@ -183,14 +240,18 @@ for animal in unique_animals:
     latency_list.append([animal, latency_perdate])
 
 # plot the capture time related numbers
-fig = plt.figure()
-encNumber_plot = fig.add_subplot(131)
-initTime_plot = fig.add_subplot(132)
-endTime_plot = fig.add_subplot(133)
+# fig = plt.figure()
+# encNumber_plot = fig.add_subplot(131)
+# initTime_plot = fig.add_subplot(132)
+# endTime_plot = fig.add_subplot(133)
+encNumber_plot = plt.figure(dpi=300)
+initTime_plot = plt.figure(dpi=300)
+endTime_plot = plt.figure(dpi=300)
 
 # put the plot handles in a list
 plot_array = [encNumber_plot, initTime_plot, endTime_plot]
 plot_labels = ['Encounter number', 'Latency to first encounter [s]', 'Total hunt time [s]']
+file_labels = ['encounters_', 'latency_', 'time_']
 # initialize an accumulator
 date_label = []
 # for all the plot types
@@ -224,16 +285,22 @@ for idx_plot, plots in enumerate(plot_array):
         date_vector = [(el - date_vector[0]).days for el in date_vector]
         if len(date_label) < len(date_vector):
             date_label = date_vector
-        # ax.plot(date_vector, latency_vector, label=animal[0], marker='o')
-        plots.plot(date_vector, plot_vector, label=animal[0], marker='o')
-        # plots.set_xticks(date_label[:2:])
-        # plots.set_xticklabels(date_label[:2:], rotation=45, fontsize=8)
-        plots.set_ylabel(plot_labels[idx_plot])
-        plots.set_xlabel('Days')
-        # plots.set_xlabel(date_label, rotation=45)
-
-plt.subplots_adjust(wspace=0.8, hspace=0.3)
-fig.savefig(join(figure_save, 'latencies_'+outcome_keyword+'_'+condition_keyword+'.png'), bbox_inches='tight')
+        # # ax.plot(date_vector, latency_vector, label=animal[0], marker='o')
+        # plots.plot(date_vector, plot_vector, label=animal[0], marker='o')
+        # # plots.set_xticks(date_label[:2:])
+        # # plots.set_xticklabels(date_label[:2:], rotation=45, fontsize=8)
+        # plots.set_ylabel(plot_labels[idx_plot])
+        # plots.set_xlabel('Days')
+        # # plots.set_xlabel(date_label, rotation=45)
+        break_axis(date_vector, plot_vector, day_lims, fig=plots, label=animal[0])
+    plots.axes[0].set_ylabel(plot_labels[idx_plot])
+    plots.axes[0].set_xlabel('Days', position=[1.1, 0.0])
+    # plt.legend(fontsize=12, loc='upper right')
+    plots.savefig(join(figure_save, file_labels[idx_plot] + outcome_keyword + '_' + condition_keyword + '.png'),
+                  bbox_inches='tight')
+# plt.show()
+# plt.subplots_adjust(wspace=0.8, hspace=0.3)
+# fig.savefig(join(figure_save, 'latencies_'+outcome_keyword+'_'+condition_keyword+'.png'), bbox_inches='tight')
 
 # plot a fitted 2D map of the distance to prey vs acceleration
 # get the limits of the distribution for distance and mouse speed
@@ -416,6 +483,6 @@ fig.savefig(join(figure_save, 'huntTriggeredAverage_'+outcome_keyword+'_'+condit
 # ax = fig.add_subplot(111)
 # ax.plot(distance_vector)
 # ax.plot(encounter_idx)
-plt.show()
+# plt.show()
 
 print('yay')

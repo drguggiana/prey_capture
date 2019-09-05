@@ -1,12 +1,13 @@
 import numpy as np
 import scipy.stats as st
-from matching_functions import interp_motive
+from functions_matching import interp_motive
 
 
 def wrap(angles, bound=360):
     """wrap angles to the range 0 to 360 deg"""
     # modified from https://stackoverflow.com/questions/15927755/opposite-of-numpy-unwrap
-    return angles % bound
+    out_angles = angles % bound
+    return out_angles
 
 
 def unwrap(angles, discont=3.141592653589793, axis=0):

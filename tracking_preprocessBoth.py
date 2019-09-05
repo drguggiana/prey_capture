@@ -5,10 +5,10 @@ from sklearn.metrics import mean_squared_error as mse
 from os.path import join, basename
 from os import listdir
 from scipy.signal import find_peaks
-from matching_functions import *
-from io_functions import *
-from plotting_functions import *
-from misc_functions import *
+from functions_matching import *
+from functions_io import *
+from functions_plotting import *
+from functions_misc import *
 from paths import *
 
 
