@@ -19,8 +19,8 @@ variable_names = ['Heading angle', 'Head direction', 'Prey angle', 'Mouse to pre
                   'Mouse head to prey angle', 'Distance to prey', 'Mouse speed',
                   'Mouse acceleration', 'Prey speed', 'Prey acceleration', 'Mouse head height',
                   'Time']
-units = [' [deg]', ' [deg]', ' [deg]', ' [deg]', ' [deg]', ' [m]', ' [cm/s]', ' [cm/s2]',
-         ' [cm/s]', ' [cm/s2]', ' [cm]', ' [s]']
+units = [' [deg]', ' [deg]', ' [deg]', ' [deg]', ' [deg]', ' [m]', ' [m/s]', ' [m/s2]',
+         ' [m/s]', ' [m/s2]', ' [cm]', ' [s]']
 
 # select the files to load
 base_path = kinematics_figs
@@ -211,23 +211,32 @@ def figure_encounter():
         # plot the results
         # define the variables to plot from
         encounter_variables = np.arange(3, 11)
+        # get the time vector
+        time_vector = encounter_average[:, -1]
+
         # for all the variables
         for var_count, variables in enumerate(encounter_variables):
             if counter == 0:
-                encounter_figs.append(plot_2d([[encounter_average[:, variables]]], yerr=[[encounter_sem[:, variables]]],
+                encounter_figs.append(plot_2d([[np.vstack((time_vector, encounter_average[:, variables])).T]], yerr=[[encounter_sem[:, variables]]],
                                               color=[color[counter]]))
-                # print(plt.xlim())
-                # plt.plot([np.sum(plt.xlim()) / 2, np.sum(plt.xlim()) / 2],
-                #          [plt.ylim()[0], plt.ylim()[0]], color='k')
             else:
-                plot_2d([[encounter_average[:, variables]]], yerr=[[encounter_sem[:, variables]]],
+                plot_2d([[np.vstack((time_vector, encounter_average[:, variables])).T]], yerr=[[encounter_sem[:, variables]]],
                         fig=encounter_figs[var_count], color=[color[counter]])
+
             curr_encounter = encounter_figs[var_count]
             plt.ylabel(variable_names[variables] + units[variables])
-            plt.xlabel('Time [a.u.]')
+            plt.xlabel('Time [s]')
+            # if it's the last data set of the ones selected
             if counter == len(data_all) - 1:
+                # if there was more than one plot, plot the legend
                 if counter > 0:
                     encounter_figs[var_count].legend(legend_list, fontsize=12)
+                # set the target figure as the current figure
+                plt.figure(encounter_figs[var_count].number)
+                # turn autoscale off so the middle line spans the whole plot
+                plt.autoscale(enable=False)
+                # draw a line in the middle to indicate the encounter
+                plt.plot([0, 0], [plt.ylim()[0], plt.ylim()[1]], color=[0., 1., 0., 1.])
 
                 curr_encounter.savefig(join(save_path, 'encounter_' + variable_names[variables] +
                                             '_' + out_keyword + '_' + cond_keyword + '.png'),
@@ -264,15 +273,51 @@ def figure_alltraces(target_parameter, sorting_parameter):
     return trace_figs
 
 
+def figure_alllines(target_parameter, sorting_parameter):
+    # PLOT ENCOUNTERS
+    font = {'family': 'arial',
+            'weight': 'normal',
+            'size': 12}
+    matplotlib.rc('font', **font)
+    # initialize the list of figures
+    trace_figs = []
+    # for all data sets
+    for counter, data in enumerate(data_all):
+        # get the current outcome and condition keywords
+        out_keyword = '_' + data[0]
+        cond_keyword = '_' + data[1]
+        # get the data
+        enc_parameters = data[4]
+        # for the target pairs of target and sorting parameters
+        for tar, sort in zip(target_parameter, sorting_parameter):
+            # sort the traces by max acceleration
+            plot_parameters = normalize_matrix(enc_parameters[np.argsort(np.nanmax(enc_parameters[:, :, sort],
+                                                                                   axis=1)), :, tar], axis=1)
+            # create the figure
+            fig = plt.figure()
+            trace_figs.append(fig)
+            ax = fig.add_subplot(111)
+            # plot them one by one
+            for traces in plot_parameters:
+                ax.plot(traces)
+
+            trace_figs[counter].savefig(join(save_path, 'lines_param' + variable_names[tar] + '_sortedby'
+                                             + variable_names[sort] +
+                                             '_' + out_keyword + '_' + cond_keyword + '.png'), bbox_inches='tight')
+    return trace_figs
+
+
+# plt.close('all')
+histogram_figures = figure_histograms()
 plt.close('all')
-# histogram_figures = figure_histograms(outcome_keyword, condition_keyword)
+# polar_figures = figure_polar()
 # plt.close('all')
-# polar_figures = figure_polar(outcome_keyword, condition_keyword)
+# timecourse_figures = figure_timecourse()
 # plt.close('all')
-# timecourse_figures = figure_timecourse(outcome_keyword, condition_keyword)
+# encounter_figures = figure_encounter()
 # plt.close('all')
-# encounter_figures = figure_encounter(outcome_keyword, condition_keyword)
+# trace_figures = figure_alltraces(target_parameter=[6], sorting_parameter=[5])
 # plt.close('all')
-trace_figures = figure_alltraces(target_parameter=[6], sorting_parameter=[5])
+line_figures = figure_alllines(target_parameter=[6], sorting_parameter=[5])
 plt.close('all')
-plt.show()
+# plt.show()

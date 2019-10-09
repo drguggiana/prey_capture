@@ -15,9 +15,9 @@ import h5py
 tk_killwindow()
 
 # define the outcome keyword to search for
-outcome_keyword = 'succ'
+outcome_keyword = 'fail'
 # define the condition keyword to search for
-condition_keyword = 'dark'
+condition_keyword = ''
 
 # load the data
 base_path = kinematics_path
@@ -98,9 +98,12 @@ timecourse_fig.savefig(join(save_path, 'timecourse_' + outcome_keyword + '_' + c
 # calculate the encounter triggered averages
 # isolate attacks by distance
 # define the number of positions to capture per encounter (split evenly)
-encounter_positions = 500
+# encounter_positions = 500
+# define the time window width, centered on the encounter (in seconds)
+encounter_window = 5
 # allocate memory for the animal encounters
 encounter_pertrial = []
+
 # for all the trials
 for data in data_all:
 
@@ -109,20 +112,42 @@ for data in data_all:
     # for all the encounters
     for encounters in range(1, encounter_number):
         # get the first coordinate of the encounter and grab the surroundings
-        encounter_start = np.nonzero(encounter_idx == encounters)[0][0]
-        # get the vector of actual indexes
-        encounter_indexes = np.linspace(encounter_start-encounter_positions/2,
-                                        encounter_start+encounter_positions/2 - 1,
-                                        encounter_positions, dtype=int)
-        if np.max(encounter_indexes) >= data.shape[0]:
+        encounter_hit = np.nonzero(encounter_idx == encounters)[0][0]
+        # get the starting time point of the encounter
+        time_start = data[encounter_hit, -1]
+        # get the number of positions for this encounter
+        encounter_start = np.argmin(np.abs(data[:, -1] - (time_start-encounter_window/2)))
+        encounter_end = np.argmin(np.abs(data[:, -1] - (time_start+encounter_window/2)))
+        # # get the vector of actual indexes
+        # encounter_indexes = np.linspace(encounter_start-encounter_positions/2,
+        #                                 encounter_start+encounter_positions/2 - 1,
+        #                                 encounter_positions, dtype=int)
+        # if np.max(encounter_indexes) >= data.shape[0]:
+        #     continue
+        if encounter_end == data.shape[0]:
             continue
         # store the distance and the speed around the encounter
-        encounter_pertrial.append(np.array(data[encounter_indexes, :]))
-    # map_permouse, binx, biny = density_map(trials, bin_number, extrema_list)
-    # map_list.append(map_permouse)
+        # encounter_pertrial.append(np.array(data[encounter_indexes, :]))
+        encounter_pertrial.append(np.array(data[encounter_start:encounter_end+1, :]))
+        # correct the time axis
+        encounter_pertrial[-1][:, -1] -= time_start
 
+# interpolate the traces to match the one with the most points
+# determine the trace with the most points
+size_array = [el.shape[0] for el in encounter_pertrial]
+max_coord = np.argmax(size_array)
+# max_coord = np.argsort(size_array)[len(size_array)//2]
+max_time = encounter_pertrial[max_coord][:, -1]
+# allocate memory for the interpolated traces
+encounter_interpolated = []
+# for all the traces, if it doesn't have the same number of points as the max, interpolate to it
+for index, traces in enumerate(encounter_pertrial):
+    if index != max_coord:
+        encounter_interpolated.append(np.hstack((interp_trace(traces[:, -1], traces[:, :-1], max_time), np.reshape(max_time, (-1, 1)))))
+    else:
+        encounter_interpolated.append(encounter_pertrial[index])
 # average and sem across encounters
-encounter_matrix = np.array(encounter_pertrial)
+encounter_matrix = np.array(encounter_interpolated)
 
 encounter_average = np.hstack((unwrap(circmean_deg(encounter_matrix[:, :, :5], axis=0), axis=0),
                                np.nanmean(encounter_matrix[:, :, 5:], axis=0)))

@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression as ols
 from tkinter import Tk
+from scipy.interpolate import interp1d
 
 
 def rolling_average(data_in, window_size):
@@ -79,3 +80,18 @@ def normalize_matrix(matrix, target=None, axis=None):
         out_matrix = (matrix - np.nanmin(matrix, axis=axis).reshape(-1, 1)) / (
                     np.nanmax(matrix, axis=axis).reshape(-1, 1) - np.nanmin(matrix, axis=axis).reshape(-1, 1))
     return out_matrix
+
+
+def interp_trace(x_known, y_known, x_target):
+    """Interpolate a trace by building an interpolant"""
+    # filter the values so the interpolant is trained only on sorted x points (required by the function)
+    sorted_frames = np.hstack((True, np.invert(x_known[1:] <= x_known[:-1])))
+    x_known = x_known[sorted_frames]
+    y_known = y_known[sorted_frames, :]
+    # also remove any NaN frames
+    notnan = ~np.isnan(np.sum(y_known, axis=1))
+    x_known = x_known[notnan]
+    y_known = y_known[notnan, :].T
+    # create the interpolant
+    interpolant = interp1d(x_known, y_known, kind='linear', bounds_error=False, fill_value=np.nanmean(y_known, axis=1))
+    return interpolant(x_target).T

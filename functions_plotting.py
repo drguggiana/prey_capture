@@ -31,7 +31,25 @@ def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-'
                     c = 'b'
                 # plot x,y ot just y depending on the size of the data
                 if len(lines.shape) == 2:
-                    line2d = ax.plot(lines[:, 0], lines[:, 1])
+                    # line2d = ax.plot(lines[:, 0], lines[:, 1])
+                    if xerr is not None:
+                        if yerr is not None:
+                            line2d = ax.errorbar(lines[:, 0], lines[:, 1], xerr=xerr[plot_counter - 1][count]
+                                                 , yerr=yerr[plot_counter - 1][count])
+                        else:
+                            line2d = ax.errorbar(lines[:, 0], lines[:, 1], xerr=xerr[plot_counter - 1][count]
+                                                 , yerr=None)
+                    else:
+                        if yerr is not None:
+                            # line2d = ax.errorbar(range(lines.shape[0]), lines, xerr=None
+                            #                      , yerr=yerr[plot_counter - 1][count])
+
+                            line2d = ax.plot(lines[:, 0], lines[:, 1], color=c)
+                            y_error = yerr[plot_counter - 1][count]
+                            ax.fill_between(lines[:, 0], lines[:, 1]-y_error, lines[:, 1]+y_error, alpha=0.5, color=c)
+                        else:
+                            line2d = ax.errorbar(lines[:, 0], lines[:, 1], xerr=None
+                                                 , yerr=None)
                 else:
                     if xerr is not None:
                         if yerr is not None:
