@@ -13,7 +13,7 @@ from paths import *
 
 
 # define the outcome keyword to search for
-outcome_keyword = 'all'
+outcome_keyword = 'succ'
 # define the condition keyword to search for
 condition_keyword = ''
 condition_list = ['dark', 'vr']

@@ -89,9 +89,9 @@ def figure_histograms():
                 histogram([[kin_parameters[:, variables]]], fig=histogram_figs[var_count], color=[color[counter]],
                           bins=100)
             curr_histogram = histogram_figs[var_count]
-            # # change to log y axis if plot is in the selected variables
-            # if variables in [6, 7, 8, 9, 10]:
-            #     curr_histogram.axes[0].set_yscale('log')
+            # change to log y axis if plot is in the selected variables
+            if variables in [6, 7, 8, 9, 10]:
+                curr_histogram.axes[0].set_yscale('log')
 
             plt.xlabel(variable_names[variables] + units[variables])
             plt.ylabel('Density [a.u.]')
@@ -224,6 +224,7 @@ def figure_encounter():
                         fig=encounter_figs[var_count], color=[color[counter]])
 
             curr_encounter = encounter_figs[var_count]
+            plt.figure(encounter_figs[var_count].number)
             plt.ylabel(variable_names[variables] + units[variables])
             plt.xlabel('Time [s]')
             # if it's the last data set of the ones selected
@@ -310,14 +311,14 @@ def figure_alllines(target_parameter, sorting_parameter):
 # plt.close('all')
 histogram_figures = figure_histograms()
 plt.close('all')
-# polar_figures = figure_polar()
-# plt.close('all')
+polar_figures = figure_polar()
+plt.close('all')
 # timecourse_figures = figure_timecourse()
 # plt.close('all')
 # encounter_figures = figure_encounter()
 # plt.close('all')
 # trace_figures = figure_alltraces(target_parameter=[6], sorting_parameter=[5])
 # plt.close('all')
-line_figures = figure_alllines(target_parameter=[6], sorting_parameter=[5])
-plt.close('all')
+# line_figures = figure_alllines(target_parameter=[6], sorting_parameter=[5])
+# plt.close('all')
 # plt.show()

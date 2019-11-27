@@ -1,6 +1,5 @@
 from sklearn.preprocessing import scale
 from scipy.interpolate import interp1d
-import numpy as np
 import cv2
 from functions_plotting import *
 from functions_misc import add_edges

@@ -29,7 +29,7 @@ for animal in file_path:
     parsed_data = []
     with open(file_path[0]) as f:
         for line in f:
-            if line[0]=='0':
+            if line[0] == '0':
                 continue
             parsed_data.append(parse_line(line))
 
@@ -47,7 +47,7 @@ for animal in file_path:
     print('Frame rate motive:' + str(1 / np.mean(np.diff(timestamp))) + ' fps')
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    ax.plot(np.diff(timestamp ))
+    ax.plot(np.diff(timestamp))
 
     # 2D mouse movement
     fig = plt.figure()
