@@ -13,11 +13,15 @@ import numpy as np
 tk_killwindow()
 
 # define whether to plot the intermediate steps
-plot_flag = 1
+plot_flag = 0
 # define the kernel size for the median filter
 kernel_size = 21
 # define the target columns (0 and 1 are mouse, 2 and 3 are cricket at the moment)
 tar_columns = [[0, 1], [2, 3]]
+# define the maximum amount of an allowed jump in the trajectory per axis, in pixels
+max_step = 300
+# define the maximum length of a jump to be interpolated
+max_length = 50
 
 # define the save path
 save_path = pre_processed_path
@@ -76,7 +80,7 @@ for current_path in file_path_bonsai:
     filtered_traces = eliminate_singles(filtered_traces)
 
     # eliminate discontinuities before interpolating
-    filtered_traces = nan_large_jumps(filtered_traces, tar_columns, 300)
+    filtered_traces = nan_large_jumps(filtered_traces, tar_columns, max_step, max_length)
 
     # interpolate the NaN stretches
     filtered_traces = interpolate_segments(filtered_traces, np.nan)
@@ -85,16 +89,15 @@ for current_path in file_path_bonsai:
     if plot_flag > 0:
         # define the start of plotting
         plot_start = 0
-        fig_final = plt.figure()
-        ax = fig_final.add_subplot(111)
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
         plt.gca().invert_yaxis()
         # plot the unfiltered trace
         ax.plot(files[plot_start:, tar_columns[0][0]],
                 files[plot_start:, tar_columns[0][1]], marker='*', linestyle='None')
         ax.plot(files[plot_start:, tar_columns[1][0]],
                 files[plot_start:, tar_columns[1][1]], marker='*', linestyle='-')
-        fig_final.savefig(path.join(save_path, path.basename(current_path)[:-4]+'.png'),
-                          bbox_inches='tight')
+
         # plot the filtered trace
         ax.plot(filtered_traces[plot_start:, tar_columns[0][0]],
                 filtered_traces[plot_start:, tar_columns[0][1]], marker='o', linestyle='None')
@@ -118,6 +121,20 @@ for current_path in file_path_bonsai:
 
         plt.show()
 
+    # save the filtered trace
+    fig_final = plt.figure()
+    ax = fig_final.add_subplot(111)
+    plt.gca().invert_yaxis()
+
+    # plot the filtered trace
+    ax.plot(filtered_traces[:, tar_columns[0][0]],
+            filtered_traces[:, tar_columns[0][1]], marker='o', linestyle='-')
+    ax.plot(filtered_traces[:, tar_columns[1][0]],
+            filtered_traces[:, tar_columns[1][1]], marker='o', linestyle='-')
+    fig_final.savefig(path.join(save_path, path.basename(current_path)[:-4] + '.png'),
+                      bbox_inches='tight')
+
+    plt.close('all')
     # save the results
     # assemble the file name
     save_file = path.join(save_path, path.basename(current_path)[:-4] + '_preproc.csv')

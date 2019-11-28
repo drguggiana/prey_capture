@@ -201,7 +201,7 @@ def eliminate_singles(files):
     return filtered_traces
 
 
-def nan_large_jumps(files, tar_columns, max_step):
+def nan_large_jumps(files, tar_columns, max_step, max_length):
     """Remove discontinuities in the trace via interpolation"""
     # allocate memory for the output
     corrected_trace = files.copy()
@@ -218,23 +218,33 @@ def nan_large_jumps(files, tar_columns, max_step):
             result = np.hstack((0, result))
 
             # find the places of threshold crossing
-            starts = np.argwhere(result > max_step)
-            ends = np.argwhere(result < -max_step)
-            # if they're empty, skip the iteration
-            if (starts.shape[0] == 0) | (ends.shape[0] == 0):
-                continue
-            else:
-                starts = starts[:, 0]
-                ends = ends[:, 0]
+            jumps = np.argwhere(np.abs(result) > max_step)
+            # get the distance between jumps
+            distance_between = np.diff(jumps, axis=0)
 
-            # match their sizes and order
-            if starts[0] > ends[0]:
-                ends = ends[1:]
-            if starts[-1] > ends[-1]:
-                starts = starts[:-1]
-            # NaN the in-betweens
-            # for all the starts
-            for start, end in zip(starts, ends):
-                curr_data[start:end] = np.nan
+            # go through each of the jumps
+            for index, jump in enumerate(distance_between):
+                # if the jump is smaller than the max_length allowed, NaN it
+                if jump[0] < max_length:
+                    curr_data[jumps[index, 0]:jumps[index+1, 0]] = np.nan
+            # ends = np.argwhere(result < -max_step)
+            # # if they're empty, skip the iteration
+            # if (starts.shape[0] == 0) | (ends.shape[0] == 0):
+            #     continue
+            # else:
+            #     starts = starts[:, 0]
+            #     ends = ends[:, 0]
+            #
+            # # match their sizes and order
+            # if starts[0] > ends[0]:
+            #     ends = ends[1:]
+            # if ends.shape[0] == 0:
+            #     continue
+            # if starts[-1] > ends[-1]:
+            #     starts = starts[:-1]
+            # # NaN the in-betweens
+            # # for all the starts
+            # for start, end in zip(starts, ends):
+            #     curr_data[start:end] = np.nan
             corrected_trace[:, col] = curr_data
     return corrected_trace
