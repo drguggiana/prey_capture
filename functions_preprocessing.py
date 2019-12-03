@@ -143,9 +143,10 @@ def median_discontinuities(files, tar_columns, kernel_size):
     filtered_traces = files.copy()
     # for the mouse and the cricket columns
     for animal in tar_columns:
-        # for the x or y coordinate
-        for col in animal:
-            filtered_traces[:, col] = medfilt(files[:, col], kernel_size=kernel_size)
+        # # for the x or y coordinate
+        # for col in animal:
+        #     filtered_traces[:, col] = medfilt(files[:, col], kernel_size=kernel_size)
+        filtered_traces[animal] = medfilt(files[animal], kernel_size=kernel_size)
 
     return filtered_traces
 
@@ -153,22 +154,22 @@ def median_discontinuities(files, tar_columns, kernel_size):
 def interpolate_segments(files, target_value):
     """Interpolate between the NaNs in a trace"""
     # allocate memory for the output
-    interpolated_traces = np.zeros_like(files)
+    interpolated_traces = files.copy()
     # for all the columns
     for col in np.arange(files.shape[1]):
         # get the target trace
-        original_trace = files[:, col]
+        original_trace = files.iloc[:, col].to_numpy()
         # if the target is nan then search for nans, otherwise search for the target value
         if np.isnan(target_value):
             # check if the target value is present, otherwise skip
             if np.sum(np.isnan(original_trace)) == 0:
-                interpolated_traces[:, col] = original_trace
+                interpolated_traces.iloc[:, col] = original_trace
                 continue
             x_known = np.squeeze(np.argwhere(~np.isnan(original_trace)))
         else:
             # check if the target value is present, otherwise skip
             if np.sum(original_trace == target_value) == 0:
-                interpolated_traces[:, col] = original_trace
+                interpolated_traces.iloc[:, col] = original_trace
                 continue
             x_known = np.squeeze(np.argwhere(original_trace != target_value))
 
@@ -177,7 +178,7 @@ def interpolate_segments(files, target_value):
         # get the known y vector
         y_known = np.expand_dims(original_trace[x_known], 1)
         # run the interpolation
-        interpolated_traces[:, col] = np.squeeze(interp_trace(x_known, y_known, x_target))
+        interpolated_traces.iloc[:, col] = np.squeeze(interp_trace(x_known, y_known, x_target))
 
     return interpolated_traces
 
@@ -189,14 +190,14 @@ def eliminate_singles(files):
     # for all the columns
     for col in np.arange(files.shape[1]):
         # get the target trace
-        original_trace = files[:, col]
+        original_trace = files.iloc[:, col]
         # find the derivative of the nan trace
         nan_positions = np.diff(np.isnan(original_trace).astype(np.int32), n=2)
         # find the coordinates of the singles
         single_positions = np.argwhere(nan_positions == 2) + 1
         # single_positions = np.argwhere((nan_positions[:-1] == 1) & (nan_positions[1:] == -1))
         # nan the singles
-        filtered_traces[single_positions, col] = np.nan
+        filtered_traces.iloc[single_positions, col] = np.nan
 
     return filtered_traces
 
@@ -208,43 +209,43 @@ def nan_large_jumps(files, tar_columns, max_step, max_length):
     # for the mouse and the cricket columns
     for animal in tar_columns:
 
-        for idx, col in enumerate(animal):
-            # get the data
-            curr_data = files[:, col].copy()
+        # for idx, col in enumerate(animal):
+        # get the data
+        curr_data = files[animal].copy()
 
-            # take the derivative trace
-            result = np.diff(curr_data[:])
+        # take the derivative trace
+        result = np.diff(curr_data[:])
 
-            result = np.hstack((0, result))
+        result = np.hstack((0, result))
 
-            # find the places of threshold crossing
-            jumps = np.argwhere(np.abs(result) > max_step)
-            # get the distance between jumps
-            distance_between = np.diff(jumps, axis=0)
+        # find the places of threshold crossing
+        jumps = np.argwhere(np.abs(result) > max_step)
+        # get the distance between jumps
+        distance_between = np.diff(jumps, axis=0)
 
-            # go through each of the jumps
-            for index, jump in enumerate(distance_between):
-                # if the jump is smaller than the max_length allowed, NaN it
-                if jump[0] < max_length:
-                    curr_data[jumps[index, 0]:jumps[index+1, 0]] = np.nan
-            # ends = np.argwhere(result < -max_step)
-            # # if they're empty, skip the iteration
-            # if (starts.shape[0] == 0) | (ends.shape[0] == 0):
-            #     continue
-            # else:
-            #     starts = starts[:, 0]
-            #     ends = ends[:, 0]
-            #
-            # # match their sizes and order
-            # if starts[0] > ends[0]:
-            #     ends = ends[1:]
-            # if ends.shape[0] == 0:
-            #     continue
-            # if starts[-1] > ends[-1]:
-            #     starts = starts[:-1]
-            # # NaN the in-betweens
-            # # for all the starts
-            # for start, end in zip(starts, ends):
-            #     curr_data[start:end] = np.nan
-            corrected_trace[:, col] = curr_data
+        # go through each of the jumps
+        for index, jump in enumerate(distance_between):
+            # if the jump is smaller than the max_length allowed, NaN it
+            if jump[0] < max_length:
+                curr_data[jumps[index, 0]:jumps[index+1, 0]] = np.nan
+        # ends = np.argwhere(result < -max_step)
+        # # if they're empty, skip the iteration
+        # if (starts.shape[0] == 0) | (ends.shape[0] == 0):
+        #     continue
+        # else:
+        #     starts = starts[:, 0]
+        #     ends = ends[:, 0]
+        #
+        # # match their sizes and order
+        # if starts[0] > ends[0]:
+        #     ends = ends[1:]
+        # if ends.shape[0] == 0:
+        #     continue
+        # if starts[-1] > ends[-1]:
+        #     starts = starts[:-1]
+        # # NaN the in-betweens
+        # # for all the starts
+        # for start, end in zip(starts, ends):
+        #     curr_data[start:end] = np.nan
+        corrected_trace[animal] = curr_data
     return corrected_trace
