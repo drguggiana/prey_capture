@@ -7,6 +7,7 @@ from os.path import join, split
 from functions_misc import *
 from functions_kinematic import *
 from scipy.stats import sem
+import pandas as pd
 
 # prevent the appearance of the tk main window
 tk_killwindow()
@@ -15,12 +16,18 @@ tk_killwindow()
 save_path = kinematics_figs
 
 # define the variable names
-variable_names = ['Heading angle', 'Head direction', 'Prey angle', 'Mouse to prey angle',
-                  'Mouse head to prey angle', 'Distance to prey', 'Mouse speed',
-                  'Mouse acceleration', 'Prey speed', 'Prey acceleration', 'Mouse head height',
-                  'Time']
-units = [' [deg]', ' [deg]', ' [deg]', ' [deg]', ' [deg]', ' [m]', ' [m/s]', ' [m/s2]',
-         ' [m/s]', ' [m/s2]', ' [cm]', ' [s]']
+variable_names = {'mouse_heading': 'Heading angle', 'head_direction': 'Head direction', 'cricket_heading': 'Prey angle',
+                  'delta_heading': 'Mouse to prey angle', 'delta_head_heading': 'Mouse head to prey angle',
+                  'mouse_cricket_distance': 'Distance to prey', 'mouse_speed': 'Mouse speed',
+                  'mouse_acceleration': 'Mouse acceleration', 'cricket_speed': 'Prey speed',
+                  'cricket_acceleration': 'Prey acceleration', 'head_height': 'Mouse head height', 'time': 'Time'}
+
+units = {'mouse_heading': ' [deg]', 'head_direction': ' [deg]', 'cricket_heading': ' [deg]',
+         'delta_heading': ' [deg]', 'mouse_cricket_angle': ' [deg]',
+         'mouse_cricket_distance': ' [m]', 'mouse_speed': ' [m/s]',
+         'mouse_acceleration': ' [m/s2]', 'cricket_speed': ' [m/s]',
+         'cricket_acceleration': ' [m/s2]', 'head_height': ' [cm]', 'time': ' [s]'}
+
 
 # select the files to load
 base_path = kinematics_figs
@@ -35,10 +42,10 @@ for files in file_path:
     outcome_term = tail[:-5].split('_')[1]
     condition_term = tail[:-5].split('_')[2]
     # load the processed data
-    with h5py.File(files, 'r') as loadfile:
-        kinematic_parameters = loadfile['kinematic_parameters'][:]
-        timecourse_parameters = loadfile['timecourse_parameters'][:]
-        encounter_parameters = loadfile['encounter_parameters'][:]
+    # with h5py.File(files, 'r') as loadfile:
+    kinematic_parameters = pd.read_hdf(files, 'kinematic_parameters')
+    timecourse_parameters = pd.read_hdf(files, 'timecourse_parameters')
+    encounter_parameters = pd.read_hdf(files, 'encounter_parameters')
     # append the data to the list
     data_all.append([outcome_term, condition_term, kinematic_parameters, timecourse_parameters, encounter_parameters])
 
@@ -53,14 +60,15 @@ condition_keyword = ''
 legend_list = []
 color = []
 # define a dictionary to map the keywords to the legend terms
-legend_dict = {'succ': 'Successful trial', 'fail': 'Failed trial', '': 'Normal lighting', 'dark': 'Darkness'}
+legend_dict = {'succ': 'Successful trial', 'fail': 'Failed trial', '': 'Normal lighting', 'dark': 'Darkness',
+               'all': 'All trials', 'miniscope': 'Small arena'}
 # color_dict = {'succ': [0, 0, 0, 0.5], 'fail': [0, 0, 0, 0.5]}
 # linestyle_dict = {'': '-', 'dark': '--'}
 color_dict = {'succ_': [0., 0., 1., 0.5], 'fail_': [1, 0., 0., 0.5], 'succ_dark': [0.0, 0.0, 0.0, 0.5],
-              'fail_dark': [0., 1., 0., 0.5]}
+              'fail_dark': [0., 1., 0., 0.5], 'all_': [1, 0., 1, 0.5], 'succ_miniscope': [0.5, 0., 0.5, 0.5]}
 
 
-def figure_histograms():
+def figure_histograms(histogram_variables):
     # PLOT HISTOGRAMS
     font = {'family': 'arial',
             'weight': 'normal',
@@ -79,18 +87,21 @@ def figure_histograms():
 
         # plot the histograms
         # define the variables to plot histograms from
-        histogram_variables = np.arange(5, 11)
+        # histogram_variables = np.arange(5, 11)
+        # histogram_variables = ['mouse_cricket_distance', 'mouse_speed',
+        #                        'mouse_acceleration', 'cricket_speed', 'cricket_acceleration', 'Mouse head height']
         # for all the variables
         for var_count, variables in enumerate(histogram_variables):
             if counter == 0:
                 histogram_figs.append(
-                    histogram([[kin_parameters[:, variables]]], color=[color[counter]], bins=100))
+                    histogram([[kin_parameters.loc[:, variables]]], color=[color[counter]], bins=100))
             else:
-                histogram([[kin_parameters[:, variables]]], fig=histogram_figs[var_count], color=[color[counter]],
+                histogram([[kin_parameters.loc[:, variables]]], fig=histogram_figs[var_count], color=[color[counter]],
                           bins=100)
             curr_histogram = histogram_figs[var_count]
             # change to log y axis if plot is in the selected variables
-            if variables in [6, 7, 8, 9, 10]:
+            if variables in ['mouse_cricket_distance', 'mouse_speed',
+                             'mouse_acceleration', 'cricket_speed', 'cricket_acceleration']:
                 curr_histogram.axes[0].set_yscale('log')
 
             plt.xlabel(variable_names[variables] + units[variables])
@@ -107,7 +118,7 @@ def figure_histograms():
     return histogram_figs
 
 
-def figure_polar():
+def figure_polar(polar_variables):
     # PLOT POLAR PLOTS
     font = {'family': 'arial',
             'weight': 'normal',
@@ -122,11 +133,11 @@ def figure_polar():
         # load the actual data
         kin_parameters = data[2]
         # plot polar graphs
-        # define the variables to plot histograms from
-        polar_variables = [3]
+        # # define the variables to plot histograms from
+        # polar_variables = [3]
         # for all the variables
         for var_count, variables in enumerate(polar_variables):
-            polar_coord = bin_angles(kin_parameters[:, variables])
+            polar_coord = bin_angles(kin_parameters.loc[:, variables])
             polar_coord[:, 1] = normalize_matrix(polar_coord[:, 1])
 
             if counter == 0:
@@ -143,7 +154,7 @@ def figure_polar():
     return polar_figs
 
 
-def figure_timecourse():
+def figure_timecourse(timecourse_angle_variables, timecourse_nonangle_variables):
     # PLOT TIMECOURSES
     font = {'family': 'arial',
             'weight': 'normal',
@@ -158,20 +169,27 @@ def figure_timecourse():
         # get the timecourse data
         time_parameters = data[3]
         # compute the averages and errors
-        trial_average = np.hstack((unwrap(circmean_deg(time_parameters[:, :, :5], axis=0), axis=0),
-                                   np.nanmean(time_parameters[:, :, 5:], axis=0)))
-        trial_sem = np.hstack(
-            (circstd_deg(time_parameters[:, :, :5], axis=0) / np.sqrt(time_parameters.shape[0]),
-             sem(time_parameters[:, :, 5:], axis=0, nan_policy='omit')))
+
+        angled_average = pd.DataFrame(unwrap(time_parameters.loc[:, timecourse_angle_variables + ['frame']].groupby('frame').agg(
+            lambda x: circmean_deg(x))), columns=timecourse_angle_variables)
+        nonangled_average = time_parameters.loc[:, timecourse_nonangle_variables + ['frame']].groupby('frame').mean()
+        trial_average = pd.concat((angled_average, nonangled_average), axis=1)
+
+        angled_std = pd.DataFrame(unwrap(time_parameters.loc[:, timecourse_angle_variables + ['frame']].groupby('frame').agg(
+            lambda x: circstd_deg(x)/np.sqrt(x.shape[0]))), columns=timecourse_angle_variables)
+        nonangled_std = time_parameters.loc[:, timecourse_nonangle_variables + ['frame']].groupby('frame').sem()
+        trial_sem = pd.concat((angled_std, nonangled_std), axis=1)
+
         # define the variables to plot from
-        timecourse_variables = np.arange(3, 11)
+        # timecourse_variables = np.arange(3, 11)
+        timecourse_variables = timecourse_angle_variables + timecourse_nonangle_variables
         # for all the variables
         for var_count, variables in enumerate(timecourse_variables):
             if counter == 0:
-                timecourse_figs.append(plot_2d([[trial_average[:, variables]]], yerr=[[trial_sem[:, variables]]],
+                timecourse_figs.append(plot_2d([[trial_average.loc[:, variables]]], yerr=[[trial_sem.loc[:, variables]]],
                                                color=[color[counter]]))
             else:
-                plot_2d([[trial_average[:, variables]]], yerr=[[trial_sem[:, variables]]],
+                plot_2d([[trial_average.loc[:, variables]]], yerr=[[trial_sem.loc[:, variables]]],
                         fig=timecourse_figs[var_count],
                         color=[color[counter]])
             curr_timecourse = timecourse_figs[var_count]
@@ -186,7 +204,7 @@ def figure_timecourse():
     return timecourse_figs
 
 
-def figure_encounter():
+def figure_encounter(encounter_angle_variables, encounter_nonangle_variables):
     # PLOT ENCOUNTERS
     font = {'family': 'arial',
             'weight': 'normal',
@@ -202,25 +220,34 @@ def figure_encounter():
         # get the encounter data
         enc_parameters = data[4]
         # compute the averages and errors
-        encounter_average = np.hstack((wrap(180 + circmean_deg(enc_parameters[:, :, :5], axis=0)),
-                                       np.nanmean(enc_parameters[:, :, 5:], axis=0)))
-        encounter_sem = np.hstack(
-            (circstd_deg(enc_parameters[:, :, :5], axis=0) / np.sqrt(enc_parameters.shape[0]),
-             sem(enc_parameters[:, :, 5:], axis=0, nan_policy='omit')))
+
+        angled_average = pd.DataFrame(
+            wrap(enc_parameters.loc[:, encounter_angle_variables + ['frame']].groupby('frame').agg(
+                lambda x: 180 + circmean_deg(x))), columns=encounter_angle_variables)
+        nonangled_average = enc_parameters.loc[:, encounter_nonangle_variables + ['frame']].groupby('frame').mean()
+        encounter_average = pd.concat((angled_average, nonangled_average), axis=1)
+
+        angled_std = pd.DataFrame(unwrap(enc_parameters.loc[:, encounter_angle_variables + ['frame']].groupby('frame').agg(
+            lambda x: circstd_deg(x)/np.sqrt(x.shape[0]))), columns=encounter_angle_variables)
+        nonangled_std = enc_parameters.loc[:, encounter_nonangle_variables + ['frame']].groupby('frame').sem()
+        encounter_sem = pd.concat((angled_std, nonangled_std), axis=1)
 
         # plot the results
         # define the variables to plot from
-        encounter_variables = np.arange(3, 11)
+        encounter_variables = encounter_angle_variables + encounter_nonangle_variables
         # get the time vector
-        time_vector = encounter_average[:, -1]
+        time_vector = enc_parameters.loc[(enc_parameters['encounter_id'] == 1) & (enc_parameters['trial_id'] == 0),
+                                         'time_vector']
 
         # for all the variables
         for var_count, variables in enumerate(encounter_variables):
             if counter == 0:
-                encounter_figs.append(plot_2d([[np.vstack((time_vector, encounter_average[:, variables])).T]], yerr=[[encounter_sem[:, variables]]],
+                encounter_figs.append(plot_2d([[np.vstack((time_vector, encounter_average.loc[:, variables])).T]],
+                                              yerr=[[encounter_sem.loc[:, variables]]],
                                               color=[color[counter]]))
             else:
-                plot_2d([[np.vstack((time_vector, encounter_average[:, variables])).T]], yerr=[[encounter_sem[:, variables]]],
+                plot_2d([[np.vstack((time_vector, encounter_average.loc[:, variables])).T]],
+                        yerr=[[encounter_sem.loc[:, variables]]],
                         fig=encounter_figs[var_count], color=[color[counter]])
 
             curr_encounter = encounter_figs[var_count]
@@ -246,7 +273,7 @@ def figure_encounter():
 
 
 def figure_alltraces(target_parameter, sorting_parameter):
-    # PLOT ENCOUNTERS
+    # PLOT ENCOUNTERS AS AN IMAGE
     font = {'family': 'arial',
             'weight': 'normal',
             'size': 12}
@@ -262,9 +289,18 @@ def figure_alltraces(target_parameter, sorting_parameter):
         enc_parameters = data[4]
         # for the target pairs of target and sorting parameters
         for tar, sort in zip(target_parameter, sorting_parameter):
-            # sort the traces by max acceleration
-            plot_parameters = normalize_matrix(enc_parameters[np.argsort(np.nanmax(enc_parameters[:, :, sort],
-                                                                                   axis=1)), :, tar], axis=1)
+            # sort the traces by a target parameter
+
+            # get the sorting vector by obtaining the desired parameter based on group by and the encounter and trial_id
+            sorting_vector = np.argsort(enc_parameters.loc[:, [sort] + ['encounter_id', 'trial_id']].groupby(
+                                        ['trial_id', 'encounter_id']).max().to_numpy(), axis=0)
+            # then extract the values as a single array to use for indexing
+            sorting_vector = np.array([el[0] for el in sorting_vector])
+            # get the actual encounters to be sorted in matrix form
+            plot_parameters = enc_parameters.loc[:, [tar] + ['encounter_id', 'trial_id']].groupby(
+                ['trial_id', 'encounter_id']).agg(list).to_numpy()
+            # turn them into an array, sorted by the sorting parameter
+            plot_parameters = np.array([el for sublist in plot_parameters for el in sublist])[sorting_vector]
             # plot the results
             trace_figs.append(plot_image([plot_parameters], colorbar=[variable_names[tar]]))
 
@@ -275,7 +311,7 @@ def figure_alltraces(target_parameter, sorting_parameter):
 
 
 def figure_alllines(target_parameter, sorting_parameter):
-    # PLOT ENCOUNTERS
+    # PLOT ENCOUNTERS AS TRACES
     font = {'family': 'arial',
             'weight': 'normal',
             'size': 12}
@@ -291,9 +327,17 @@ def figure_alllines(target_parameter, sorting_parameter):
         enc_parameters = data[4]
         # for the target pairs of target and sorting parameters
         for tar, sort in zip(target_parameter, sorting_parameter):
-            # sort the traces by max acceleration
-            plot_parameters = normalize_matrix(enc_parameters[np.argsort(np.nanmax(enc_parameters[:, :, sort],
-                                                                                   axis=1)), :, tar], axis=1)
+
+            # get the sorting vector by obtaining the desired parameter based on group by and the encounter and trial_id
+            sorting_vector = np.argsort(enc_parameters.loc[:, [sort] + ['encounter_id', 'trial_id']].groupby(
+                                        ['trial_id', 'encounter_id']).max().to_numpy(), axis=0)
+            # then extract the values as a single array to use for indexing
+            sorting_vector = np.array([el[0] for el in sorting_vector])
+            # get the actual encounters to be sorted in matrix form
+            plot_parameters = enc_parameters.loc[:, [tar] + ['encounter_id', 'trial_id']].groupby(
+                ['trial_id', 'encounter_id']).agg(list).to_numpy()
+            # turn them into an array, sorted by the sorting parameter
+            plot_parameters = np.array([el for sublist in plot_parameters for el in sublist])[sorting_vector]
             # create the figure
             fig = plt.figure()
             trace_figs.append(fig)
@@ -309,16 +353,32 @@ def figure_alllines(target_parameter, sorting_parameter):
 
 
 # plt.close('all')
-histogram_figures = figure_histograms()
+histogram_vars = ['mouse_cricket_distance', 'mouse_speed',
+                  'mouse_acceleration', 'cricket_speed', 'cricket_acceleration']
+histogram_figures = figure_histograms(histogram_vars)
 plt.close('all')
-polar_figures = figure_polar()
+
+# polar_vars = ['delta_heading']
+# polar_figures = figure_polar(polar_vars)
+# plt.close('all')
+#
+# timecourse_angle_vars = ['mouse_heading', 'cricket_heading', 'delta_heading']
+# timecourse_nonangle_vars = ['mouse_cricket_distance', 'mouse_speed', 'mouse_acceleration', 'cricket_speed',
+#                             'cricket_acceleration']
+# timecourse_figures = figure_timecourse(timecourse_angle_vars, timecourse_nonangle_vars)
+# plt.close('all')
+#
+# encounter_angle_vars = ['mouse_heading', 'cricket_heading', 'delta_heading']
+# encounter_nonangle_vars = ['mouse_cricket_distance', 'mouse_speed', 'mouse_acceleration', 'cricket_speed',
+#                            'cricket_acceleration']
+# encounter_figures = figure_encounter(encounter_angle_vars, encounter_nonangle_vars)
+# plt.close('all')
+
+
+trace_figures = figure_alltraces(target_parameter=['mouse_speed'], sorting_parameter=['mouse_cricket_distance'])
 plt.close('all')
-# timecourse_figures = figure_timecourse()
+
+# line_figures = figure_alllines(target_parameter=['mouse_speed'], sorting_parameter=['mouse_cricket_distance'])
 # plt.close('all')
-# encounter_figures = figure_encounter()
-# plt.close('all')
-# trace_figures = figure_alltraces(target_parameter=[6], sorting_parameter=[5])
-# plt.close('all')
-# line_figures = figure_alllines(target_parameter=[6], sorting_parameter=[5])
-# plt.close('all')
+
 # plt.show()

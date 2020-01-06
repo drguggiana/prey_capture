@@ -30,7 +30,7 @@ def parse_line(single_line):
 def file_parser(file_path, outcome_keyword, condition_keyword, mse_threshold=None):
     """Parse the file path to include or exclude desired terms"""
     # define the possible conditions
-    condition_list = ['dark', 'vr']
+    condition_list = ['dark', 'vr', 'miniscope']
 
     # filter the results by outcome (only use all for performance plot though)
     if outcome_keyword != 'all':
@@ -42,7 +42,8 @@ def file_parser(file_path, outcome_keyword, condition_keyword, mse_threshold=Non
     elif condition_keyword != 'all':
         file_path = [file for file in file_path if condition_keyword in file]
     # if an mse threshold is provided, filter the files further
-    if mse_threshold is not None:
+    # (unless there's no VR, since then there is not alignment mse)
+    if (mse_threshold is not None) and ('mse' in file_path[0]):
         file_path = [file for file in file_path if np.float(file[file.find('mse')+3:file.find('mse')+9]) < mse_threshold]
     return file_path
 

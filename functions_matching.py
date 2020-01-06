@@ -173,3 +173,6 @@ def match_traces(data_3d, data_2d, frame_time_list, coordinate_list, cricket):
     min_size = np.min([opencv_3d.shape[1], opencv_2d.shape[1]])
 
     return opencv_3d[:, :min_size].T, opencv_2d[:, :min_size].T, shifted_time, opencv_cricket[:, :min_size].T
+
+
+# def

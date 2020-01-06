@@ -178,7 +178,7 @@ def interpolate_segments(files, target_value):
         # get the known y vector
         y_known = np.expand_dims(original_trace[x_known], 1)
         # run the interpolation
-        interpolated_traces.iloc[:, col] = np.squeeze(interp_trace(x_known, y_known, x_target))
+        interpolated_traces.iloc[:, col] = np.squeeze(interp_trace(y_known, x_known, x_target))
 
     return interpolated_traces
 

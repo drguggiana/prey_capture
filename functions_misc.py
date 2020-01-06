@@ -82,16 +82,25 @@ def normalize_matrix(matrix, target=None, axis=None):
     return out_matrix
 
 
-def interp_trace(x_known, y_known, x_target):
+def interp_trace(y_known, x_known, x_target):
     """Interpolate a trace by building an interpolant"""
     # filter the values so the interpolant is trained only on sorted x points (required by the function)
     sorted_frames = np.hstack((True, np.invert(x_known[1:] <= x_known[:-1])))
     x_known = x_known[sorted_frames]
-    y_known = y_known[sorted_frames, :]
+    # select frames based on the shape of the array
+    if len(y_known.shape) > 1:
+        y_known = y_known[sorted_frames, :]
+        notnan = ~np.isnan(np.sum(y_known, axis=1))
+        y_known = y_known[notnan, :].T
+        axis = 1
+    else:
+        y_known = y_known[sorted_frames]
+        notnan = ~np.isnan(y_known)
+        y_known = y_known[notnan]
+        axis = 0
+
     # also remove any NaN frames
-    notnan = ~np.isnan(np.sum(y_known, axis=1))
     x_known = x_known[notnan]
-    y_known = y_known[notnan, :].T
     # create the interpolant
-    interpolant = interp1d(x_known, y_known, kind='linear', bounds_error=False, fill_value=np.nanmean(y_known, axis=1))
+    interpolant = interp1d(x_known, y_known, kind='linear', bounds_error=False, fill_value=np.nanmean(y_known, axis=axis))
     return interpolant(x_target).T
