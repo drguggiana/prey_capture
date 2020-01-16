@@ -11,6 +11,7 @@ import functions_misc
 import h5py
 import matplotlib.pyplot as plt
 import kinematic_S1_calculations
+import datetime
 
 # get rid of the tk main window
 tk_killwindow()
@@ -19,8 +20,8 @@ tk_killwindow()
 # define the base loading path
 base_path_bonsai = paths.bonsai_path
 # select the files to process
-# file_path_bonsai = filedialog.askopenfilenames(initialdir=base_path_bonsai, filetypes=(("csv files", "*.csv"), ))
-file_path_bonsai = [r'D:\Code Repos\miniscope_processing\12_07_2019_15_01_31_miniscope_MM_191108_a_succ.csv']
+file_path_bonsai = filedialog.askopenfilenames(initialdir=base_path_bonsai, filetypes=(("csv files", "*.csv"), ))
+# file_path_bonsai = [r'D:\Code Repos\miniscope_processing\12_07_2019_15_01_31_miniscope_MM_191108_a_succ.csv']
 
 # run through the files and select the appropriate analysis script
 for files in file_path_bonsai:
@@ -103,7 +104,17 @@ for files in file_path_bonsai:
         # fig = functions_plotting.plot_2d([[functions_plotting.normalize_matrix(matched_bonsai.mouse_cricket_distance.to_numpy())]])
         # plt.plot(functions_plotting.normalize_matrix(np.mean(calcium_data, axis=0)))
         # plt.show()
-    # TODO: if no miniscope, check the date, if before sync, run the old analysis
+    if not miniscope_flag and file_date <= datetime.datetime(year=2019, month=11, day=10):
+        # run the first stage of preprocessing
+        out_path, filtered_traces = tracking_preprocessBonsai.run_preprocess([files], paths.pre_processed_path,
+                                                                             ['cricket_x', 'cricket_y'])
+        # TODO: add corner detection to calibrate the coordinate to real size
+        # in the meantime, add a rough manual correction based on the size of the arena and the number of pixels
+
+        # TODO: add the old motive-bonsai alignment as a function
+
+        # run the preprocessing kinematic calculations
+        kinematics_data = kinematic_S1_calculations.kinematic_calculations(out_path, paths.kinematics_path)
     # TODO: if no miniscope and after sync, run the new analysis
 
 print('yay')
