@@ -2,7 +2,9 @@ from sklearn.preprocessing import scale
 from scipy.interpolate import interp1d
 import cv2
 from functions_plotting import *
-from functions_misc import add_edges
+from functions_misc import add_edges, interp_trace
+import h5py
+import pandas as pd
 
 
 def align_traces_maxrate(frame_rate_1, frame_rate_2, data_1, data_2, sign_vector, frame_times, cricket, z=1):
@@ -175,4 +177,45 @@ def match_traces(data_3d, data_2d, frame_time_list, coordinate_list, cricket):
     return opencv_3d[:, :min_size].T, opencv_2d[:, :min_size].T, shifted_time, opencv_cricket[:, :min_size].T
 
 
-# def
+def match_calcium(calcium_path, sync_path, filtered_traces, kinematics_data):
+    """Match the kinematic and calcium data provided based on the sync file provided"""
+    # load the calcium data
+    with h5py.File(calcium_path) as f:
+        calcium_data = np.array(f['calcium_data'])
+
+    # # get the time vector from bonsai
+    # bonsai_time = filtered_traces.time
+    # get the number of frames from the bonsai file
+    n_frames_bonsai_file = filtered_traces.shape[0]
+
+    # load the sync data
+    sync_data = pd.read_csv(sync_path, names=['Time', 'mini_frames', 'bonsai_frames'])
+    # get the number of miniscope frames on the sync file
+    n_frames_mini_sync = np.sum(np.diff(sync_data.mini_frames) > 0)
+    # match the sync frames with the actual miniscope frames
+    frame_times_mini_sync = sync_data.loc[
+        np.concatenate(([0], np.diff(sync_data.mini_frames) > 0)) > 0, 'Time'].to_numpy()
+
+    # find the gaps between bonsai frames, take the frames only after the background subtraction gap
+    # bonsai_ifi = np.argwhere(np.diff(sync_data.bonsai_frames) > 0)
+    # bonsai_start_frame = bonsai_ifi[np.argwhere(np.diff(bonsai_ifi, axis=0) > 1000)[0][0] + 1][0]
+    # n_frames_bonsai_sync = np.sum(np.diff(sync_data.bonsai_frames.to_numpy()[bonsai_start_frame:]) > 0)
+    frame_times_bonsai_sync = sync_data.loc[
+                                  np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0, 'Time'].to_numpy()[
+                              -n_frames_bonsai_file:]
+
+    # interpolate the bonsai traces to match the mini frames
+    matched_bonsai = kinematics_data.drop(['time_vector'], axis=1).apply(interp_trace, raw=False,
+                                                                         args=(frame_times_bonsai_sync,
+                                                                               frame_times_mini_sync))
+
+    # trim the data to the frames within the experiment
+    calcium_data = calcium_data[:, :n_frames_mini_sync].T
+
+    # print a single dataframe with the calcium matched positions and timestamps
+    calcium_dataframe = pd.DataFrame(calcium_data,
+                                     columns=['_'.join(('cell', str(el))) for el in range(calcium_data.shape[1])])
+    # concatenate both data frames
+    full_dataframe = pd.concat([matched_bonsai, calcium_dataframe], axis=1)
+
+    return full_dataframe

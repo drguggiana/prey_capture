@@ -1,9 +1,7 @@
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib import animation
-import matplotlib
 import numpy as np
-from functions_misc import normalize_matrix
 
 
 def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-', color=None,

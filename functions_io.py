@@ -4,6 +4,7 @@ from os.path import basename
 import datetime
 from skimage import io
 from skimage.external import tifffile as tif
+import pandas as pd
 
 
 def load_preprocessed(file_path_in):
@@ -62,12 +63,17 @@ def combine_tif(filenames):
 
     # read the first stack on the list
     im_1 = io.imread(filenames[0])
-    # if it's 2d, expand 1 dimension
+    # allocate a list to store the original names and the number of frames
+    frames_list = []
+    # if it's 2d (i.e 1 frame), expand 1 dimension
     if len(im_1.shape) == 2:
         im_1 = np.expand_dims(im_1, 2)
         im_1 = np.transpose(im_1, [2, 0, 1])
+    # save the file name and the number of frames
+    frames_list.append([filenames[0], im_1.shape[0]])
     # assemble the output path
-    out_path = filenames[0].replace('.tif', '_CAT.tif')
+    out_path_tif = filenames[0].replace('.tif', '_CAT.tif')
+    out_path_log = filenames[0].replace('.tif', '_CAT.csv')
     # run through the remaining files
     for i in range(1, len(filenames)):
         # load the next file
@@ -78,7 +84,12 @@ def combine_tif(filenames):
             im_n = np.transpose(im_n, [2, 0, 1])
         # concatenate it to the previous one
         im_1 = np.concatenate((im_1, im_n))
+        # save the file name and the number of frames
+        frames_list.append([filenames[i], im_n.shape[0]])
     # save the final stack
-    tif.imsave(out_path, im_1.astype('uint16'), bigtiff=True)
+    tif.imsave(out_path_tif, im_1.astype('uint16'), bigtiff=True)
+    # save the info about the files
+    frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
+    frames_list.to_csv(out_path_log)
 
-    return out_path
+    return out_path_tif, out_path_log
