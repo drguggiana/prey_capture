@@ -9,5 +9,5 @@ tk_killwindow()
 base_path = paths.aligned_path
 file_path = filedialog.askopenfilenames(initialdir=base_path, filetypes=(("aligned files", "*.csv"),))
 
-# run through the files
-for files in file_path:
+# # run through the files
+# for files in file_path:
