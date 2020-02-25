@@ -65,7 +65,7 @@ def tk_killwindow():
     return None
 
 
-def normalize_matrix(matrix, target=None, axis=None):
+def normalize_matrix(matrix, target=None, axis=None, background=None):
     """Normalize a matrix by the max and min, so to the range 0-1"""
     if axis is None:
         # normalize between 0 and 1
@@ -76,9 +76,15 @@ def normalize_matrix(matrix, target=None, axis=None):
                 target.flatten())
     else:
         assert target is None, "can't normalize to target when using a specific axis"
-        # normalize to 0-1 range along the desired dimension
-        out_matrix = (matrix - np.nanmin(matrix, axis=axis).reshape(-1, 1)) / (
-                    np.nanmax(matrix, axis=axis).reshape(-1, 1) - np.nanmin(matrix, axis=axis).reshape(-1, 1))
+        if background is not None:
+            # obtain the background trace along the given dimension
+            background_signal = matrix.take(indices=range(background), axis=axis).mean(axis=axis).reshape(-1, 1)
+            # calculate the background normalized trace
+            out_matrix = (matrix - background_signal)/background_signal
+        else:
+            # normalize to 0-1 range along the desired dimension
+            out_matrix = (matrix - np.nanmin(matrix, axis=axis).reshape(-1, 1)) / (
+                        np.nanmax(matrix, axis=axis).reshape(-1, 1) - np.nanmin(matrix, axis=axis).reshape(-1, 1))
     return out_matrix
 
 

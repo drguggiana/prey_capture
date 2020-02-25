@@ -1,13 +1,15 @@
 # imports
 from tkinter import filedialog
-import h5py
 from paths import *
 from functions_plotting import *
 from os.path import join, split
 from functions_misc import *
 from functions_kinematic import *
-from scipy.stats import sem
 import pandas as pd
+import matplotlib
+from bokeh.plotting import figure, show
+import plotly.express as px
+
 
 # prevent the appearance of the tk main window
 tk_killwindow()
@@ -352,11 +354,142 @@ def figure_alllines(target_parameter, sorting_parameter):
     return trace_figs
 
 
+def figure_minitraces(data_in, encounter_angle_variables, encounter_nonangle_variables, include_cells=False):
+    """Plot the desired variables over time, with the option of including calcium traces if present"""
+    # PLOT ENCOUNTERS AS AN IMAGE
+    font = {'family': 'arial',
+            'weight': 'normal',
+            'size': 12}
+    matplotlib.rc('font', **font)
+    encounter_fig = []
+    # for all data sets
+    for counter, data in enumerate(data_in):
+
+        # plot encounter graphs
+        # get the current outcome and condition keywords
+        out_keyword = '_' + data[0]
+        cond_keyword = '_' + data[1]
+        # get the encounter data
+        enc_parameters = data[4]
+        # compute the averages and errors
+
+        angled_average = pd.DataFrame(
+            wrap(enc_parameters.loc[:, encounter_angle_variables + ['frame']].groupby('frame').agg(
+                lambda x: 180 + circmean_deg(x))), columns=encounter_angle_variables)
+        nonangled_average = enc_parameters.loc[:, encounter_nonangle_variables + ['frame']].groupby('frame').mean()
+        encounter_average = pd.concat((angled_average, nonangled_average), axis=1).to_numpy()
+
+        # angled_std = pd.DataFrame(
+        #     unwrap(enc_parameters.loc[:, encounter_angle_variables + ['frame']].groupby('frame').agg(
+        #         lambda x: circstd_deg(x) / np.sqrt(x.shape[0]))), columns=encounter_angle_variables)
+        # nonangled_std = enc_parameters.loc[:, encounter_nonangle_variables + ['frame']].groupby('frame').sem()
+        # encounter_sem = pd.concat((angled_std, nonangled_std), axis=1)
+
+        # plot the results
+        # define the variables to plot from
+        encounter_variables = encounter_angle_variables + encounter_nonangle_variables
+        # get the time vector
+        time_vector = enc_parameters.loc[(enc_parameters['encounter_id'] == 1) & (enc_parameters['trial_id'] == 0),
+                                         'time_vector']
+
+        # if the option to include the calcium data is on
+        if include_cells:
+            # get a list of the column names
+            col_names = list(enc_parameters.columns)
+            # only continue if there are cells in it
+            if 'cell_0' in col_names:
+                # load the trace averages in a list
+                trace_list = np.squeeze(np.array([enc_parameters.loc[:, [el] +
+                                                                        ['frame']].groupby('frame').mean().to_numpy()
+                                                  for el in col_names if 'cell' in el]))
+                # trace_list = np.squeeze(np.array([enc_parameters.loc[:, [el] +
+                #                                                         ['frame']].groupby('frame').agg(list).to_numpy()
+                #                         for el in col_names if 'cell' in el]))
+                # trace_list = np.array([el for sublist in trace_list for el in sublist])
+                encounter_fig.append(plot_image([encounter_average.T, normalize_matrix(trace_list, axis=1, background=10)],
+                                           rows=2, columns=1))
+            else:
+                encounter_fig.append(plot_image([encounter_average]))
+
+        else:
+            encounter_fig.append(plot_image([encounter_average]))
+
+        # encounter_figs.append(plot_2d([[np.vstack((time_vector, encounter_average.loc[:, variables])).T]],
+        #                               yerr=[[encounter_sem.loc[:, variables]]],
+        #                               color=[color[counter]]))
+
+        # curr_encounter = encounter_figs[var_count]
+        # plt.figure(encounter_figs[var_count].number)
+        # plt.ylabel(variable_names[variables] + units[variables])
+        # plt.xlabel('Time [s]')
+
+        # turn autoscale off so the middle line spans the whole plot
+        # plt.autoscale(enable=False)
+        # draw a line in the middle to indicate the encounter
+        # plt.plot([0, 0], [plt.ylim()[0], plt.ylim()[1]], color=[0., 1., 0., 1.])
+
+        # encounter_fig.savefig(join(save_path, 'encounter_' + '_'.join(variable_names) +
+        #                            '_' + out_keyword + '_' + cond_keyword + '.png'),
+        #                       bbox_inches='tight')
+    return encounter_fig
+
+
+def figure_corrmatrix(data_in):
+    """Plot a correlation matrix between the all the columns in the input array of dataframes"""
+    font = {'family': 'arial',
+            'weight': 'normal',
+            'size': 12}
+    matplotlib.rc('font', **font)
+    corr_fig = []
+    # for all data sets
+    for counter, data in enumerate(data_in):
+
+        # plot encounter graphs
+        # get the current outcome and condition keywords
+        out_keyword = '_' + data[0]
+        cond_keyword = '_' + data[1]
+        # get the encounter data and convert to a matrix
+        kin_parameters = data[2].to_numpy().T
+
+        # calculate the correlation between the variables and plot
+        # correlation_matrix = np.corrcoef(kin_parameters[np.array([3] + list(np.arange(9, 23))), :])
+        correlation_matrix = np.corrcoef(kin_parameters)
+
+        corr_fig.append(plot_image([correlation_matrix]))
+    return corr_fig
+
+
+def figure_whole_timecourse(data_in):
+    """Plot several trials concatenated"""
+
+    # font = {'family': 'arial',
+    #         'weight': 'normal',
+    #         'size': 12}
+    # matplotlib.rc('font', **font)
+    corr_fig = []
+    # for all data sets
+    for counter, data in enumerate(data_in):
+        kin_parameters = np.squeeze(normalize_matrix(data[2].to_numpy().T, axis=1))
+
+        # plot the activity of the neurons along with the distance to cricket
+        # plot_image([kin_parameters])
+        p = figure(x_range=(0, 20), y_range=(0, 20))
+        # p = figure()
+        # p.image(image=[kin_parameters[np.array([3] + list(np.arange(9, 23))), :]])
+        p.image(image=[kin_parameters[np.array([3] + list(np.arange(9, 23))), :]], x=0, y=0, dw=2, dh=2, palette="Spectral11")
+        show(p)
+
+        # fig = px.imshow(kin_parameters)
+        # fig.show()
+        print('yay')
+
+    return None
+
 # plt.close('all')
-histogram_vars = ['mouse_cricket_distance', 'mouse_speed',
-                  'mouse_acceleration', 'cricket_speed', 'cricket_acceleration']
-histogram_figures = figure_histograms(histogram_vars)
-plt.close('all')
+# histogram_vars = ['mouse_cricket_distance', 'mouse_speed',
+#                   'mouse_acceleration', 'cricket_speed', 'cricket_acceleration']
+# histogram_figures = figure_histograms(histogram_vars)
+# plt.close('all')
 
 # polar_vars = ['delta_heading']
 # polar_figures = figure_polar(polar_vars)
@@ -374,11 +507,20 @@ plt.close('all')
 # encounter_figures = figure_encounter(encounter_angle_vars, encounter_nonangle_vars)
 # plt.close('all')
 
-
-trace_figures = figure_alltraces(target_parameter=['mouse_speed'], sorting_parameter=['mouse_cricket_distance'])
-plt.close('all')
+# trace_figures = figure_alltraces(target_parameter=['mouse_speed'], sorting_parameter=['mouse_cricket_distance'])
+# plt.close('all')
 
 # line_figures = figure_alllines(target_parameter=['mouse_speed'], sorting_parameter=['mouse_cricket_distance'])
 # plt.close('all')
 
-# plt.show()
+# encounter_angle_vars = []
+# encounter_nonangle_vars = ['mouse_cricket_distance', 'mouse_speed']
+# encounter_figures = figure_minitraces(data_all, encounter_angle_vars, encounter_nonangle_vars, include_cells=True)
+# plt.close('all')
+
+correlation_figures = figure_corrmatrix(data_all)
+# plt.close('all')
+
+# whole_timecourse_figures = figure_whole_timecourse(data_all)
+
+plt.show()

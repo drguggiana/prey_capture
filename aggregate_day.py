@@ -8,24 +8,31 @@ from functions_kinematic import *
 from paths import *
 from scipy.ndimage.measurements import label
 import pandas as pd
+import functions_bondjango as bd
 
 # prevent the appearance of the tk main window
 tk_killwindow()
 
-# define the outcome keyword to search for
-outcome_keyword = 'succ'
-# define the condition keyword to search for
-condition_keyword = 'miniscope'
+# # define the outcome keyword to search for
+# outcome_keyword = 'succ'
+# # define the condition keyword to search for
+# condition_keyword = 'miniscope'
 
-# load the data
-base_path = kinematics_path
-file_path = filedialog.askopenfilenames(initialdir=base_path, filetypes=(("kine files", "*.csv"),))
+# # load the data
+# base_path = kinematics_path
+# file_path = filedialog.askopenfilenames(initialdir=base_path, filetypes=(("kine files", "*.csv"),))
+
+# define the search query
+search_string = 'result=succ, lighting=normal'
+target_model = 'analyzed_data'
+# get the queryset
+file_path = bd.query_database(target_model, search_string)
 
 # define the figure save path
-save_path = kinematics_figs
+save_path = analysis_path
 
-# parse the file names for the desired trait
-file_path = file_parser(file_path, outcome_keyword, condition_keyword, mse_threshold=0.01)
+# # parse the file names for the desired trait
+# file_path = file_parser(file_path, outcome_keyword, condition_keyword, mse_threshold=0.01)
 
 # actually load the data
 data_all = [pd.read_csv(el, index_col=0) for el in file_path]

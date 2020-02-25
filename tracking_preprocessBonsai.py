@@ -16,6 +16,8 @@ def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
     """Preprocess the bonsai file"""
     # initialize a list for the path output
     out_path = []
+    filtered_traces = []
+    pic_path = []
 
     # for all the files
     for current_path in file_path_bonsai:
@@ -119,15 +121,24 @@ def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
                 filtered_traces.mouse_y, marker='o', linestyle='-')
         ax.plot(filtered_traces.cricket_x,
                 filtered_traces.cricket_y, marker='o', linestyle='-')
-        fig_final.savefig(path.join(save_path_bonsai, path.basename(current_path)[:-4] + '.png'),
-                          bbox_inches='tight')
+        # fig_final.savefig(path.join(save_path_bonsai, path.basename(current_path)[:-4] + '.png'),
+        #                   bbox_inches='tight')
+        # define the path for the figure
+        pic_path = path.join(save_path_bonsai[:-4] + '.png')
+        fig_final.savefig(pic_path, bbox_inches='tight')
 
         plt.close('all')
         # save the results
         # assemble the file name
-        save_file = path.join(save_path_bonsai, path.basename(current_path)[:-4] + '_preproc.csv')
-        # write the file
-        filtered_traces.to_csv(save_file)
+        # save_file = path.join(save_path_bonsai, path.basename(current_path)[:-4] + '_preproc.csv')
+        # # write the file
+        # filtered_traces.to_csv(save_file)
+
+        # define the save path
+        save_file = path.join(save_path_bonsai[:-4] + '_preproc.hdf5')
+
+        # create the file name
+        filtered_traces.to_hdf(save_file, key='full_traces', mode='w', format='table')
 
         # append to the outpath list
         out_path.append(save_file)
@@ -135,7 +146,7 @@ def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
         #     file_writer = csv.writer(f, delimiter=',')
         #     for el, t in zip(files, time):
         #         file_writer.writerow(np.hstack((el, t)))
-    return out_path, filtered_traces
+    return out_path, filtered_traces, pic_path
 
 
 if __name__ == '__main__':
