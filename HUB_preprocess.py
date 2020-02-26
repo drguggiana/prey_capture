@@ -16,7 +16,7 @@ import functions_bondjango as bd
 # functions_misc.tk_killwindow()
 
 # define the search string
-search_string = 'result=succ, lighting=normal'
+# search_string = 'result=succ, lighting=normal'
 target_model = 'video_experiment'
 # get the queryset
 file_path_bonsai = bd.query_database(target_model)
@@ -95,6 +95,7 @@ for files in file_path_bonsai:
         'rig': files['rig'],
         'lighting': files['lighting'],
         'slug': files['slug'] + '_preprocessing',
+        'notes': files['notes'],
         'video_analysis': [files['url']]
     }
     # check if the entry already exists, if so, update it, otherwise, create it

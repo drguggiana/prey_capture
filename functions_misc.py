@@ -3,6 +3,13 @@ from sklearn.linear_model import LinearRegression as ols
 from tkinter import Tk
 from scipy.interpolate import interp1d
 
+# for slugify function
+non_url_safe = ['"', '#', '$', '%', '&', '+',
+                ',', '/', ':', ';', '=', '?',
+                '@', '[', '\\', ']', '^', '`',
+                '{', '|', '}', '~', "'"]
+translate_table = {ord(char): u'' for char in non_url_safe}
+
 
 def rolling_average(data_in, window_size):
     """Perform rolling average"""
@@ -110,3 +117,10 @@ def interp_trace(y_known, x_known, x_target):
     # create the interpolant
     interpolant = interp1d(x_known, y_known, kind='linear', bounds_error=False, fill_value=np.nanmean(y_known, axis=axis))
     return interpolant(x_target).T
+
+
+def slugify(string_in):
+    """Slugify the input string, taken from https://www.peterbe.com/plog/fastest-python-function-to-slugify-a-string"""
+    string_out = string_in.translate(translate_table)
+    string_out = u'_'.join(string_out.split())
+    return string_out

@@ -9,6 +9,7 @@ from functions_preprocessing import trim_bounds, median_discontinuities, interpo
     nan_large_jumps
 import numpy as np
 import pandas as pd
+import datetime
 
 
 def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
@@ -38,7 +39,8 @@ def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
                 ex_list = [float(el) for el in ex_list]
 
                 parsed_data.append([ex_list, timestamp])
-
+        # parse the path
+        parsed_path = parse_path(current_path)
         # animal_data_bonsai.append(np.array(parsed_data))
         files = np.array(parsed_data)
 
@@ -76,6 +78,10 @@ def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
 
         # add the time field to the dataframe
         filtered_traces['time'] = time
+
+        # also the mouse and the date
+        filtered_traces['mouse'] = parsed_path['animal']
+        filtered_traces['datetime'] = parsed_path['datetime']
 
         # if plotting is enabled
         if plot_flag > 0:
@@ -147,6 +153,28 @@ def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
         #     for el, t in zip(files, time):
         #         file_writer.writerow(np.hstack((el, t)))
     return out_path, filtered_traces, pic_path
+
+
+def parse_path(in_path):
+    """Parse the input path into a dict"""
+    path_parts = path.basename(in_path)[:-4].split('_')
+
+    # check whether the rig is miniscope or social
+    if path_parts[6] == 'miniscope':
+        rig = 'miniscope'
+        counter = 7
+    elif path_parts[6] == 'social':
+        rig = 'social'
+        counter = 7
+    else:
+        rig = 'vr'
+        counter = 6
+
+    out_path = {'datetime': datetime.datetime.strptime('_'.join((path_parts[:6])), '%m_%d_%Y_%H_%M_%S'),
+                'rig': rig,
+                'animal': '_'.join((path_parts[counter:counter+3])),
+                'result': path_parts[counter+3]}
+    return out_path
 
 
 if __name__ == '__main__':

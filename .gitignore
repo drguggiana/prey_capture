@@ -1,3 +1,4 @@
 .idea/
 __pycache__/
 paths.py
+.ipynb_checkpoints/
