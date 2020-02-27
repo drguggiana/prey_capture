@@ -90,7 +90,11 @@ def normalize_matrix(matrix, target=None, axis=None, background=None):
             out_matrix = (matrix - background_signal)/background_signal
         else:
             # normalize to 0-1 range along the desired dimension
-            out_matrix = (matrix - np.nanmin(matrix, axis=axis).reshape(-1, 1)) / (
+            if axis == 0:
+                out_matrix = (matrix - np.nanmin(matrix, axis=axis)) / (
+                            np.nanmax(matrix, axis=axis) - np.nanmin(matrix, axis=axis))
+            else:
+                out_matrix = (matrix - np.nanmin(matrix, axis=axis).reshape(-1, 1)) / (
                         np.nanmax(matrix, axis=axis).reshape(-1, 1) - np.nanmin(matrix, axis=axis).reshape(-1, 1))
     return out_matrix
 

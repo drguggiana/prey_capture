@@ -5,6 +5,7 @@ import paths
 import functions_bondjango as bd
 import pandas as pd
 import datetime
+# import deepdish as dd
 
 
 def generate_entry(in_path, out_path, parsed_search, analysis_t, pic_path=''):
@@ -58,18 +59,27 @@ def parse_search_string(string_in):
     return string_dict
 
 
-def save_create(data_in, paths_in, analysis_type, parsed_query):
+def save_create(data_in, paths_in, hdf5_key, parsed_query, action='both', mode='w'):
     """Save the data frame and create a database entry"""
+    # get the actual analysis type from the hdf5 key
+    analysis_type = hdf5_key.split('/')[-1]
     # save a file
     file_name = os.path.join(paths.analysis_path,
-                             '_'.join([el for el in parsed_query.values() if len(el) > 0] + [analysis_type])+'.hdf5')
-    data_in.to_hdf(file_name, key=analysis_type, mode='w', format='table')
-    # generate an entry
-    generate_entry(paths_in, file_name, parsed_query, analysis_type)
+                             '_'.join([el for el in parsed_query.values() if len(el) > 0] +
+                                      [analysis_type])+'.hdf5')
+
+    # check which actions to perform based on the kwarg
+    if action in ['save', 'both']:
+        # save as dataframe
+        data_in.to_hdf(file_name, key=hdf5_key, mode=mode, format='table')
+
+    if action in ['create', 'both']:
+        # generate an entry
+        generate_entry(paths_in, file_name, parsed_query, analysis_type)
     return None
 
 
-def fetch_data(search_query, sub_key=None):
+def fetch_preprocessing(search_query, sub_key=None):
     """Take the search query and load the data and the input paths"""
     # get the queryset
     file_path = bd.query_database('analyzed_data', search_query)

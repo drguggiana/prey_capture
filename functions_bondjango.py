@@ -75,12 +75,8 @@ def query_database(target_model, query=None):
     # get the results
     results = data['results']
 
-    # while data['next'] is not None:
-    #     r = requests.get(data['next'],
-    #                      auth=(paths.bondjango_username, paths.bondjango_password))
-    #     data = json.loads(r.text)
-    #
-    #     results += data['results']
+    assert data['next'] is None, 'Pagination is on, revise serializer'
+
     return results
 
 
@@ -117,6 +113,3 @@ def parse_query(query):
     return parsed_query
 
 
-# def level_up_url(url):
-#     """Return one level up in the path of the url"""
-#     return url_up
