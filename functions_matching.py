@@ -5,6 +5,7 @@ from functions_plotting import *
 from functions_misc import add_edges, interp_trace
 import h5py
 import pandas as pd
+import os
 
 
 def align_traces_maxrate(frame_rate_1, frame_rate_2, data_1, data_2, sign_vector, frame_times, cricket, z=1):
@@ -177,7 +178,7 @@ def match_traces(data_3d, data_2d, frame_time_list, coordinate_list, cricket):
     return opencv_3d[:, :min_size].T, opencv_2d[:, :min_size].T, shifted_time, opencv_cricket[:, :min_size].T
 
 
-def match_calcium(calcium_path, sync_path, filtered_traces, kinematics_data):
+def match_calcium(calcium_path, sync_path, kinematics_data):
     """Match the kinematic and calcium data provided based on the sync file provided"""
     # load the calcium data
     with h5py.File(calcium_path) as f:
@@ -186,7 +187,7 @@ def match_calcium(calcium_path, sync_path, filtered_traces, kinematics_data):
     # # get the time vector from bonsai
     # bonsai_time = filtered_traces.time
     # get the number of frames from the bonsai file
-    n_frames_bonsai_file = filtered_traces.shape[0]
+    n_frames_bonsai_file = kinematics_data.shape[0]
 
     # load the sync data
     sync_data = pd.read_csv(sync_path, names=['Time', 'mini_frames', 'bonsai_frames'])
@@ -208,6 +209,17 @@ def match_calcium(calcium_path, sync_path, filtered_traces, kinematics_data):
     matched_bonsai = kinematics_data.drop(['time_vector'], axis=1).apply(interp_trace, raw=False,
                                                                          args=(frame_times_bonsai_sync,
                                                                                frame_times_mini_sync))
+    # add the correct time vector from the interpolated traces
+    matched_bonsai['time_vector'] = frame_times_mini_sync
+
+    # if the calcium data has less frames than the ones detected during triggers, show a warning
+    delta_frames = n_frames_mini_sync - calcium_data.shape[1]
+    if delta_frames > 0:
+        # show the warning
+        print("File %s has %s calcium frames less than triggers detected" % (os.path.basename(calcium_path),
+                                                                             str(delta_frames)))
+        # trim matched bonsai
+        matched_bonsai = matched_bonsai.iloc[:-delta_frames, ]
 
     # trim the data to the frames within the experiment
     calcium_data = calcium_data[:, :n_frames_mini_sync].T

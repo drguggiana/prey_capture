@@ -9,13 +9,17 @@ import paths
 import pandas as pd
 
 
-def kinematic_calculations(file_path, save_path):
+def kinematic_calculations(file_path, data):
     """Calculate basic kinematic parameters of mouse and cricket"""
+
+    kine_data = []
     # calculate heading direction, speed, acceleration
     for file_idx, name in enumerate(file_path):
 
         # load the dataframe
-        data = pd.read_csv(name, index_col=0)
+        # data = pd.read_csv(name, index_col=0)
+        # data = pd.read_hdf(name, 'full_traces')
+
         # # get the field names
         # fields = data.columns
 
@@ -68,7 +72,7 @@ def kinematic_calculations(file_path, save_path):
         angle_traces[np.isinf(angle_traces)] = np.nan
 
         # create a dataframe with the results
-        kinematic_data = pd.DataFrame(angle_traces, columns=['mouse_heading', 'cricket_heading', 'delta_heading',
+        kine_data = pd.DataFrame(angle_traces, columns=['mouse_heading', 'cricket_heading', 'delta_heading',
                                                              'mouse_cricket_distance', 'mouse_speed', 'mouse_acceleration',
                                                              'cricket_speed', 'cricket_acceleration', 'time_vector'])
 
@@ -88,34 +92,36 @@ def kinematic_calculations(file_path, save_path):
             # get offset via correlation
             angle_offset = np.argmax([np.corrcoef(np.vstack((wrap(head_direction - el), mouse_heading)))[0][1]
                                       for el in range(360)])
-            print(angle_offset)
+            # print(angle_offset)
 
             head_direction = head_direction - angle_offset
-            print(np.corrcoef(np.vstack((head_direction, mouse_heading)))[0][1])
-            # calculate the arrow centers
-            arrow_centers = np.vstack((data[0, 0:2], (data[1:, 0:2] + data[:-1, 0:2]) / 2))
-            quiver_fig = plot_arrow(data[:, :2], arrow_centers, np.ones_like(arrow_centers),
-                                    np.ones_like(arrow_centers) * 0.5,
-                                    data[:, 8:10], angles=mouse_heading, angles2=head_direction)
+            # print(np.corrcoef(np.vstack((head_direction, mouse_heading)))[0][1])
+            # # calculate the arrow centers
+            # arrow_centers = np.vstack((data[0, 0:2], (data[1:, 0:2] + data[:-1, 0:2]) / 2))
+            # quiver_fig = plot_arrow(data[:, :2], arrow_centers, np.ones_like(arrow_centers),
+            #                         np.ones_like(arrow_centers) * 0.5,
+            #                         data[:, 8:10], angles=mouse_heading, angles2=head_direction)
             # animate_hunt(data[:, :2], mouse_heading, head_direction, data[:, 8:10], (-0.7, 0.6), (-0.35, 0.35),
             #              interval=80)
             delta_head = cricket_heading - head_direction
 
-            # save the quiver plot
-            quiver_fig.savefig(join(save_path, basename(file_path[file_idx])[:-12] + '.png'), bbox_inches='tight')
-            plt.close(fig='all')
+            # # save the quiver plot
+            # quiver_fig.savefig(join(save_path, basename(file_path[file_idx])[:-12] + '.png'), bbox_inches='tight')
+            # plt.close(fig='all')
 
             # include the motive info in the final dataframe
-            kinematic_data['head_direction'] = head_direction
-            kinematic_data['head_height'] = head_height
-            kinematic_data['delta_head'] = delta_head
+            kine_data['head_direction'] = head_direction
+            kine_data['head_height'] = head_height
+            kine_data['delta_head'] = delta_head
 
         # save the data to file
         # assemble the file name
-        save_file = join(save_path, basename(file_path[file_idx])[:-12] + '_kinematics.csv')
+        # save_file = join(save_path, basename(file_path[file_idx])[:-12] + '_kinematics.csv')
+        kine_data.to_hdf(name, key='full_traces', mode='w', format='table')
+
         # save the dataframe
-        kinematic_data.to_csv(save_file)
-    return kinematic_data
+        # kine_data.to_csv(save_file)
+    return kine_data
     # plt.show()
 
 

@@ -9,6 +9,7 @@ from functions_preprocessing import trim_bounds, median_discontinuities, interpo
     nan_large_jumps
 import numpy as np
 import pandas as pd
+import datetime
 
 
 def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
@@ -16,6 +17,8 @@ def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
     """Preprocess the bonsai file"""
     # initialize a list for the path output
     out_path = []
+    filtered_traces = []
+    pic_path = []
 
     # for all the files
     for current_path in file_path_bonsai:
@@ -36,7 +39,8 @@ def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
                 ex_list = [float(el) for el in ex_list]
 
                 parsed_data.append([ex_list, timestamp])
-
+        # parse the path
+        parsed_path = parse_path(current_path)
         # animal_data_bonsai.append(np.array(parsed_data))
         files = np.array(parsed_data)
 
@@ -74,6 +78,10 @@ def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
 
         # add the time field to the dataframe
         filtered_traces['time'] = time
+
+        # also the mouse and the date
+        filtered_traces['mouse'] = parsed_path['animal']
+        filtered_traces['datetime'] = parsed_path['datetime']
 
         # if plotting is enabled
         if plot_flag > 0:
@@ -119,15 +127,24 @@ def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
                 filtered_traces.mouse_y, marker='o', linestyle='-')
         ax.plot(filtered_traces.cricket_x,
                 filtered_traces.cricket_y, marker='o', linestyle='-')
-        fig_final.savefig(path.join(save_path_bonsai, path.basename(current_path)[:-4] + '.png'),
-                          bbox_inches='tight')
+        # fig_final.savefig(path.join(save_path_bonsai, path.basename(current_path)[:-4] + '.png'),
+        #                   bbox_inches='tight')
+        # define the path for the figure
+        pic_path = path.join(save_path_bonsai[:-4] + '.png')
+        fig_final.savefig(pic_path, bbox_inches='tight')
 
         plt.close('all')
         # save the results
         # assemble the file name
-        save_file = path.join(save_path_bonsai, path.basename(current_path)[:-4] + '_preproc.csv')
-        # write the file
-        filtered_traces.to_csv(save_file)
+        # save_file = path.join(save_path_bonsai, path.basename(current_path)[:-4] + '_preproc.csv')
+        # # write the file
+        # filtered_traces.to_csv(save_file)
+
+        # define the save path
+        save_file = path.join(save_path_bonsai[:-4] + '_preproc.hdf5')
+
+        # create the file name
+        filtered_traces.to_hdf(save_file, key='full_traces', mode='w', format='table')
 
         # append to the outpath list
         out_path.append(save_file)
@@ -135,7 +152,29 @@ def run_preprocess(file_path_bonsai, save_path_bonsai, tar_columns, plot_flag=0,
         #     file_writer = csv.writer(f, delimiter=',')
         #     for el, t in zip(files, time):
         #         file_writer.writerow(np.hstack((el, t)))
-    return out_path, filtered_traces
+    return out_path, filtered_traces, pic_path
+
+
+def parse_path(in_path):
+    """Parse the input path into a dict"""
+    path_parts = path.basename(in_path)[:-4].split('_')
+
+    # check whether the rig is miniscope or social
+    if path_parts[6] == 'miniscope':
+        rig = 'miniscope'
+        counter = 7
+    elif path_parts[6] == 'social':
+        rig = 'social'
+        counter = 7
+    else:
+        rig = 'vr'
+        counter = 6
+
+    out_path = {'datetime': datetime.datetime.strptime('_'.join((path_parts[:6])), '%m_%d_%Y_%H_%M_%S'),
+                'rig': rig,
+                'animal': '_'.join((path_parts[counter:counter+3])),
+                'result': path_parts[counter+3]}
+    return out_path
 
 
 if __name__ == '__main__':

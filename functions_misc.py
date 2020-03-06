@@ -3,6 +3,13 @@ from sklearn.linear_model import LinearRegression as ols
 from tkinter import Tk
 from scipy.interpolate import interp1d
 
+# for slugify function
+non_url_safe = ['"', '#', '$', '%', '&', '+',
+                ',', '/', ':', ';', '=', '?',
+                '@', '[', '\\', ']', '^', '`',
+                '{', '|', '}', '~', "'"]
+translate_table = {ord(char): u'' for char in non_url_safe}
+
 
 def rolling_average(data_in, window_size):
     """Perform rolling average"""
@@ -65,7 +72,7 @@ def tk_killwindow():
     return None
 
 
-def normalize_matrix(matrix, target=None, axis=None):
+def normalize_matrix(matrix, target=None, axis=None, background=None):
     """Normalize a matrix by the max and min, so to the range 0-1"""
     if axis is None:
         # normalize between 0 and 1
@@ -76,9 +83,19 @@ def normalize_matrix(matrix, target=None, axis=None):
                 target.flatten())
     else:
         assert target is None, "can't normalize to target when using a specific axis"
-        # normalize to 0-1 range along the desired dimension
-        out_matrix = (matrix - np.nanmin(matrix, axis=axis).reshape(-1, 1)) / (
-                    np.nanmax(matrix, axis=axis).reshape(-1, 1) - np.nanmin(matrix, axis=axis).reshape(-1, 1))
+        if background is not None:
+            # obtain the background trace along the given dimension
+            background_signal = matrix.take(indices=range(background), axis=axis).mean(axis=axis).reshape(-1, 1)
+            # calculate the background normalized trace
+            out_matrix = (matrix - background_signal)/background_signal
+        else:
+            # normalize to 0-1 range along the desired dimension
+            if axis == 0:
+                out_matrix = (matrix - np.nanmin(matrix, axis=axis)) / (
+                            np.nanmax(matrix, axis=axis) - np.nanmin(matrix, axis=axis))
+            else:
+                out_matrix = (matrix - np.nanmin(matrix, axis=axis).reshape(-1, 1)) / (
+                        np.nanmax(matrix, axis=axis).reshape(-1, 1) - np.nanmin(matrix, axis=axis).reshape(-1, 1))
     return out_matrix
 
 
@@ -104,3 +121,10 @@ def interp_trace(y_known, x_known, x_target):
     # create the interpolant
     interpolant = interp1d(x_known, y_known, kind='linear', bounds_error=False, fill_value=np.nanmean(y_known, axis=axis))
     return interpolant(x_target).T
+
+
+def slugify(string_in):
+    """Slugify the input string, taken from https://www.peterbe.com/plog/fastest-python-function-to-slugify-a-string"""
+    string_out = string_in.translate(translate_table)
+    string_out = u'_'.join(string_out.split())
+    return string_out
