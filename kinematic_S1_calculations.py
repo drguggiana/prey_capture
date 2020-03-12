@@ -60,11 +60,6 @@ def kinematic_calculations(file_path, data):
                                         / (time_vector[1:] - time_vector[:-1])))
         cricket_acceleration = np.concatenate(([0], np.diff(cricket_speed)))
 
-        # TODO: clean up preprocessing so this is not needed
-        # mouse_cricket_distance[mouse_cricket_distance > 2] = np.nan
-        # mouse_speed[mouse_speed > 20] = np.nan
-        # cricket_speed[cricket_speed > 200] = np.nan
-
         # save the traces to a variable
         angle_traces = np.vstack((mouse_heading, cricket_heading, delta_heading, mouse_cricket_distance,
                                   mouse_speed, mouse_acceleration, cricket_speed, cricket_acceleration, time_vector)).T

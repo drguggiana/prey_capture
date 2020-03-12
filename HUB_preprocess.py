@@ -74,17 +74,23 @@ for files in file_path_bonsai:
         out_path, filtered_traces, pic_path = tracking_preprocessBonsai.run_preprocess([files['bonsai_path']],
                                                                                        save_path,
                                                                                        ['cricket_x', 'cricket_y'])
-        # TODO: add corner detection to calibrate the coordinate to real size
-        # in the meantime, add a rough manual correction based on the size of the arena and the number of pixels
 
         # TODO: add the old motive-bonsai alignment as a function
 
         # run the preprocessing kinematic calculations
         kinematics_data = kinematic_S1_calculations.kinematic_calculations(out_path, paths.kinematics_path)
-    # TODO: if no miniscope and after sync, run the new analysis
     else:
-        pic_path = ''
-        out_path = []
+        # TODO: make sure the constants are set to values that make sense for the vr arena
+        # run the first stage of preprocessing
+        out_path, filtered_traces, pic_path = tracking_preprocessBonsai.run_preprocess([files['bonsai_path']],
+                                                                                       save_path,
+                                                                                       ['cricket_x', 'cricket_y'])
+
+        # run the preprocessing kinematic calculations
+        kinematics_data = kinematic_S1_calculations.kinematic_calculations(out_path, paths.kinematics_path)
+
+        # pic_path = ''
+        # out_path = []
 
     # assemble the entry data
     entry_data = {

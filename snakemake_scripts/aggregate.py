@@ -7,75 +7,6 @@ import pandas as pd
 import numpy as np
 
 
-# TODO: adapt the functions for snakemake running (i.e. they have to take in a path, not a query)
-def aggregate_master(search_query, action, sub_key):
-    """Aggregate the queried preprocessing files and select the proper function depending on action and data"""
-    # define the origin analysis type
-    ori_type = 'preprocessing'
-    # define the suffix for this function
-    if action == 'full_traces':
-        analysis_type = 'aggFull'
-    elif action == 'bin_time':
-        analysis_type = 'aggBin'
-    elif action == 'encounters':
-        analysis_type = 'aggEnc'
-    else:
-        raise ValueError('Action not recognized')
-
-    # get the data and paths
-    data_all, paths_all, parsed_query, date_list, animal_list = \
-        fd.fetch_preprocessing(search_query + ', =analysis_type:' + ori_type, sub_key=sub_key)
-
-    # add the CA termination to the analysis type if the sub_key matches (and also set the unique variables)
-    if sub_key == 'matched_calcium':
-        analysis_type += 'CA'
-        # get the unique mice and dates
-        unique_mice = np.unique(animal_list)
-        unique_dates = np.unique(date_list)
-    elif sub_key == 'full_traces':
-        unique_mice = [0]
-        unique_dates = [0]
-    else:
-        raise ValueError('Sub_key not recognized')
-
-    # for all the mice
-    for idx, mouse in enumerate(unique_mice):
-        # for all the dates
-        for idx2, date in enumerate(unique_dates):
-
-            # define the writing mode so that the file is overwritten in the first iteration
-            mode = 'w' if idx+idx2 == 0 else 'a'
-
-            # if there is no calcium, concatenate across the entire queryset
-            if mouse == 0 and date == 0:
-                partial_data = data_all
-                group_key = analysis_type
-            else:
-                # get the data from the corresponding mouse and date
-                partial_data = [el for idx, el in enumerate(data_all)
-                                if (date_list[idx] == date) & (animal_list[idx] == mouse)]
-                # assemble the group key for the hdf5 file (making sure the date is natural)
-                group_key = '/'.join(('', mouse, 'd' + str(date)[:10].replace('-', '_'), analysis_type))
-
-            # select the function to run
-            if action == 'full_traces':
-                partial_data = aggregate_full_traces(partial_data)
-            elif action == 'bin_time':
-                partial_data = aggregate_bin_time(partial_data)
-            elif action == 'encounters':
-                partial_data = aggregate_encounters(partial_data)
-            else:
-                raise ValueError('Action not recognized')
-
-            # save to file
-            fd.save_create(partial_data, paths_all, group_key, parsed_query, action='save', mode=mode)
-
-    # create the entry
-    fd.save_create([], paths_all, analysis_type, parsed_query, action='create')
-
-    return None
-
-
 def aggregate_full_traces(partial_data):
     """Generate a file with the aggregated full traces from the entire queryset concatenated"""
 
@@ -203,16 +134,98 @@ def aggregate_encounters(data_all):
     return encounter_matrix
 
 
-if __name__ == '__main__':
+# TODO: adapt the functions for snakemake running (i.e. they have to take in a path, not a query)
+# def aggregate_master(search_query, action, sub_key):
+#     """Aggregate the queried preprocessing files and select the proper function depending on action and data"""
+raw_path = snakemake.output[0]
+dict_path = fd.parse_outpath(raw_path)
+analysis_type = dict_path['analysis_type']
+sub_key = 'matched_calcium' if 'CA' in analysis_type else 'full_traces'
+paths_all = snakemake.input
+# get the path info
+path_info = [fd.parse_preproc_name(el) for el in paths_all]
 
-    # define the search query
-    search_string = 'result:fail, lighting:normal, rig:miniscope'
-    # run the functions
-    aggregate_master(search_string, 'full_traces', 'full_traces')
-    aggregate_master(search_string, 'bin_time', 'full_traces')
-    aggregate_master(search_string, 'encounters', 'full_traces')
+data = [pd.read_hdf(el, sub_key) for el in paths_all]
+# get a list of all the animals and dates involved
+animal_list = [el['mouse'] for el in path_info]
+unique_mice = np.unique(animal_list) if 'CA' in analysis_type else [0]
 
-    # aggregate_master(search_string, 'full_traces', 'matched_calcium')
-    # aggregate_master(search_string, 'bin_time', 'matched_calcium')
-    # aggregate_master(search_string, 'encounters', 'matched_calcium')
+date_list = [el['date'][0] for el in path_info]
+unique_dates = np.unique(date_list) if 'CA' in analysis_type else [0]
+
+# define the origin analysis type
+# ori_type = 'preprocessing'
+# # define the suffix for this function
+# if action == 'full_traces':
+#     analysis_type = 'aggFull'
+# elif action == 'bin_time':
+#     analysis_type = 'aggBin'
+# elif action == 'encounters':
+#     analysis_type = 'aggEnc'
+# else:
+#     raise ValueError('Action not recognized')
+
+# get the data and paths
+# data_all, paths_all, parsed_query, date_list, animal_list = \
+#     fd.fetch_preprocessing(search_query + ', =analysis_type:' + ori_type, sub_key=sub_key)
+
+
+# # add the CA termination to the analysis type if the sub_key matches (and also set the unique variables)
+# if sub_key == 'matched_calcium':
+#     analysis_type += 'CA'
+#     # get the unique mice and dates
+#     unique_mice = np.unique(animal_list)
+#     unique_dates = np.unique(date_list)
+# elif sub_key == 'full_traces':
+#     unique_mice = [0]
+#     unique_dates = [0]
+# else:
+#     raise ValueError('Sub_key not recognized')
+
+# for all the mice
+for idx, mouse in enumerate(unique_mice):
+    # for all the dates
+    for idx2, date in enumerate(unique_dates):
+
+        # define the writing mode so that the file is overwritten in the first iteration
+        mode = 'w' if idx+idx2 == 0 else 'a'
+
+        # if there is no calcium, concatenate across the entire queryset
+        if mouse == 0 and date == 0:
+            partial_data = data
+            group_key = analysis_type
+        else:
+            # get the data from the corresponding mouse and date
+            partial_data = [el for idx, el in enumerate(data)
+                            if (date_list[idx] == date) & (animal_list[idx] == mouse)]
+            # assemble the group key for the hdf5 file (making sure the date is natural)
+            group_key = '/'.join(('', mouse, 'd' + str(date)[:10].replace('-', '_'), analysis_type))
+
+        # select the function to run
+        if 'aggFull' in analysis_type:
+            partial_data = aggregate_full_traces(partial_data)
+        elif 'aggBin' in analysis_type:
+            partial_data = aggregate_bin_time(partial_data)
+        elif 'aggEnc' in analysis_type:
+            partial_data = aggregate_encounters(partial_data)
+        else:
+            raise ValueError('Action not recognized')
+
+        # save to file
+        fd.save_create_snake(partial_data, paths_all, raw_path, group_key, dict_path, action='save', mode=mode)
+
+# create the entry
+fd.save_create_snake([], paths_all, raw_path, analysis_type, dict_path, action='create')
+# if __name__ == '__main__':
+#
+#     # define the search query
+#     search_string = 'result:fail, lighting:normal, rig:miniscope'
+#     # run the functions
+#     aggregate_master(search_string, 'full_traces', 'full_traces')
+#     aggregate_master(search_string, 'bin_time', 'full_traces')
+#     aggregate_master(search_string, 'encounters', 'full_traces')
+#
+#     # aggregate_master(search_string, 'full_traces', 'matched_calcium')
+#     # aggregate_master(search_string, 'bin_time', 'matched_calcium')
+#     # aggregate_master(search_string, 'encounters', 'matched_calcium')
 

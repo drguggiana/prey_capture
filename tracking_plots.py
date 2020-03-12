@@ -168,9 +168,6 @@ fig.savefig(join(figure_save, 'cricketKinematicHistograms_'+outcome_keyword+'_'+
 #
 #     # relative heading
 #     relative_heading = cricket_angle-mouse_heading
-# TODO: plot distance triggered average
-# TODO: incorporate motive traces for the VR cricket
-# TODO: remove arbitrary threshold in mouse speed
 
 plt.show()
 print('yay')

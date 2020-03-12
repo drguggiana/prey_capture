@@ -42,20 +42,22 @@ def parse_search_string(string_in):
     string_parts = string_in.split(',')
     # allocate a dictionary
     string_dict = {
-        'analysis_type': '',
         'result': '',
         'rig': '',
         'lighting': '',
         'slug': '',
         'notes': '',
+        'analysis_type': '',
     }
     # for all the keys, find the matching terms and fill in the required entries
     for key in string_dict.keys():
         # for all the elements in string_parts
         for parts in string_parts:
             if key in parts:
-                string_dict[key] = parts.split('=')[1]
-
+                string_dict[key] = parts.split(':')[1]
+        # fill it up with ALL if not present
+        if string_dict[key] == '':
+            string_dict[key] = 'ALL'
     return string_dict
 
 
@@ -110,3 +112,53 @@ def fetch_preprocessing(search_query, sub_key=None):
     paths_all = [el['analysis_path'] for el in file_path]
 
     return data_all, paths_all, parsed_query, date_list, animal_list
+
+
+def parse_preproc_name(path):
+    """Parse the filename of a preprocessed path"""
+    # split the path
+    path_parts = path.replace('_preproc.hdf5', '').split('_')
+    parsed_name = {
+        'date': '_'.join((path_parts[:3])),
+        'mouse': '_'.join((path_parts[7:10])) if path_parts[6] == 'miniscope' else '_'.join((path_parts[6:9])),
+        'rig': 'miniscope' if path_parts[6] == 'miniscope' else 'vr',
+        'result': path_parts[10] if path_parts[6] == 'miniscope' else path_parts[9],
+        'notes': '_'.join((path_parts[10:])) if path_parts[6] == 'miniscope' else '_'.join((path_parts[9:])),
+    }
+    return parsed_name
+
+
+def parse_outpath(path):
+    """Parse the output path for the search parameters"""
+    path_parts = path.split('_')
+    parsed_path = {
+        'ori_type': path_parts[0],
+        'result': path_parts[1],
+        'rig': path_parts[2],
+        'lighting': path_parts[3],
+        'slug': path_parts[4],
+        'notes': path_parts[5],
+        'analysis_type': path_parts[-1][:-5]
+    }
+
+    return parsed_path
+
+
+def save_create_snake(data_in, paths_in, file_name, hdf5_key, parsed_query, action='both', mode='w'):
+    """Save the data frame and create a database entry for snakemake"""
+    # get the actual analysis type from the hdf5 key
+    analysis_type = hdf5_key.split('/')[-1]
+    # save a file
+    # file_name = os.path.join(paths.analysis_path,
+    #                          '_'.join([el for el in parsed_query.values() if len(el) > 0] +
+    #                                   [analysis_type])+'.hdf5')
+
+    # check which actions to perform based on the kwarg
+    if action in ['save', 'both']:
+        # save as dataframe
+        data_in.to_hdf(file_name, key=hdf5_key, mode=mode, format='table')
+
+    if action in ['create', 'both']:
+        # generate an entry
+        generate_entry(paths_in, file_name, parsed_query, analysis_type)
+    return None
