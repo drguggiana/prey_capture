@@ -5,6 +5,7 @@ import snakemake_scripts.sub_preprocess_S1 as s1
 import snakemake_scripts.sub_preprocess_S2 as s2
 import datetime
 import functions_bondjango as bd
+import functions_data_handling as fd
 
 # define the search string
 # # search_string = 'result=succ, lighting=normal'
@@ -15,16 +16,19 @@ import functions_bondjango as bd
 
 # get the path to the file, parse and turn into a dictionary
 raw_path = snakemake.input[0]
-# get the target model from the path
-target_model = 'video_experiment' if 'miniscope' in raw_path else 'vr_experiment'
+
 # find the entry based on the path
-files = bd.query_database(target_model, 'bonsai_path:'+raw_path)[0]
+# files = bd.query_database(target_model, 'bonsai_path:'+raw_path)[0]
+files = fd.parse_experiment_name(raw_path)
+# get the target model from the path
+target_model = 'video_experiment' if files['rig'] == 'miniscope' else 'vr_experiment'
 
 # run through the files and select the appropriate analysis script
 
 # get the file date
 # file_date = functions_io.get_file_date(files)
-file_date = datetime.datetime.strptime(files['date'], '%Y-%m-%dT%H:%M:%SZ')
+# file_date = datetime.datetime.strptime(files['date'], '%Y-%m-%dT%H:%M:%SZ')
+file_date = datetime.datetime.strptime(files['date'], '%m_%d_%Y_%H_%M_%S')
 
 # check for the nomini flag
 if ('nomini' in files['notes']) or ('nofluo' in files['notes']):
@@ -67,7 +71,7 @@ elif files['rig'] == 'miniscope' and not nomini_flag:
     # get a dataframe with the calcium data matched to the bonsai data
     matched_calcium = functions_matching.match_calcium(calcium_path, sync_path, kinematics_data)
 
-    matched_calcium.to_hdf(out_path[0], key='matched_calcium', mode='a', format='table')
+    matched_calcium.to_hdf(out_path, key='matched_calcium', mode='a', format='table')
 
 elif files['rig'] != 'miniscope' and file_date <= datetime.datetime(year=2019, month=11, day=10):
     # run the first stage of preprocessing
@@ -93,27 +97,31 @@ else:
     # out_path = []
 
 # assemble the entry data
+# TODO: make sure it's compatible also with VR experiments
 entry_data = {
     'analysis_type': 'preprocessing',
-    'analysis_path': out_path[0],
+    'analysis_path': out_path,
     'pic_path': '',
     'result': files['result'],
     'rig': files['rig'],
     'lighting': files['lighting'],
     'slug': files['slug'] + '_preprocessing',
     'notes': files['notes'],
-    'video_analysis': [files['url']]
+    'video_analysis': [files['url']] if files['rig'] == 'miniscope' else [],
+    'vr_analysis': [] if files['rig'] == 'miniscope' else [files['url']],
 }
 # check if the entry already exists, if so, update it, otherwise, create it
-if len(files['preproc_files']) > 0:
-    update_url = '/'.join((paths.bondjango_url, 'analyzed_data', files['preproc_files'][0], ''))
-    output_entry = bd.update_entry(update_url, entry_data)
-else:
+update_url = '/'.join((paths.bondjango_url, 'analyzed_data', entry_data['slug'], ''))
+output_entry = bd.update_entry(update_url, entry_data)
+if output_entry.status_code == 404:
     # build the url for creating an entry
     create_url = '/'.join((paths.bondjango_url, 'analyzed_data', ''))
     output_entry = bd.create_entry(create_url, entry_data)
-# print the result
-print('The output status was %i, reason %s' % (output_entry.status_code, output_entry.reason))
 
-print('yay')
+print('The output status was %i, reason %s' %
+      (output_entry.status_code, output_entry.reason))
+if output_entry.status_code in [500, 400]:
+    print(entry_data)
+
+# print('yay')
 print('<3')

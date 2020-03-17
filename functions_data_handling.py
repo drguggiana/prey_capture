@@ -5,7 +5,7 @@ import paths
 import functions_bondjango as bd
 import pandas as pd
 import datetime
-# import deepdish as dd
+import itertools as it
 
 
 def generate_entry(in_path, out_path, parsed_search, analysis_t, pic_path=''):
@@ -117,7 +117,7 @@ def fetch_preprocessing(search_query, sub_key=None):
 def parse_preproc_name(path):
     """Parse the filename of a preprocessed path"""
     # split the path
-    path_parts = path.replace('_preproc.hdf5', '').split('_')
+    path_parts = os.path.basename(path).replace('_preproc.hdf5', '').split('_')
     parsed_name = {
         'date': '_'.join((path_parts[:3])),
         'mouse': '_'.join((path_parts[7:10])) if path_parts[6] == 'miniscope' else '_'.join((path_parts[6:9])),
@@ -144,6 +144,31 @@ def parse_outpath(path):
     return parsed_path
 
 
+def parse_experiment_name(experiment_name):
+    """Parse an experiment path into a dictionary"""
+    path_basename = os.path.basename(experiment_name)[:-4]
+    path_parts = path_basename.split('_')
+    # get the analysis type for the url
+    url_type = 'video_experiment/' if path_parts[6] == 'miniscope' else 'vr_experiment/'
+    # assemble the parsed dictionary
+    parsed_name = {
+        'date': '_'.join((path_parts[:6])),
+        'mouse': '_'.join((path_parts[7:10])) if path_parts[6] == 'miniscope' else '_'.join((path_parts[6:9])),
+        'rig': 'miniscope' if path_parts[6] == 'miniscope' else 'vr',
+        'result': path_parts[10] if path_parts[6] == 'miniscope' else path_parts[9],
+        'lighting': 'normal' if 'dark' not in experiment_name else 'dark',
+        'notes': ''.join((path_parts[11:])) if path_parts[6] == 'miniscope' else ''.join((path_parts[10:])),
+        'slug': fm.slugify(path_basename),
+        'url': 'http://192.168.236.135:8080/loggers/' + url_type+fm.slugify(path_basename)+'/',
+        'bonsai_path': experiment_name,
+        'fluo_path': experiment_name.replace('.csv', '_calcium_data.h5'),
+        'sync_path': experiment_name.replace('miniscope', 'syncMini', 1) if path_parts[6] == 'miniscope' else
+        '_'.join((path_parts[:6], 'syncVR', path_parts[6:]))
+    }
+
+    return parsed_name
+
+
 def save_create_snake(data_in, paths_in, file_name, hdf5_key, parsed_query, action='both', mode='w'):
     """Save the data frame and create a database entry for snakemake"""
     # get the actual analysis type from the hdf5 key
@@ -162,3 +187,39 @@ def save_create_snake(data_in, paths_in, file_name, hdf5_key, parsed_query, acti
         # generate an entry
         generate_entry(paths_in, file_name, parsed_query, analysis_type)
     return None
+
+
+def combinatorial_query(input_dict):
+    """Given the input dict, generate all combinations of the elements as search queries"""
+    # get the keys of the dict
+    fields_list = input_dict.keys()
+    # get the cartesian product of the values
+    combinations = it.product(*input_dict.values())
+    # allocate the output list
+    search_queries = []
+    # for all the combinations
+    for combination in combinations:
+        # assemble the actual search query
+        search_queries.append(','.join([field + ':' + term for field, term
+                                        in zip(fields_list, combination)]))
+    return search_queries
+
+
+def remove_query_field(input_query, target_field):
+    """Remove the target query field from the search query"""
+    # split the query
+    split_query = input_query.split(',')
+    # allocate memory for the result
+    output_query = []
+    # for all the parts
+    for parts in split_query:
+        # split in field and query
+        field = parts.split(':')[0]
+        # if it's the target field, skip it
+        if field == target_field:
+            continue
+        # otherwise put it in the output query
+        output_query.append(parts)
+    # assemble the new query minus the target field
+    output_query = ','.join(output_query)
+    return output_query

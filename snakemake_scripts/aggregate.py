@@ -5,6 +5,7 @@ import functions_data_handling as fd
 from scipy.ndimage.measurements import label
 import pandas as pd
 import numpy as np
+import os
 
 
 def aggregate_full_traces(partial_data):
@@ -138,7 +139,7 @@ def aggregate_encounters(data_all):
 # def aggregate_master(search_query, action, sub_key):
 #     """Aggregate the queried preprocessing files and select the proper function depending on action and data"""
 raw_path = snakemake.output[0]
-dict_path = fd.parse_outpath(raw_path)
+dict_path = fd.parse_outpath(os.path.basename(raw_path))
 analysis_type = dict_path['analysis_type']
 sub_key = 'matched_calcium' if 'CA' in analysis_type else 'full_traces'
 paths_all = snakemake.input
@@ -150,37 +151,8 @@ data = [pd.read_hdf(el, sub_key) for el in paths_all]
 animal_list = [el['mouse'] for el in path_info]
 unique_mice = np.unique(animal_list) if 'CA' in analysis_type else [0]
 
-date_list = [el['date'][0] for el in path_info]
+date_list = [el['date'] for el in path_info]
 unique_dates = np.unique(date_list) if 'CA' in analysis_type else [0]
-
-# define the origin analysis type
-# ori_type = 'preprocessing'
-# # define the suffix for this function
-# if action == 'full_traces':
-#     analysis_type = 'aggFull'
-# elif action == 'bin_time':
-#     analysis_type = 'aggBin'
-# elif action == 'encounters':
-#     analysis_type = 'aggEnc'
-# else:
-#     raise ValueError('Action not recognized')
-
-# get the data and paths
-# data_all, paths_all, parsed_query, date_list, animal_list = \
-#     fd.fetch_preprocessing(search_query + ', =analysis_type:' + ori_type, sub_key=sub_key)
-
-
-# # add the CA termination to the analysis type if the sub_key matches (and also set the unique variables)
-# if sub_key == 'matched_calcium':
-#     analysis_type += 'CA'
-#     # get the unique mice and dates
-#     unique_mice = np.unique(animal_list)
-#     unique_dates = np.unique(date_list)
-# elif sub_key == 'full_traces':
-#     unique_mice = [0]
-#     unique_dates = [0]
-# else:
-#     raise ValueError('Sub_key not recognized')
 
 # for all the mice
 for idx, mouse in enumerate(unique_mice):

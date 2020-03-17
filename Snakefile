@@ -15,9 +15,15 @@ rule preprocess:
 rule aggregate_preprocessed:
     input:
           expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files'])
-         # expand(lambda wildcards: config['files'][wildcards.file].replace('.csv','_preproc.hdf5'), file=config["files"])
-         # expand( ,file=config["files"])
     output:
          os.path.join(paths.analysis_path, "preprocessing_{query}.hdf5")
     script:
           "snakemake_scripts/aggregate.py"
+
+rule visualize_aggregates:
+    input:
+        os.path.join(paths.analysis_path, "preprocessing_{query}.hdf5")
+    output:
+        os.path.join(paths.figures_path, "averages_{query}.html")
+    notebook:
+        "snakemake_scripts/notebooks/Visualize_snake_1.ipynb"
