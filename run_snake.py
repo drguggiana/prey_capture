@@ -11,13 +11,13 @@ input_dictionary = {
     'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA'],
     'result': ['succ', 'fail'],
     'rig': ['miniscope'],
-    'lighting': ['normal', 'dark']
+    'lighting': ['normal', 'dark'],
+    'imaging': ['doric', 'no'],
 }
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
 # for all the search queries
-for search_query in search_queries:
-    # search_query = 'result:succ,rig:miniscope,lighting:normal'
+for search_query in search_queries[:1]:
 
     # pick the target model based on the search query
     if 'rig:miniscope' in search_query:
@@ -35,12 +35,17 @@ for search_query in search_queries:
     # parse the search string
     parsed_search = fd.parse_search_string(search_query)
     # if the analysis type requires CA data, make sure notes=BLANK
-    # TODO: update the model definition and the remaining fields to add calcium explicitly
     if 'CA' in parsed_search['analysis_type']:
-        parsed_search['notes'] = 'BLANK'
-        search_query += ',notes:BLANK'
+        # parsed_search['notes'] = 'BLANK'
+        # search_query += ',notes:BLANK'
+        parsed_search['imaging'] = 'doric'
+        if 'imaging:no' in search_query:
+            search_query.replace('imaging:no', 'imaging:doric')
+        elif 'imaging' not in search_query:
+            search_query += 'imaging:doric'
+
     # also get the target database entries
-    target_entries = bd.query_database(target_model, fd.remove_query_field(search_query, 'analysis_type'))
+    target_entries = bd.query_database(target_model, fd.remove_query_field(search_query, 'analysis_type'))[:2]
     # if there are no entries, skip the iteration
     if len(target_entries) == 0:
         print('No entries: ' + search_query)
@@ -50,14 +55,20 @@ for search_query in search_queries:
 
     # create the config file
     config_dict = {'files': {os.path.basename(el['bonsai_path'])[:-4]: os.path.basename(el['bonsai_path'])[:-4]
-                             for el in target_entries}, 'target_path': target_path}
+                             for el in target_entries},
+                   'file_info': {os.path.basename(el['bonsai_path'])[:-4]: yaml.dump(el)
+                                 for el in target_entries},
+                   'output_info': yaml.dump(parsed_search),
+                   'target_path': target_path,
+                   }
+    # write the file
     with open(paths.snakemake_config, 'w') as f:
         target_file = yaml.dump(config_dict, f)
 
     # assemble the output path
-    # out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
+    out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
 
-    out_path = os.path.join(paths.figures_path, '_'.join(('averages', *parsed_search.values())) + '.html')
+    # out_path = os.path.join(paths.figures_path, '_'.join(('averages', *parsed_search.values())) + '.html')
 
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, '--cores', '1',

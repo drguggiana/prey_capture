@@ -3,8 +3,6 @@ import os
 import functions_misc as fm
 import paths
 import functions_bondjango as bd
-import pandas as pd
-import datetime
 import itertools as it
 
 
@@ -20,6 +18,7 @@ def generate_entry(in_path, out_path, parsed_search, analysis_t, pic_path=''):
         'result': parsed_search['result'],
         'rig': parsed_search['rig'],
         'lighting': parsed_search['lighting'],
+        'imaging': parsed_search['imaging'],
         'slug': fm.slugify(os.path.basename(out_path)[:-5]),
         'notes': parsed_search['notes'],
     }
@@ -48,6 +47,7 @@ def parse_search_string(string_in):
         'slug': '',
         'notes': '',
         'analysis_type': '',
+        'imaging': '',
     }
     # for all the keys, find the matching terms and fill in the required entries
     for key in string_dict.keys():
@@ -61,91 +61,8 @@ def parse_search_string(string_in):
     return string_dict
 
 
-def save_create(data_in, paths_in, hdf5_key, parsed_query, action='both', mode='w'):
-    """Save the data frame and create a database entry"""
-    # get the actual analysis type from the hdf5 key
-    analysis_type = hdf5_key.split('/')[-1]
-    # save a file
-    file_name = os.path.join(paths.analysis_path,
-                             '_'.join([el for el in parsed_query.values() if len(el) > 0] +
-                                      [analysis_type])+'.hdf5')
-
-    # check which actions to perform based on the kwarg
-    if action in ['save', 'both']:
-        # save as dataframe
-        data_in.to_hdf(file_name, key=hdf5_key, mode=mode, format='table')
-
-    if action in ['create', 'both']:
-        # generate an entry
-        generate_entry(paths_in, file_name, parsed_query, analysis_type)
-    return None
-
-
-def fetch_preprocessing(search_query, sub_key=None):
-    """Take the search query and load the data and the input paths"""
-    # get the queryset
-    file_path = bd.query_database('analyzed_data', search_query)
-
-    assert len(file_path) > 0, 'Query gave no results'
-
-    # parse the search query
-    parsed_query = parse_search_string(search_query)
-
-    # if coming from vr or video, also get lists for the dates and animals
-    if parsed_query['analysis_type'] == 'preprocessing':
-        if parsed_query['rig'] == 'miniscope':
-            m2m_field = 'video_analysis'
-        else:
-            m2m_field = 'vr_analysis'
-
-        # filter the path for the days
-        date_list = [datetime.datetime.strptime(el[m2m_field][0][:10], '%m_%d_%Y') for el in file_path]
-
-        # filter the list for animals
-        animal_list = [el[m2m_field][0][30:41] for el in file_path]
-    else:
-        date_list = []
-        animal_list = []
-    # load the data
-    data_all = [pd.read_hdf(el['analysis_path'], sub_key) for el in file_path]
-    # get the paths
-    paths_all = [el['analysis_path'] for el in file_path]
-
-    return data_all, paths_all, parsed_query, date_list, animal_list
-
-
-def parse_preproc_name(path):
-    """Parse the filename of a preprocessed path"""
-    # split the path
-    path_parts = os.path.basename(path).replace('_preproc.hdf5', '').split('_')
-    parsed_name = {
-        'date': '_'.join((path_parts[:3])),
-        'mouse': '_'.join((path_parts[7:10])) if path_parts[6] == 'miniscope' else '_'.join((path_parts[6:9])),
-        'rig': 'miniscope' if path_parts[6] == 'miniscope' else 'vr',
-        'result': path_parts[10] if path_parts[6] == 'miniscope' else path_parts[9],
-        'notes': '_'.join((path_parts[10:])) if path_parts[6] == 'miniscope' else '_'.join((path_parts[9:])),
-    }
-    return parsed_name
-
-
-def parse_outpath(path):
-    """Parse the output path for the search parameters"""
-    path_parts = path.split('_')
-    parsed_path = {
-        'ori_type': path_parts[0],
-        'result': path_parts[1],
-        'rig': path_parts[2],
-        'lighting': path_parts[3],
-        'slug': path_parts[4],
-        'notes': path_parts[5],
-        'analysis_type': path_parts[-1][:-5]
-    }
-
-    return parsed_path
-
-
 def parse_experiment_name(experiment_name):
-    """Parse an experiment path into a dictionary"""
+    """Parse an experiment file path into a dictionary"""
     path_basename = os.path.basename(experiment_name)[:-4]
     path_parts = path_basename.split('_')
     # get the analysis type for the url
@@ -156,12 +73,15 @@ def parse_experiment_name(experiment_name):
         'mouse': '_'.join((path_parts[7:10])) if path_parts[6] == 'miniscope' else '_'.join((path_parts[6:9])),
         'rig': 'miniscope' if path_parts[6] == 'miniscope' else 'vr',
         'result': path_parts[10] if path_parts[6] == 'miniscope' else path_parts[9],
+        # TODO: generalize this
         'lighting': 'normal' if 'dark' not in experiment_name else 'dark',
+        'imaging': 'doric',
         'notes': ''.join((path_parts[11:])) if path_parts[6] == 'miniscope' else ''.join((path_parts[10:])),
         'slug': fm.slugify(path_basename),
         'url': 'http://192.168.236.135:8080/loggers/' + url_type+fm.slugify(path_basename)+'/',
         'bonsai_path': experiment_name,
         'fluo_path': experiment_name.replace('.csv', '_calcium_data.h5'),
+        'tif_path': experiment_name.replace('.csv', '.tif'),
         'sync_path': experiment_name.replace('miniscope', 'syncMini', 1) if path_parts[6] == 'miniscope' else
         '_'.join((path_parts[:6], 'syncVR', path_parts[6:]))
     }
@@ -173,10 +93,6 @@ def save_create_snake(data_in, paths_in, file_name, hdf5_key, parsed_query, acti
     """Save the data frame and create a database entry for snakemake"""
     # get the actual analysis type from the hdf5 key
     analysis_type = hdf5_key.split('/')[-1]
-    # save a file
-    # file_name = os.path.join(paths.analysis_path,
-    #                          '_'.join([el for el in parsed_query.values() if len(el) > 0] +
-    #                                   [analysis_type])+'.hdf5')
 
     # check which actions to perform based on the kwarg
     if action in ['save', 'both']:

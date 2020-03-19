@@ -5,9 +5,11 @@ import paths
 
 rule preprocess:
     input:
-         lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.csv')
+          lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.csv'),
     output:
           os.path.join(paths.analysis_path, "{file}_preproc.hdf5")
+    params:
+          info=lambda wildcards: config["file_info"][wildcards.file]
     script:
           "snakemake_scripts/preprocess_all.py"
 
@@ -17,8 +19,12 @@ rule aggregate_preprocessed:
           expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files'])
     output:
          os.path.join(paths.analysis_path, "preprocessing_{query}.hdf5")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
     script:
           "snakemake_scripts/aggregate.py"
+
 
 rule visualize_aggregates:
     input:

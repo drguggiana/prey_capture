@@ -6,6 +6,7 @@ from scipy.ndimage.measurements import label
 import pandas as pd
 import numpy as np
 import os
+import yaml
 
 
 def aggregate_full_traces(partial_data):
@@ -135,17 +136,20 @@ def aggregate_encounters(data_all):
     return encounter_matrix
 
 
-# TODO: adapt the functions for snakemake running (i.e. they have to take in a path, not a query)
-# def aggregate_master(search_query, action, sub_key):
-#     """Aggregate the queried preprocessing files and select the proper function depending on action and data"""
+# Main script
+# get the raw output_path
 raw_path = snakemake.output[0]
-dict_path = fd.parse_outpath(os.path.basename(raw_path))
+# get the parsed path
+dict_path = yaml.load(snakemake.params.output_info, Loader=yaml.FullLoader)
+# get the analysis type
 analysis_type = dict_path['analysis_type']
+# get the sub key
 sub_key = 'matched_calcium' if 'CA' in analysis_type else 'full_traces'
+# get the input paths
 paths_all = snakemake.input
-# get the path info
-path_info = [fd.parse_preproc_name(el) for el in paths_all]
-
+# get the parsed path info
+path_info = [yaml.load(el, Loader=yaml.FullLoader) for el in snakemake.params.file_info]
+# read the data
 data = [pd.read_hdf(el, sub_key) for el in paths_all]
 # get a list of all the animals and dates involved
 animal_list = [el['mouse'] for el in path_info]
@@ -188,16 +192,3 @@ for idx, mouse in enumerate(unique_mice):
 
 # create the entry
 fd.save_create_snake([], paths_all, raw_path, analysis_type, dict_path, action='create')
-# if __name__ == '__main__':
-#
-#     # define the search query
-#     search_string = 'result:fail, lighting:normal, rig:miniscope'
-#     # run the functions
-#     aggregate_master(search_string, 'full_traces', 'full_traces')
-#     aggregate_master(search_string, 'bin_time', 'full_traces')
-#     aggregate_master(search_string, 'encounters', 'full_traces')
-#
-#     # aggregate_master(search_string, 'full_traces', 'matched_calcium')
-#     # aggregate_master(search_string, 'bin_time', 'matched_calcium')
-#     # aggregate_master(search_string, 'encounters', 'matched_calcium')
-
