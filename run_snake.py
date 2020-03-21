@@ -9,15 +9,15 @@ import os
 # define the type of analysis
 input_dictionary = {
     'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA'],
+    # 'analysis_type': ['aggFull'],
     'result': ['succ', 'fail'],
-    'rig': ['miniscope'],
-    'lighting': ['normal', 'dark'],
-    'imaging': ['doric', 'no'],
+    'rig': ['miniscope', ],
+    'lighting': ['normal', ],
 }
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
 # for all the search queries
-for search_query in search_queries[:1]:
+for search_query in search_queries:
 
     # pick the target model based on the search query
     if 'rig:miniscope' in search_query:
@@ -36,16 +36,14 @@ for search_query in search_queries[:1]:
     parsed_search = fd.parse_search_string(search_query)
     # if the analysis type requires CA data, make sure notes=BLANK
     if 'CA' in parsed_search['analysis_type']:
-        # parsed_search['notes'] = 'BLANK'
-        # search_query += ',notes:BLANK'
+
         parsed_search['imaging'] = 'doric'
-        if 'imaging:no' in search_query:
-            search_query.replace('imaging:no', 'imaging:doric')
-        elif 'imaging' not in search_query:
-            search_query += 'imaging:doric'
+
+        if 'imaging' not in search_query:
+            search_query += ',imaging:doric'
 
     # also get the target database entries
-    target_entries = bd.query_database(target_model, fd.remove_query_field(search_query, 'analysis_type'))[:2]
+    target_entries = bd.query_database(target_model, fd.remove_query_field(search_query, 'analysis_type'))
     # if there are no entries, skip the iteration
     if len(target_entries) == 0:
         print('No entries: ' + search_query)
@@ -71,7 +69,7 @@ for search_query in search_queries[:1]:
     # out_path = os.path.join(paths.figures_path, '_'.join(('averages', *parsed_search.values())) + '.html')
 
     # run snakemake
-    preprocess_sp = sp.Popen(['snakemake', out_path, '--cores', '1',
+    preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1', '-f',
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)

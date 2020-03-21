@@ -7,6 +7,7 @@ import datetime
 import functions_bondjango as bd
 import os
 import yaml
+import matplotlib.pyplot as plt
 
 # check if launched from snakemake, otherwise, prompt user
 try:
@@ -31,8 +32,11 @@ file_date = files['date']
 # assemble the save path
 try:
     save_path = snakemake.output[0]
+    pic_path = snakemake.output[1]
 except NameError:
-    save_path = os.path.join(paths.analysis_path, os.path.basename(files['bonsai_path']))
+    save_path = os.path.join(paths.analysis_path,
+                             os.path.basename(files['bonsai_path'][:-4]))+'_preproc.hdf5'
+    pic_path = os.path.join(save_path[:-13] + '.png')
 
 # decide the analysis path based on the file name and date
 # if miniscope but no imaging, run bonsai only
@@ -88,11 +92,25 @@ else:
     # run the preprocessing kinematic calculations
     kinematics_data = s2.kinematic_calculations(out_path, paths.kinematics_path)
 
+# save the filtered trace
+fig_final = plt.figure()
+ax = fig_final.add_subplot(111)
+plt.gca().invert_yaxis()
+
+# plot the filtered trace
+ax.plot(filtered_traces.mouse_x,
+        filtered_traces.mouse_y, marker='o', linestyle='-')
+ax.plot(filtered_traces.cricket_x,
+        filtered_traces.cricket_y, marker='o', linestyle='-')
+
+# define the path for the figure
+fig_final.savefig(pic_path, bbox_inches='tight')
+
 # assemble the entry data
 entry_data = {
     'analysis_type': 'preprocessing',
     'analysis_path': out_path,
-    'pic_path': '',
+    'pic_path': pic_path,
     'result': files['result'],
     'rig': files['rig'],
     'lighting': files['lighting'],

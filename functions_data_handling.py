@@ -4,6 +4,8 @@ import functions_misc as fm
 import paths
 import functions_bondjango as bd
 import itertools as it
+import pandas as pd
+import datetime
 
 
 def generate_entry(in_path, out_path, parsed_search, analysis_t, pic_path=''):
@@ -46,8 +48,8 @@ def parse_search_string(string_in):
         'lighting': '',
         'slug': '',
         'notes': '',
-        'analysis_type': '',
         'imaging': '',
+        'analysis_type': '',
     }
     # for all the keys, find the matching terms and fill in the required entries
     for key in string_dict.keys():
@@ -139,3 +141,38 @@ def remove_query_field(input_query, target_field):
     # assemble the new query minus the target field
     output_query = ','.join(output_query)
     return output_query
+
+
+def fetch_preprocessing(search_query):
+    """Take the search query and load the data and the input paths"""
+    # get the queryset
+    file_path = bd.query_database('analyzed_data', search_query)
+
+    assert len(file_path) > 0, 'Query gave no results'
+
+    # parse the search query
+    parsed_query = parse_search_string(search_query)
+
+    # if coming from vr or video, also get lists for the dates and animals
+    if parsed_query['analysis_type'] == 'preprocessing':
+        if parsed_query['rig'] == 'miniscope':
+            m2m_field = 'video_analysis'
+        else:
+            m2m_field = 'vr_analysis'
+
+        # filter the path for the days
+        # date_list = [datetime.datetime.strptime(el[m2m_field][0][:10], '%m_%d_%Y') for el in file_path]
+        date_list = [el['date'] for el in file_path]
+
+        # filter the list for animals
+        animal_list = [el[m2m_field][0][30:41] for el in file_path]
+    else:
+        date_list = []
+        animal_list = []
+    # # load the data
+    # data_all = [pd.read_hdf(el['analysis_path'], sub_key) for el in file_path]
+    # get the paths
+    paths_all = [el['analysis_path'] for el in file_path]
+
+    return file_path, paths_all, parsed_query, date_list, animal_list
+

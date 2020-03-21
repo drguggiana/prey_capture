@@ -7,7 +7,8 @@ rule preprocess:
     input:
           lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.csv'),
     output:
-          os.path.join(paths.analysis_path, "{file}_preproc.hdf5")
+          os.path.join(paths.analysis_path, "{file}_preproc.hdf5"),
+          os.path.join(paths.analysis_path, "{file}.png")
     params:
           info=lambda wildcards: config["file_info"][wildcards.file]
     script:
@@ -32,4 +33,4 @@ rule visualize_aggregates:
     output:
         os.path.join(paths.figures_path, "averages_{query}.html")
     notebook:
-        "snakemake_scripts/notebooks/Visualize_snake_1.ipynb"
+        "snakemake_scripts/notebooks/Vis_averages.ipynb"
