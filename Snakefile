@@ -26,6 +26,12 @@ rule aggregate_preprocessed:
     script:
           "snakemake_scripts/aggregate.py"
 
+# rule cluster_encounters:
+#     input:
+#     output:
+#     params:
+#     script:
+
 
 rule visualize_aggregates:
     input:

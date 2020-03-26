@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import os
 import yaml
+import datetime
 
 
 def aggregate_full_traces(partial_data):
@@ -160,12 +161,12 @@ try:
     analysis_type = dict_path['analysis_type']
     # get a list of all the animals and dates involved
     animal_list = [el['mouse'] for el in path_info]
-    date_list = [el['date'] for el in path_info]
+    date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in file_path]
 except NameError:
     # define the analysis type
-    analysis_type = 'aggFull'
+    analysis_type = 'aggFullCA'
     # define the search query
-    search_query = 'result:succ,lighting:normal,rig:miniscope'
+    search_query = 'result:succ,lighting:normal,rig:miniscope,imaging:doric'
     # define the origin model
     ori_type = 'preprocessing'
     # get a dictionary with the search terms

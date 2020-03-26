@@ -162,7 +162,7 @@ def fetch_preprocessing(search_query):
 
         # filter the path for the days
         # date_list = [datetime.datetime.strptime(el[m2m_field][0][:10], '%m_%d_%Y') for el in file_path]
-        date_list = [el['date'] for el in file_path]
+        date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in file_path]
 
         # filter the list for animals
         animal_list = [el[m2m_field][0][30:41] for el in file_path]

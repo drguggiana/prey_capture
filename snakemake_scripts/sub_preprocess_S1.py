@@ -65,18 +65,12 @@ def run_preprocess(file_path_bonsai, save_file, tar_columns,
     filtered_traces['mouse'] = parsed_path['animal']
     filtered_traces['datetime'] = parsed_path['datetime']
 
-    # define the save path
-    # save_file = path.join(save_path_bonsai[:-4] + '_preproc.hdf5')
-
     # create the file name
     filtered_traces.to_hdf(save_file, key='full_traces', mode='w', format='table')
 
     # append to the outpath list
     out_path = save_file
-    # with open(save_file, mode='w', newline='') as f:
-    #     file_writer = csv.writer(f, delimiter=',')
-    #     for el, t in zip(files, time):
-    #         file_writer.writerow(np.hstack((el, t)))
+
     return out_path, filtered_traces
 
 

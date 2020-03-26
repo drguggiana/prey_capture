@@ -111,6 +111,7 @@ fig_final.savefig(pic_path, bbox_inches='tight')
 entry_data = {
     'analysis_type': 'preprocessing',
     'analysis_path': out_path,
+    'date': files['date'],
     'pic_path': pic_path,
     'result': files['result'],
     'rig': files['rig'],
