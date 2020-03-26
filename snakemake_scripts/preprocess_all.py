@@ -15,13 +15,14 @@ try:
     raw_path = snakemake.input[0]
     files = yaml.load(snakemake.params.info, Loader=yaml.FullLoader)
 except NameError:
+    # USE FOR DEBUGGING ONLY (or edit the search query and the object selection)
     # define the search string
-    search_string = 'result=succ, lighting=normal'
+    search_string = 'result:succ, lighting:normal, imaging:doric'
     # define the target model
     target_model = 'video_experiment'
     # get the queryset
-    files = bd.query_database(target_model, search_string)
-    raw_path = files[0]['bonsai_path']
+    files = bd.query_database(target_model, search_string)[0]
+    raw_path = files['bonsai_path']
 
 # get the target model from the path
 target_model = 'video_experiment' if files['rig'] == 'miniscope' else 'vr_experiment'

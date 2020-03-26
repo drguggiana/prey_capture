@@ -12,13 +12,6 @@ import pandas as pd
 def kinematic_calculations(name, data):
     """Calculate basic kinematic parameters of mouse and cricket"""
 
-    # load the dataframe
-    # data = pd.read_csv(name, index_col=0)
-    # data = pd.read_hdf(name, 'full_traces')
-
-    # # get the field names
-    # fields = data.columns
-
     # calculate the heading with the motive data if available
     if 'motive_x' in data.columns:
         mouse_coord_hd = data.loc[:, ['motive_x', 'motive_y']].to_numpy()
@@ -27,7 +20,7 @@ def kinematic_calculations(name, data):
 
     mouse_heading = wrap(np.concatenate((heading_calculation(mouse_coord_hd[1:, :], mouse_coord_hd[:-1, :]), [0])))
 
-    # zero the NaNs and unwrap
+    # zero the NaNs
     mouse_heading[np.isnan(mouse_heading)] = 0
 
     # calculate the heading to the cricket
@@ -105,10 +98,16 @@ def kinematic_calculations(name, data):
         kine_data['head_height'] = head_height
         kine_data['delta_head'] = delta_head
 
+    kine_data = pd.concat([data.loc[:, ['mouse_x', 'mouse_y', 'cricket_x', 'cricket_y']], kine_data], axis=1)
+
     # save the data to file
     # assemble the file name
     # save_file = join(save_path, basename(file_path[file_idx])[:-12] + '_kinematics.csv')
     kine_data.to_hdf(name, key='full_traces', mode='w', format='table')
+
+    # # also save the trajectory data
+    # trajectory_data = data.loc[:, ['mouse_x', 'mouse_y', 'cricket_x', 'cricket_y']]
+    # trajectory_data.to_hdf(name, key='trajectory', mode='a', format='table')
 
     # save the dataframe
     # kine_data.to_csv(save_file)
