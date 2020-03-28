@@ -5,11 +5,15 @@ import numpy as np
 
 
 def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-', color=None,
-            xerr=None, yerr=None, fig=None, fontsize=None):
+            xerr=None, yerr=None, fig=None, fontsize=None, dpi=None):
     """Wrapper for 2D plotting data into subplots"""
     # create a new figure window
     if fig is None:
-        fig = plt.figure(dpi=300)
+        if dpi is None:
+            dpi = 300
+        else:
+            dpi = dpi
+        fig = plt.figure(dpi=dpi)
     # initialize a plot counter
     plot_counter = 1
     # for all the rows
@@ -138,11 +142,15 @@ def animation_plotter(motivedata, bonsaidata, cricket_data, xlim, ylim, interval
     return anim
 
 
-def histogram(data_in, rows=1, columns=1, bins=50, fig=None, color=None, fontsize=None):
+def histogram(data_in, rows=1, columns=1, bins=50, fig=None, color=None, fontsize=None, dpi=None):
     """Wrapper for the histogram function in subplots"""
     # create a new figure window
     if fig is None:
-        fig = plt.figure(dpi=300)
+        if dpi is None:
+            dpi = 300
+        else:
+            dpi = dpi
+        fig = plt.figure(dpi=dpi)
     # initialize a plot counter
     plot_counter = 1
     # for all the rows

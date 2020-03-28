@@ -161,7 +161,7 @@ try:
     analysis_type = dict_path['analysis_type']
     # get a list of all the animals and dates involved
     animal_list = [el['mouse'] for el in path_info]
-    date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in file_path]
+    date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in path_info]
 except NameError:
     # define the analysis type
     analysis_type = 'aggFullCA'
