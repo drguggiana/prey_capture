@@ -1,11 +1,41 @@
 configfile: "snakemake_scripts/config_snake.yaml"
 import os
 import paths
+import yaml
+import json
 
+
+def yaml_to_json(wildcards):
+    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    # escape the double quotes inside the json
+    json_dict = json.dumps(python_dict).replace('"', '\\"')
+    return json_dict
+
+rule dlc_extraction:
+    input:
+          lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi'),
+    output:
+          os.path.join(config["target_path"], "{file}_dlc.h5"),
+    params:
+            info=yaml_to_json,
+            dlc_path=config["dlc_path"],
+          # info=lambda wildcards: config["file_info"][wildcards.file]
+    # notebook:
+    #     "snakemake_scripts/notebooks/Process_videoexperiment.ipynb"
+    shell:
+        r'conda activate DLC-GPU & python "{params.dlc_path}" "{input}" "{output}" "{params.info}"'
+        # r'conda activate DLC-GPU & D:/ProgramData/Miniconda3/envs/DLC-GPU/python.exe "D:/Code Repos/prey_capture/snakemake_scripts/run_dlc.py" '
+        # + r'"{input}" "{output}" "{params.info}"'
+
+def dlc_input_selector(wildcards):
+    if config["dlc_flag"][wildcards.file]:
+        return rules.dlc_extraction.output
+    else:
+        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.csv')
 
 rule preprocess:
     input:
-          lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.csv'),
+          dlc_input_selector
     output:
           os.path.join(paths.analysis_path, "{file}_preproc.hdf5"),
           os.path.join(paths.analysis_path, "{file}.png")
@@ -21,7 +51,7 @@ rule aggregate_preprocessed:
     output:
           os.path.join(paths.analysis_path, "preprocessing_{query}.hdf5")
     wildcard_constraints:
-          query="._agg."
+          query=".*_agg.*"
     params:
           file_info=expand("{info}", info=config["file_info"].values()),
           output_info=config["output_info"]

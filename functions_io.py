@@ -1,6 +1,7 @@
 import numpy as np
 import csv
 import os
+import shutil
 import datetime
 from skimage import io
 from skimage.external import tifffile as tif
@@ -99,3 +100,18 @@ def combine_tif(filenames, processing_path=None):
     frames_list.to_csv(out_path_log)
 
     return out_path_tif, out_path_log
+
+
+def delete_contents(folder_path):
+    """Delete all files and folders inside the target folder"""
+    "taken from https://stackoverflow.com/questions/185936/how-to-delete-the-contents-of-a-folder"
+
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))

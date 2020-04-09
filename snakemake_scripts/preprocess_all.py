@@ -9,43 +9,51 @@ import os
 import yaml
 import matplotlib.pyplot as plt
 
+
+def preprocess_selector(csv_path, saving_path, file_info):
+    """functions that selects the preprocessing function for the first step, either dlc or not"""
+    # check if the input has a dlc path or not
+    if len(file_info['dlc_path']) > 0:
+        # if there's a dlc file, use this preprocessing
+        output_path, traces = s1.run_dlc_preprocess(csv_path, file_info['dlc_path'], saving_path)
+    else:
+        # if not, use the legacy non-dlc preprocessing
+        output_path, traces = s1.run_preprocess(csv_path, saving_path)
+    return output_path, traces
+
+
 # check if launched from snakemake, otherwise, prompt user
 try:
     # get the path to the file, parse and turn into a dictionary
     raw_path = snakemake.input[0]
     files = yaml.load(snakemake.params.info, Loader=yaml.FullLoader)
+    # get the save paths
+    save_path = snakemake.output[0]
+    pic_path = snakemake.output[1]
 except NameError:
-    # USE FOR DEBUGGING ONLY (or edit the search query and the object selection)
+    # USE FOR DEBUGGING ONLY (need to edit the search query and the object selection)
     # define the search string
-    search_string = 'result:succ, lighting:normal, imaging:doric'
+    search_string = 'result:succ, lighting:normal, slug:03_02_2020_15_50_05_miniscope_MM_200129_a_succ'
     # define the target model
     target_model = 'video_experiment'
     # get the queryset
     files = bd.query_database(target_model, search_string)[0]
     raw_path = files['bonsai_path']
-
-# get the target model from the path
-target_model = 'video_experiment' if files['rig'] == 'miniscope' else 'vr_experiment'
-
-# get the file date
-file_date = files['date']
-
-# assemble the save path
-try:
-    save_path = snakemake.output[0]
-    pic_path = snakemake.output[1]
-except NameError:
+    # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
                              os.path.basename(files['bonsai_path'][:-4]))+'_preproc.hdf5'
     pic_path = os.path.join(save_path[:-13] + '.png')
+
+# get the file date
+file_date = files['date']
 
 # decide the analysis path based on the file name and date
 # if miniscope but no imaging, run bonsai only
 if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     # run the first stage of preprocessing
-    out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
-                                                  save_path,
-                                                  ['cricket_x', 'cricket_y'])
+    # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
+    #                                               save_path)
+    out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
     # TODO: add corner detection to calibrate the coordinate to real size
     # in the meantime, add a rough manual correction based on the size of the arena and the number of pixels
 
@@ -55,9 +63,9 @@ if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
 # if miniscope regular, run with the matching of miniscope frames
 elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # run the first stage of preprocessing
-    out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
-                                                  save_path,
-                                                  ['cricket_x', 'cricket_y'])
+    # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
+    #                                               save_path)
+    out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # run the preprocessing kinematic calculations
     kinematics_data = s2.kinematic_calculations(out_path, filtered_traces)
@@ -75,9 +83,9 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
 
 elif files['rig'] == 'vr' and file_date <= datetime.datetime(year=2019, month=11, day=10):
     # run the first stage of preprocessing
-    out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
-                                                  save_path,
-                                                  ['cricket_x', 'cricket_y'])
+    # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
+    #                                               save_path)
+    out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # TODO: add the old motive-bonsai alignment as a function
 
@@ -86,9 +94,9 @@ elif files['rig'] == 'vr' and file_date <= datetime.datetime(year=2019, month=11
 else:
     # TODO: make sure the constants are set to values that make sense for the vr arena
     # run the first stage of preprocessing
-    out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
-                                                  save_path,
-                                                  ['cricket_x', 'cricket_y'])
+    # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
+    #                                               save_path)
+    out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # run the preprocessing kinematic calculations
     kinematics_data = s2.kinematic_calculations(out_path, paths.kinematics_path)

@@ -52,7 +52,7 @@ data = [pd.read_hdf(el, 'matched_calcium') for el in paths_all]
 unique_mice = np.unique(animal_list)
 unique_dates = np.unique(date_list)
 # set the flag for first run
-first_run = 1
+first_run = True
 # for all the mice
 for mouse in unique_mice:
     # for all the dates
@@ -96,9 +96,21 @@ for mouse in unique_mice:
                 # if out of bounds, just skip
                 try:
                     # get the interval for the peak
-                    ata_list.append(variables.iloc[(peak[0]-frames[0]):(peak[0]+frames[1]), :].copy())
+                    peak_interval = variables.iloc[(peak[0]-frames[0]):(peak[0]+frames[1]), :].copy()
+
+                    # if the desired time is not fulfilled, skip
+                    if peak_interval.shape[0] < sum(frames):
+                        continue
+                    # do the same with the calcium
+                    current_calcium = cell_data[(peak[0] - frames[0]):(peak[0] + frames[1])]
+                    # include it in the frame
+                    peak_interval['calcium'] = current_calcium
                     # combine it with a peak id vector
-                    ata_list[-1]['peak_id'] = idx
+                    peak_interval['peak_id'] = idx
+                    peak_interval['peak_frame'] = list(np.arange(sum(frames)))
+                    # save the peak
+                    ata_list.append(peak_interval)
+
                 except IndexError:
                     continue
             # if there were no peaks, skip the cell
@@ -114,19 +126,28 @@ for mouse in unique_mice:
         # fp.histogram([[cell_data]], dpi=50, bins=100)
         # fp.plot_2d([[cell_data, cell_plot]], linestyle=[['-', 'None']], dpi=50)
         # concatenate the final data
-        ata_final = pd.concat(ata_frame, axis=0)
+        peaks_final = pd.concat(ata_frame, axis=0)
         # assemble the group key for the hdf5 file (making sure the date is natural)
-        group_key = '/'.join(('', mouse, 'd' + str(date)[:10].replace('-', '_'), analysis_type))
+        group_key = '/'.join(('', mouse, 'd' + str(date)[:10].replace('-', '_'), analysis_type, 'peaks'))
 
         # if its the first run, overwrite the file, otherwise, append
-        if first_run == 1:
-            mode = 'w'
-            first_run += 1
+        if first_run:
+            # save to file
+            fd.save_create_snake(peaks_final, paths_all, raw_path, group_key, dict_path, action='save', mode='w')
+            first_run = False
         else:
-            mode = 'a'
-        # save to file
-        fd.save_create_snake(ata_final, paths_all, raw_path, group_key, dict_path, action='save', mode=mode)
+            # save to file
+            fd.save_create_snake(peaks_final, paths_all, raw_path, group_key, dict_path, action='save', mode='a')
+        # set the mode
+        mode = 'a'
 
+        # average the variables for each cell
+        ata_final = peaks_final.groupby(['cell', 'peak_frame']).mean()
+        # assemble the group key for the hdf5 file (making sure the date is natural)
+        group_key2 = '/'.join(('', mouse, 'd' + str(date)[:10].replace('-', '_'), analysis_type, 'average'))
+
+        # save to file
+        fd.save_create_snake(ata_final, paths_all, raw_path, group_key2, dict_path, action='save', mode=mode)
     # create the entry
     fd.save_create_snake([], paths_all, raw_path, analysis_type, dict_path, action='create')
 
