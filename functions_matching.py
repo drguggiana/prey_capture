@@ -219,10 +219,15 @@ def match_calcium(calcium_path, sync_path, kinematics_data):
         print("File %s has %s calcium frames less than triggers detected" % (os.path.basename(calcium_path),
                                                                              str(delta_frames)))
         # trim matched bonsai
-        matched_bonsai = matched_bonsai.iloc[:-delta_frames, ]
+        matched_bonsai = matched_bonsai.iloc[:-delta_frames, :]
 
     # trim the data to the frames within the experiment
     calcium_data = calcium_data[:, :n_frames_mini_sync].T
+    # also trim the data to the beginning of the video tracking
+    # find the index of the closest timestamp to the beginning of the tracking file
+    first_tracking_frame = np.argmin(np.abs(frame_times_bonsai_sync[0] - frame_times_mini_sync))
+    calcium_data = calcium_data[first_tracking_frame:, :]
+    matched_bonsai = matched_bonsai.iloc[first_tracking_frame:, :].reset_index()
 
     # print a single dataframe with the calcium matched positions and timestamps
     calcium_dataframe = pd.DataFrame(calcium_data,

@@ -11,7 +11,7 @@ input_dictionary = {
     'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA'],
     # 'analysis_type': ['aggFull'],
     # 'analysis_type': ['trigAveCA'],
-    'result': ['succ', 'fail'],
+    'result': ['succ', ],
     'rig': ['miniscope', ],
     'lighting': ['normal', ],
 }
@@ -59,6 +59,7 @@ for search_query in search_queries:
                                  for el in target_entries},
                    'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
                                 else False for el in target_entries},
+                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,

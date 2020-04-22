@@ -284,3 +284,63 @@ def plot_image(data_in, rows=1, columns=1, fig=None, colormap=None, colorbar=Non
             # update the plot counter
             plot_counter += 1
     return fig
+
+
+def plot_scatter(data_in, rows=1, columns=1, labels=None, markers=None, color=None,
+                 fig=None, fontsize=None, dpi=None):
+    """Draw a scatter plot"""
+    # create a new figure window
+    if fig is None:
+        if dpi is None:
+            dpi = 300
+        else:
+            dpi = dpi
+        fig = plt.figure(dpi=dpi)
+    # initialize a plot counter
+    plot_counter = 1
+    # for all the rows
+    for row in range(rows):
+        # for all the columns
+        for col in range(columns):
+            # if there's no plot in this position, skip it
+            if len(data_in) < plot_counter:
+                continue
+            # add the subplot
+            ax = fig.add_subplot(rows, columns, plot_counter)
+            # for all the lines in the list
+            for count, lines in enumerate(data_in[plot_counter - 1]):
+                if color is not None:
+                    c = color[plot_counter - 1]
+                else:
+                    c = 'b'
+                # plot x,y ot just y depending on the size of the data
+                if len(lines.shape) == 2:
+                    # line2d = ax.plot(lines[:, 0], lines[:, 1])
+                    scatter2d = ax.scatter(lines[:, 0], lines[:, 1], c=c)
+                else:
+                    scatter2d = ax.scatter(range(lines.shape[0]), lines, c=c)
+
+                # # change the marker if provided, otherwise use dots
+                # if markers is not None:
+                #     scatter2d.set_marker(markers[plot_counter - 1][count])
+                # else:
+                #     scatter2d.set_marker('.')
+                # # change the font size if provided
+                if fontsize is not None:
+                    ax[0].set_fontsize(fontsize[plot_counter - 1][count])
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            ax.xaxis.set_ticks_position('bottom')
+            ax.yaxis.set_ticks_position('left')
+            # add labels if provided
+            if labels is not None:
+                plt.legend(labels[plot_counter - 1])
+            # update the plot counter
+            plot_counter += 1
+    return fig
+
+
+def show():
+    """Wrapper for plt.show"""
+    return plt.show()
+

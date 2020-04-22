@@ -33,11 +33,12 @@ try:
 except NameError:
     # USE FOR DEBUGGING ONLY (need to edit the search query and the object selection)
     # define the search string
-    search_string = 'result:succ, lighting:normal, slug:03_02_2020_15_50_05_miniscope_MM_200129_a_succ'
+    search_string = 'slug:03_04_2020_16_16_18_miniscope_MM_200129_b_succ'
+    # search_string = 'result:succ, lighting:normal, rig:miniscope'
     # define the target model
     target_model = 'video_experiment'
     # get the queryset
-    files = bd.query_database(target_model, search_string)[0]
+    files = bd.query_database(target_model, search_string)[7]
     raw_path = files['bonsai_path']
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,

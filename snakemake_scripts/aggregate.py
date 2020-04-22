@@ -83,13 +83,14 @@ def aggregate_encounters(data_all):
         for encounters in range(1, encounter_number):
             # get the first coordinate of the encounter and grab the surroundings
             encounter_hit = np.nonzero(encounter_idx == encounters)[0][0]
+
             # get the starting time point of the encounter
             time_start = data_in.loc[encounter_hit, 'time_vector']
             # get the number of positions for this encounter
             encounter_start = np.argmin(np.abs(time_temp - (time_start-encounter_window/2)))
             encounter_end = np.argmin(np.abs(time_temp - (time_start+encounter_window/2)))
 
-            if encounter_end == data_in.shape[0]:
+            if (encounter_end == data_in.shape[0]) or (encounter_start < 0):
                 continue
 
             # also for the next encounter, unless it's the last one
@@ -164,9 +165,9 @@ try:
     date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in path_info]
 except NameError:
     # define the analysis type
-    analysis_type = 'aggFullCA'
+    analysis_type = 'aggEncCA'
     # define the search query
-    search_query = 'result:succ,lighting:normal,rig:miniscope,imaging:doric'
+    search_query = 'result:succ,lighting:normal,rig:miniscope, imaging:doric'
     # define the origin model
     ori_type = 'preprocessing'
     # get a dictionary with the search terms
@@ -182,7 +183,6 @@ except NameError:
 
 # get the sub key
 sub_key = 'matched_calcium' if 'CA' in analysis_type else 'full_traces'
-
 # read the data
 data = [pd.read_hdf(el, sub_key) for el in paths_all]
 # get the unique animals and dates

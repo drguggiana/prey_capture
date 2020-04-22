@@ -6,6 +6,7 @@ import functions_bondjango as bd
 import itertools as it
 import pandas as pd
 import datetime
+import numpy as np
 
 
 def generate_entry(in_path, out_path, parsed_search, analysis_t, pic_path=''):
@@ -175,4 +176,39 @@ def fetch_preprocessing(search_query):
     paths_all = [el['analysis_path'] for el in file_path]
 
     return file_path, paths_all, parsed_query, date_list, animal_list
+
+
+def aggregate_loader(data_path):
+    """Load the data from the given hdf5 file"""
+    # with pd.HDFStore(data_all[0]['analysis_path']) as h:
+    with pd.HDFStore(data_path) as h:
+        # get a list of the existing keys
+        keys = h.keys()
+        # if it's only one key, just load the file
+        if len(keys) == 1:
+            data = h[keys[0]]
+        else:
+            # allocate a dictionary for them
+            data = {}
+            # extract the animals present
+            animal_list = [el.split('/')[1] for el in keys]
+            # get the unique animals
+            unique_animals = np.unique(animal_list)
+            # for all the animals
+            for animal in unique_animals:
+                # allocate a dictionary for the tables
+                sub_dict = {}
+                # get the unique dates for this animal
+                date_list = [el.split('/')[2] for el in keys if animal in el]
+                # for all the unique dates
+                for date in date_list:
+                    # get the corresponding key
+                    current_key = [el for el in keys if (animal in el) and (date in el)][0]
+                    print(current_key)
+                    # load the table into the dictionary (minus the d at the beginning,
+                    # added cause natural python naming)
+                    sub_dict[date[1:]] = h[current_key]
+                # save the dictionary into the corresponding entry of the animal dictionary
+                data[animal] = sub_dict
+    return data
 

@@ -5,7 +5,7 @@ from os import path
 from paths import *
 from functions_misc import tk_killwindow
 from functions_preprocessing import trim_bounds, median_discontinuities, interpolate_segments, eliminate_singles, \
-    nan_large_jumps
+    nan_large_jumps, find_frozen_tracking, nan_jumps_dlc
 import numpy as np
 import pandas as pd
 import datetime
@@ -106,6 +106,9 @@ def parse_bonsai(path_in):
 
 def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, kernel_size=21):
     """Extract the relevant columns from the dlc file and rename"""
+    # TODO: convert everything to real distance
+    # define the threshold for trimming the trace (in pixels for now)
+    trim_cutoff = 200
     # just return the output path
     out_path = save_file
     # load the bonsai info
@@ -114,34 +117,90 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, kernel_size=2
     column_names = raw_h5.columns
     # take only the relevant columns
     filtered_traces = pd.DataFrame(raw_h5[[
-        [el for el in column_names if ('mouseBody' in el) and ('x' in el)][0],
-        [el for el in column_names if ('mouseBody' in el) and ('y' in el)][0],
         [el for el in column_names if ('mouseHead' in el) and ('x' in el)][0],
         [el for el in column_names if ('mouseHead' in el) and ('y' in el)][0],
-        [el for el in column_names if ('cricket' in el) and ('x' in el)][0],
-        [el for el in column_names if ('cricket' in el) and ('y' in el)][0],
-    ]].to_numpy(), columns=['mouse_x', 'mouse_y', 'mouse_head_x', 'mouse_head_y', 'cricket_x', 'cricket_y'])
+        [el for el in column_names if ('mouseBody' in el) and ('x' in el)][0],
+        [el for el in column_names if ('mouseBody' in el) and ('y' in el)][0],
+        [el for el in column_names if ('mouseBase' in el) and ('x' in el)][0],
+        [el for el in column_names if ('mouseBase' in el) and ('y' in el)][0],
+        [el for el in column_names if ('cricketHead' in el) and ('x' in el)][0],
+        [el for el in column_names if ('cricketHead' in el) and ('y' in el)][0],
+        [el for el in column_names if ('cricketBody' in el) and ('x' in el)][0],
+        [el for el in column_names if ('cricketBody' in el) and ('y' in el)][0],
+    ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
+                            'cricket_head_x', 'cricket_head_y', 'cricket_x', 'cricket_y'])
 
-    fp.plot_2d([[filtered_traces['cricket_x']]])
+    # TODO: need to take advantage of the constraints between points to filter the data
     # median filter the traces
     filtered_traces = median_discontinuities(filtered_traces, filtered_traces.columns, kernel_size)
+    # trim the trace at the last large jump of the mouse trajectory (i.e when the mouse enters the arena)
+    # do it after median filtering to prevent the single point errors to trim the video too much
+    # calculate the displacement of the mouse center
+    mouse_displacement = np.sqrt((np.diff(filtered_traces['mouse_x']))**2 + (np.diff(filtered_traces['mouse_y']))**2)
+    cutoff_frame = np.argwhere(mouse_displacement > trim_cutoff)
+    # check if it's empty. if so, don't cutoff anything
+    if cutoff_frame.shape[0] > 0:
+        cutoff_frame = cutoff_frame[-1][0]
+    else:
+        cutoff_frame = 0
 
+    # perform the trimming
+    filtered_traces = filtered_traces.iloc[cutoff_frame:, :].reset_index()
+    # find the places where there is no pixel movement in any axis and NaN those
+
+    # cricket_nonans_x = filtered_traces['cricket_x']
+    # cricket_nonans_y = filtered_traces['cricket_y']
+    # find the places with tracking off via delta pixel and NaN them
+    # filtered_traces = find_frozen_tracking(filtered_traces, stretch_length=15)
+    # eliminate discontinuities before interpolating
+    # filtered_traces = nan_large_jumps(filtered_traces, ['cricket_x', 'cricket_y'], max_step=200, max_length=150)
+    # eliminate large jumps
+    # filtered_traces = nan_jumps_dlc(filtered_traces)
+    # # eliminate isolated points
+    # filtered_traces = eliminate_singles(filtered_traces)
+    # interpolate the NaN stretches
+    # filtered_traces = interpolate_segments(filtered_traces, np.nan)
     # parse the bonsai file for the time stamps
     timestamp = []
+    bonsai_data = []
     with open(file_path_bonsai) as f:
         for ex_line in f:
             ex_list = ex_line.split(' ')
             ex_list.remove('\n')
             timestamp.append(ex_list.pop())
+            bonsai_data.append([float(el) for el in ex_list])
+    # turn bonsai_data into an array
+    bonsai_data = np.array(bonsai_data)
+    # # plot trajectories
+    # fp.plot_2d([[filtered_traces['mouse_x'].to_numpy(),
+    #              cricket_nonans_x,
+    #              filtered_traces['cricket_x'].to_numpy()],
+    #
+    #              # bonsai_data[:, 0]],
+    #             [filtered_traces['mouse_y'].to_numpy(),
+    #              cricket_nonans_y,
+    #              filtered_traces['cricket_y'].to_numpy()]
+    #             ], rows=2, dpi=100)
     # parse the path
     parsed_path = parse_path(file_path_bonsai)
     # add the time stamps to the main dataframe
-    time = [datetime.datetime.strptime(el[:-7], '%Y-%m-%dT%H:%M:%S.%f') for el in timestamp[:filtered_traces.shape[0]]]
+    time = [datetime.datetime.strptime(el[:-7], '%Y-%m-%dT%H:%M:%S.%f')
+            for el in timestamp[cutoff_frame:filtered_traces.shape[0]+cutoff_frame]]
+    # if time is missing frames, skip them from the end and show a warning (checked comparing the traces)
+    if len(time) < filtered_traces.shape[0]:
+        # calculate the delta
+        delta_frame = filtered_traces.shape[0] - len(time)
+        # show the warning
+        print('Extra frames in video: %i' % delta_frame)
+        # trim filtered traces
+        filtered_traces = filtered_traces.iloc[:-delta_frame, :]
+
     filtered_traces['time'] = [(el - time[0]).total_seconds() for el in time]
 
     # also the mouse and the date
     filtered_traces['mouse'] = parsed_path['animal']
     filtered_traces['datetime'] = parsed_path['datetime']
+
     return out_path, filtered_traces
 
 
