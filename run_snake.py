@@ -9,9 +9,9 @@ import os
 # define the type of analysis
 input_dictionary = {
     'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA'],
-    # 'analysis_type': ['aggFull'],
+    # 'analysis_type': ['aggEnc'],
     # 'analysis_type': ['trigAveCA'],
-    'result': ['succ', ],
+    'result': ['succ', 'fail', ],
     'rig': ['miniscope', ],
     'lighting': ['normal', ],
 }
@@ -75,7 +75,7 @@ for search_query in search_queries:
     # out_path = os.path.join(paths.figures_path, '_'.join(('averages', *parsed_search.values())) + '.html')
 
     # run snakemake
-    preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
+    preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1', '-f',
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)

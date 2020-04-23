@@ -170,7 +170,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, kernel_size=2
             timestamp.append(ex_list.pop())
             bonsai_data.append([float(el) for el in ex_list])
     # turn bonsai_data into an array
-    bonsai_data = np.array(bonsai_data)
+    # bonsai_data = np.array(bonsai_data)
     # # plot trajectories
     # fp.plot_2d([[filtered_traces['mouse_x'].to_numpy(),
     #              cricket_nonans_x,

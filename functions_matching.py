@@ -235,4 +235,8 @@ def match_calcium(calcium_path, sync_path, kinematics_data):
     # concatenate both data frames
     full_dataframe = pd.concat([matched_bonsai, calcium_dataframe], axis=1)
 
+    # reset the time vector
+    old_time = full_dataframe['time_vector']
+    full_dataframe['time_vector'] = np.array([el - old_time[0] for el in old_time])
+
     return full_dataframe

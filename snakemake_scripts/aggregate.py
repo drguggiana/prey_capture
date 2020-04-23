@@ -89,8 +89,8 @@ def aggregate_encounters(data_all):
             # get the number of positions for this encounter
             encounter_start = np.argmin(np.abs(time_temp - (time_start-encounter_window/2)))
             encounter_end = np.argmin(np.abs(time_temp - (time_start+encounter_window/2)))
-
-            if (encounter_end == data_in.shape[0]) or (encounter_start < 0):
+            if ((time_temp[-1] - encounter_window/2) < time_start) or \
+                    ((time_temp[0] + encounter_window/2) > time_start):
                 continue
 
             # also for the next encounter, unless it's the last one
@@ -189,13 +189,12 @@ data = [pd.read_hdf(el, sub_key) for el in paths_all]
 unique_mice = np.unique(animal_list) if 'CA' in analysis_type else [0]
 unique_dates = np.unique(date_list) if 'CA' in analysis_type else [0]
 
+# define a flag for the first save
+first_save = True
 # for all the mice
 for idx, mouse in enumerate(unique_mice):
     # for all the dates
     for idx2, date in enumerate(unique_dates):
-
-        # define the writing mode so that the file is overwritten in the first iteration
-        mode = 'w' if idx+idx2 == 0 else 'a'
 
         # if there is no calcium, concatenate across the entire queryset
         if mouse == 0 and date == 0:
@@ -225,6 +224,12 @@ for idx, mouse in enumerate(unique_mice):
         if len(sub_data) == 0:
             print('No encounters were found in day %s and mouse %s' % (date, mouse))
             continue
+        # if the flag is still on, create the file, otherwise append
+        if first_save:
+            first_save = False
+            mode = 'w'
+        else:
+            mode = 'a'
         # save to file
         fd.save_create_snake(sub_data, paths_all, raw_path, group_key, dict_path, action='save', mode=mode)
 
