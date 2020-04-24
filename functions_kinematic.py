@@ -99,3 +99,16 @@ def jump_killer(data_in, jump_threshold):
     data_out = data_in.copy()
     data_out[index_vector[~smooth_map]] = interp_points
     return data_out
+
+
+def rotate_points(data_in, angles):
+    """Rotate the given points by the given angle in degrees"""
+
+    # allocate memory for the angles
+    rotated_x = np.zeros_like(angles)
+    rotated_y = np.zeros_like(angles)
+    for idx, angle in enumerate(angles):
+        rotated_x[idx] = data_in[idx, 0] * np.cos(np.deg2rad(angle)) - data_in[idx, 1] * np.sin(np.deg2rad(angle))
+        rotated_y[idx] = data_in[idx, 0] * np.sin(np.deg2rad(angle)) - data_in[idx, 1] * np.cos(np.deg2rad(angle))
+
+    return np.concatenate((rotated_x, rotated_y), axis=1)

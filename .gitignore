@@ -2,3 +2,5 @@
 __pycache__/
 paths.py
 .ipynb_checkpoints/
+.snakemake/
+snakemake_scripts/config_snake.yaml

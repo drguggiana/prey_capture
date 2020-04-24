@@ -203,7 +203,7 @@ def eliminate_singles(files):
 
 
 def nan_large_jumps(files, tar_columns, max_step, max_length):
-    """Remove discontinuities in the trace via interpolation"""
+    """NaN discontinuities in the trace (for later interpolation)"""
     # allocate memory for the output
     corrected_trace = files.copy()
     # for the mouse and the cricket columns
@@ -225,7 +225,8 @@ def nan_large_jumps(files, tar_columns, max_step, max_length):
 
         # go through each of the jumps
         for index, jump in enumerate(distance_between):
-            # if the jump is smaller than the max_length allowed, NaN it
+            # if the jump is smaller than the max_length allowed, NaN it (if bigger, that's a larger error in tracing
+            # than can be fixed with just interpolation)
             if jump[0] < max_length:
                 curr_data[jumps[index, 0]:jumps[index+1, 0]] = np.nan
         # ends = np.argwhere(result < -max_step)
@@ -248,4 +249,75 @@ def nan_large_jumps(files, tar_columns, max_step, max_length):
         # for start, end in zip(starts, ends):
         #     curr_data[start:end] = np.nan
         corrected_trace[animal] = curr_data
+    return corrected_trace
+
+
+def find_frozen_tracking(files, margin=0.5, stretch_length=10):
+    """Find places where the trajectory is too steady (i.e. no single pixel movement) and NaN them since it's probably
+    not actually tracking"""
+
+    # create a copy of the data
+    corrected_trace = files.copy()
+    # get the column names
+    column_names = corrected_trace.columns
+    # run through the columns
+    for column in column_names:
+        # skip the index column
+        if column == 'index':
+            continue
+        # get the derivative of the traces
+        delta_trace = abs(np.diff(corrected_trace[column], axis=0))
+        # find the places that don't pass the criterion
+        no_movement, number_no_movement = label(delta_trace < margin)
+        # add a zero at the beginning to match the size of corrected traces
+        no_movement = np.hstack([0, no_movement])
+        # go through the jumps
+        for jumps in np.arange(1, number_no_movement):
+            # if the jump passes the criterion
+            if np.sum(no_movement == jumps) >= stretch_length:
+                # nan them
+                corrected_trace.loc[no_movement == jumps, column] = np.nan
+        # no_movement = np.array([el[0] for el in np.argwhere(delta_trace < margin) + 1])
+        # # if it's not empty
+        # if no_movement.shape[0] > 0:
+        #     # nan them
+        #     corrected_trace.loc[no_movement, column] = np.nan
+
+    return corrected_trace
+
+
+def nan_jumps_dlc(files, max_jump=200):
+    """Nan stretches in between large jumps, assuming most of the trace is correct"""
+    # copy the data
+    corrected_trace = files.copy()
+    # get the column names
+    column_names = corrected_trace.columns
+    # run through the columns
+    for column in column_names:
+        # skip the index column if it's there
+        if column == 'index':
+            continue
+        # find the jumps
+        jump_length = np.diff(corrected_trace[column], axis=0)
+        jump_location = np.argwhere(abs(jump_length) > max_jump)
+        if jump_location.shape[0] == 0:
+            continue
+        jump_location = [el[0] for el in jump_location]
+        # initialize a flag
+        pair_flag = True
+        # go through pairs of jumps
+        for idx, jump in enumerate(jump_location[:-1]):
+            # if this is the second member of a pair, skip
+            if not pair_flag:
+                # reset the pair flag
+                pair_flag = True
+                continue
+            # if this jump and the next have the same sign, skip
+            if (jump_length[jump]*jump_length[jump_location[idx+1]]) > 0:
+                continue
+            # nan the segment in between
+            corrected_trace.loc[jump+1:jump_location[idx+1]+1, column] = np.nan
+            # set the pair flag
+            pair_flag = False
+
     return corrected_trace

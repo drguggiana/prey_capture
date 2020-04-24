@@ -1,6 +1,7 @@
 import numpy as np
 import csv
-from os.path import basename
+import os
+import shutil
 import datetime
 from skimage import io
 from skimage.external import tifffile as tif
@@ -53,11 +54,11 @@ def file_parser(file_path, outcome_keyword, condition_keyword, mse_threshold=Non
 
 def get_file_date(filename):
     """Extract the file date and time from a bonsai filename"""
-    file_date = datetime.datetime.strptime(basename(filename)[:18], '%m_%d_%Y_%H_%M_%S')
+    file_date = datetime.datetime.strptime(os.path.basename(filename)[:18], '%m_%d_%Y_%H_%M_%S')
     return file_date
 
 
-def combine_tif(filenames):
+def combine_tif(filenames, processing_path=None):
     """Function to concatenate together several tif files supplied as a list of paths"""
     # based on https://stackoverflow.com/questions/47182125/how-to-combine-tif-stacks-in-python
 
@@ -72,8 +73,14 @@ def combine_tif(filenames):
     # save the file name and the number of frames
     frames_list.append([filenames[0], im_1.shape[0]])
     # assemble the output path
-    out_path_tif = filenames[0].replace('.tif', '_CAT.tif')
-    out_path_log = filenames[0].replace('.tif', '_CAT.csv')
+    if processing_path is not None:
+        # get the basename
+        base_name = os.path.basename(filenames[0])
+        out_path_tif = os.path.join(processing_path, base_name.replace('.tif', '_CAT.tif'))
+        out_path_log = os.path.join(processing_path, base_name.replace('.tif', '_CAT.csv'))
+    else:
+        out_path_tif = filenames[0].replace('.tif', '_CAT.tif')
+        out_path_log = filenames[0].replace('.tif', '_CAT.csv')
     # run through the remaining files
     for i in range(1, len(filenames)):
         # load the next file
@@ -93,3 +100,18 @@ def combine_tif(filenames):
     frames_list.to_csv(out_path_log)
 
     return out_path_tif, out_path_log
+
+
+def delete_contents(folder_path):
+    """Delete all files and folders inside the target folder"""
+    "taken from https://stackoverflow.com/questions/185936/how-to-delete-the-contents-of-a-folder"
+
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))

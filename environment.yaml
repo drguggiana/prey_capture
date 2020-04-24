@@ -1,5 +1,6 @@
 name: Prey_capture
 channels:
+  - bioconda
   - conda-forge
   - defaults
 dependencies:
@@ -12,7 +13,7 @@ dependencies:
   - bokeh=1.4.0=py37_0
   - bzip2=1.0.8=he774522_0
   - ca-certificates=2020.1.1=0
-  - certifi=2019.11.28=py37_0
+  - certifi=2019.11.28=py37_1
   - cffi=1.14.0=py37h7a1dbc1_0
   - chardet=3.0.4=py37_1003
   - click=7.0=py37_0
@@ -26,6 +27,7 @@ dependencies:
   - dask-core=2.11.0=py_0
   - datashader=0.10.0=py_0
   - datashape=0.5.4=py37_1
+  - datrie=0.8=py37hfa6e2cd_0
   - decorator=4.4.1=py_0
   - deepdish=0.3.4=py_3
   - defusedxml=0.6.0=py_0
@@ -33,6 +35,7 @@ dependencies:
   - entrypoints=0.3=py37_0
   - freetype=2.9.1=ha9979f8_1
   - fsspec=0.6.2=py_0
+  - gitdb=4.0.2=py_0
   - h5py=2.8.0=py37h3bdd7fb_2
   - hdf5=1.10.2=hac2f561_1
   - heapdict=1.0.1=py_0
@@ -80,6 +83,7 @@ dependencies:
   - msgpack-python=0.6.1=py37h74a9793_1
   - msys2-conda-epoch=20160418=1
   - multipledispatch=0.6.0=py37_0
+  - nb_conda_kernels=2.2.3=py37_0
   - nbconvert=5.6.1=py37_0
   - nbformat=5.0.4=py_0
   - networkx=2.4=py_0
@@ -90,7 +94,7 @@ dependencies:
   - numpy-base=1.17.3=py37hc3f5095_0
   - olefile=0.46=py37_0
   - opencv=3.4.1=py37h6fd60c2_3
-  - openssl=1.1.1d=he774522_4
+  - openssl=1.1.1e=he774522_0
   - packaging=20.1=py_0
   - pandas=0.25.3=py37ha925a31_0
   - pandoc=2.2.3.2=0
@@ -117,6 +121,7 @@ dependencies:
   - pytables=3.4.4=py37he6f6034_0
   - python=3.7.3=h8c8aaf0_1
   - python-dateutil=2.8.1=py_0
+  - python_abi=3.7=1_cp37m
   - pytz=2019.3=py_0
   - pyviz_comms=0.7.3=py_0
   - pywavelets=1.1.1=py37he774522_0
@@ -134,6 +139,8 @@ dependencies:
   - setuptools=41.0.1=py37_0
   - sip=4.19.8=py37h6538335_0
   - six=1.13.0=py37_0
+  - smmap=3.0.1=py_0
+  - snakemake-minimal=5.10.0=py_0
   - snappy=1.1.7=h777316e_3
   - sortedcontainers=2.1.0=py37_0
   - sqlite=3.28.0=he774522_0
@@ -143,6 +150,7 @@ dependencies:
   - testpath=0.4.4=py_0
   - tk=8.6.8=hfa6e2cd_0
   - toolz=0.10.0=py_0
+  - toposort=1.5=py_3
   - tornado=6.0.3=py37he774522_0
   - tqdm=4.42.1=py_0
   - traitlets=4.3.3=py37_0
@@ -165,7 +173,6 @@ dependencies:
   - pip:
     - appdirs==1.4.3
     - configargparse==0.15.2
-    - datrie==0.8
     - docutils==0.15.2
     - gitdb2==2.0.6
     - gitpython==3.0.5
@@ -176,7 +183,6 @@ dependencies:
     - pyyaml==5.2
     - ratelimiter==1.2.0.post0
     - smmap2==2.0.5
-    - snakemake==5.8.2
     - urllib3==1.25.7
     - wrapt==1.11.2
     - zipp==0.6.0

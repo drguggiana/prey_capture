@@ -126,5 +126,5 @@ def interp_trace(y_known, x_known, x_target):
 def slugify(string_in):
     """Slugify the input string, taken from https://www.peterbe.com/plog/fastest-python-function-to-slugify-a-string"""
     string_out = string_in.translate(translate_table)
-    string_out = u'_'.join(string_out.split())
+    string_out = u'_'.join(string_out.split()).lower()
     return string_out
