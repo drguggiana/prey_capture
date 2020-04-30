@@ -17,17 +17,22 @@ def aggregate_full_traces(partial_data):
     # create a frame vector for each dataset
     frame = [list(range(el.shape[0])) for el in partial_data]
     frame = np.concatenate(frame, axis=0)
+    # also add the trial id
+    trial_id = [[index]*el.shape[0] for index, el in enumerate(partial_data)]
+    trial_id = np.concatenate(trial_id, axis=0)
+
     # concatenate the data
-    partial_data = pd.concat(partial_data)
+    out_data = pd.concat(partial_data)
 
     # wrap angles
-    partial_data.mouse_heading = fk.wrap(partial_data.mouse_heading)
-    partial_data.cricket_heading = fk.wrap(partial_data.cricket_heading)
+    out_data.mouse_heading = fk.wrap(out_data.mouse_heading)
+    out_data.cricket_heading = fk.wrap(out_data.cricket_heading)
 
     # add the frame as a column
-    partial_data['frame'] = frame
+    out_data['frame'] = frame
+    out_data['trial_id'] = trial_id
 
-    return partial_data
+    return out_data
 
 
 def aggregate_bin_time(data_all):

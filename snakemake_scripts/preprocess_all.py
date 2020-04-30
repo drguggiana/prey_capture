@@ -1,5 +1,6 @@
 # imports
 import functions_matching
+import functions_preprocessing as fp
 import paths
 import snakemake_scripts.sub_preprocess_S1 as s1
 import snakemake_scripts.sub_preprocess_S2 as s2
@@ -38,7 +39,7 @@ except NameError:
     # define the target model
     target_model = 'video_experiment'
     # get the queryset
-    files = bd.query_database(target_model, search_string)[7]
+    files = bd.query_database(target_model, search_string)[0]
     raw_path = files['bonsai_path']
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
@@ -57,7 +58,6 @@ if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
     # TODO: add corner detection to calibrate the coordinate to real size
     # in the meantime, add a rough manual correction based on the size of the arena and the number of pixels
-
     # run the preprocessing kinematic calculations
     kinematics_data = s2.kinematic_calculations(out_path, filtered_traces)
 
@@ -67,6 +67,7 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
     #                                               save_path)
     out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
+    [] = fp.rescale_pixels(filtered_traces, files)
 
     # run the preprocessing kinematic calculations
     kinematics_data = s2.kinematic_calculations(out_path, filtered_traces)

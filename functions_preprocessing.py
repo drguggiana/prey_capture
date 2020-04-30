@@ -3,6 +3,8 @@ from scipy.ndimage.measurements import label
 import datetime
 from scipy.signal import medfilt
 from functions_misc import interp_trace
+import cv2
+import matplotlib.pyplot as plt
 
 
 def remove_nans(files, tar_columns):
@@ -321,3 +323,50 @@ def nan_jumps_dlc(files, max_jump=200):
             pair_flag = False
 
     return corrected_trace
+
+
+def rescale_pixels(traces, db_data):
+    """Use OpenCV to find corners in the image and rescale the data"""
+    # get the moded image
+    corner_coordinates = find_corners(db_data['avi_path'])
+
+    return []
+
+
+def find_corners(video_path, mode_frames=10):
+    """Take the mode of a video to use the image to find corners"""
+    # create the video object
+    cap = cv2.VideoCapture(video_path)
+    # allocate memory for the frames
+    corner_list = []
+    corners = []
+    # get the frames to mode
+    for frames in np.arange(mode_frames):
+        img = cap.read()[1]
+        # # get the corners
+        # corners = np.int0(cv2.goodFeaturesToTrack(current_frame[:, :, 0], 25, 0.001, 500))
+        # dst = cv2.cornerHarris(current_frame[:, :, 0], 2, 3, 0.04)
+        # corner_list.append(corners)
+        #
+        # for i in corners:
+        #     x, y = i.ravel()
+        #     cv2.circle(current_frame, (x, y), 10, 255, -1)
+
+        # Initiate FAST object with default values
+        fast = cv2.FastFeatureDetector_create(threshold=10, type=2)
+        # find and draw the keypoints
+        kp = fast.detect(img, None)
+        img2 = cv2.drawKeypoints(img, kp, None, color=(255, 0, 0))
+        # Print all default params
+        print("Threshold: {}".format(fast.getThreshold()))
+        print("nonmaxSuppression:{}".format(fast.getNonmaxSuppression()))
+        print("neighborhood: {}".format(fast.getType()))
+        print("Total Keypoints with nonmaxSuppression: {}".format(len(kp)))
+
+        plt.imshow(img2)
+    plt.show()
+
+    # release the video file
+    cap.release()
+
+    return corners
