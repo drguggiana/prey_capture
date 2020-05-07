@@ -227,7 +227,7 @@ def match_calcium(calcium_path, sync_path, kinematics_data):
     # find the index of the closest timestamp to the beginning of the tracking file
     first_tracking_frame = np.argmin(np.abs(frame_times_bonsai_sync[0] - frame_times_mini_sync))
     calcium_data = calcium_data[first_tracking_frame:, :]
-    matched_bonsai = matched_bonsai.iloc[first_tracking_frame:, :].reset_index()
+    matched_bonsai = matched_bonsai.iloc[first_tracking_frame:, :].reset_index(drop=True)
 
     # print a single dataframe with the calcium matched positions and timestamps
     calcium_dataframe = pd.DataFrame(calcium_data,

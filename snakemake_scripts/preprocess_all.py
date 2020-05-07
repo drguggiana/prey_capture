@@ -67,7 +67,7 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
     #                                               save_path)
     out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
-    [] = fp.rescale_pixels(filtered_traces, files)
+    # [] = fp.rescale_pixels(filtered_traces, files)
 
     # run the preprocessing kinematic calculations
     kinematics_data = s2.kinematic_calculations(out_path, filtered_traces)

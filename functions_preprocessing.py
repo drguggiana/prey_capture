@@ -5,6 +5,9 @@ from scipy.signal import medfilt
 from functions_misc import interp_trace
 import cv2
 import matplotlib.pyplot as plt
+from quicksect import IntervalNode, Interval
+from functools import reduce
+import pandas as pd
 
 
 def remove_nans(files, tar_columns):
@@ -370,3 +373,80 @@ def find_corners(video_path, mode_frames=10):
     cap.release()
 
     return corners
+
+
+def timed_event_finder(dframe_in, parameter, threshold, function, window=5):
+    """This function will generate a dataframe with all the encountered windows of traces that pass the threshold
+    in the target parameter"""
+
+    # calculate the frame rate
+    framerate = np.round(1 / np.mean(np.diff(dframe_in['time_vector']))).astype(int)
+    # get the frames per window
+    window_frames = int(window * framerate)
+    # get the event triggers
+    [event_labels, _] = label(function(dframe_in[parameter], threshold))
+
+    # get the event onsets (where the threshold is crossed)
+    event_onsets = np.argwhere(np.diff(event_labels) > 0) + 1
+    # create a matrix with all the interval indexes
+    event_matrix = [[el[0]-window_frames, el[0]+window_frames] for el in event_onsets
+                    if ((el-window_frames) > 0) and ((el + window_frames) < event_labels.shape[0])]
+
+    # if no events were found, skip
+    if len(event_matrix) == 0:
+        return []
+
+    # filter the overlapping events
+    nonoverlap_matrix = maximize_nonoverlapping_count(event_matrix)
+    # get the output dataframe for each event
+    output_events = [dframe_in.iloc[el[0]:el[1], :].copy() for el in nonoverlap_matrix]
+    # for all events
+    for idx, event in enumerate(output_events):
+
+        # reset the index
+        event.reset_index(inplace=True, drop=True)
+        # reset the time
+        event.loc[:, 'time_vector'] -= event.loc[:, 'time_vector'].to_numpy()[0]
+        # add the event id
+        event.loc[:, 'event_id'] = idx
+    # concatenate and output
+    return pd.concat(output_events)
+
+# class and functions taken from https://stackoverflow.com/questions/16312871/python-removing-overlapping-lists
+
+
+class IntervalSub(Interval, object):
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+        self.removed = False
+
+
+def maximize_nonoverlapping_count(intervals):
+    intervals = [IntervalSub(start, end) for start, end in intervals]
+
+    # sort by the end-point
+    intervals.sort(key=lambda x: (x.end, (x.end - x.start)))   # O(n*log n)
+    tree = build_interval_tree(intervals) # O(n*log n)
+    result = []
+    for smallest in intervals: # O(n) (without the loop body)
+        # pop the interval with the smallest end-point, keep it in the result
+        if smallest.removed:
+            continue # skip removed nodes
+        smallest.removed = True
+        result.append([smallest.start, smallest.end]) # O(1)
+
+        # remove (mark) intervals that overlap with the popped interval
+        # tree.intersect(smallest.start, smallest.end, # O(log n + m)
+        #                lambda x: setattr(x.other, 'removed', True))
+        intersection = tree.intersect(smallest.start, smallest.end)
+        [setattr(el, 'removed', True) for el in intersection]
+    return result
+
+
+def build_interval_tree(intervals):
+    # root = IntervalNode(intervals[0].start, intervals[0].end,
+    #                     other=intervals[0])
+    root = IntervalNode(intervals[0])
+    return reduce(lambda tree, x: tree.insert(x),
+                  intervals[1:], root)

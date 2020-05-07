@@ -144,8 +144,8 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, kernel_size=2
     else:
         cutoff_frame = 0
 
-    # perform the trimming
-    filtered_traces = filtered_traces.iloc[cutoff_frame:, :].reset_index()
+    # perform the trimming and reset index
+    filtered_traces = filtered_traces.iloc[cutoff_frame:, :].reset_index(drop=True)
     # find the places where there is no pixel movement in any axis and NaN those
 
     # cricket_nonans_x = filtered_traces['cricket_x']
