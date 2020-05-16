@@ -18,7 +18,8 @@ def kinematic_calculations(name, data):
     else:
         mouse_coord_hd = data.loc[:, ['mouse_x', 'mouse_y']].to_numpy()
 
-    mouse_heading = wrap(np.concatenate((heading_calculation(mouse_coord_hd[1:, :], mouse_coord_hd[:-1, :]), [0])))
+    # mouse_heading = wrap(np.concatenate((heading_calculation(mouse_coord_hd[1:, :], mouse_coord_hd[:-1, :]), [0])))
+    mouse_heading = np.concatenate((heading_calculation(mouse_coord_hd[1:, :], mouse_coord_hd[:-1, :]), [0]))
 
     # zero the NaNs
     mouse_heading[np.isnan(mouse_heading)] = 0
@@ -36,6 +37,9 @@ def kinematic_calculations(name, data):
 
     # get the delta angle
     delta_heading = cricket_heading - mouse_heading
+    # effectively wrap around -180 and 180 to put the center at 0
+    delta_heading[delta_heading > 180] += -180
+    delta_heading[delta_heading < -180] += 180
 
     # get the mouse-cricket distance
     mouse_cricket_distance = distance_calculation(cricket_coord, mouse_coord)

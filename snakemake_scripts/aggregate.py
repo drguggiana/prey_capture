@@ -26,8 +26,8 @@ def aggregate_full_traces(partial_data):
     out_data = pd.concat(partial_data)
 
     # wrap angles
-    out_data.mouse_heading = fk.wrap(out_data.mouse_heading)
-    out_data.cricket_heading = fk.wrap(out_data.cricket_heading)
+    # out_data.mouse_heading = fk.wrap(out_data.mouse_heading)
+    # out_data.cricket_heading = fk.wrap(out_data.cricket_heading)
 
     # add the frame as a column
     out_data['frame'] = frame

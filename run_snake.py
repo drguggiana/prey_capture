@@ -8,9 +8,9 @@ import os
 
 # define the type of analysis
 input_dictionary = {
-    'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA'],
+    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA'],
     # 'analysis_type': ['aggEnc', 'aggEncCA'],
-    # 'analysis_type': ['trigAveCA'],
+    'analysis_type': ['trigAveCA'],
     'result': ['succ', 'fail', ],
     'rig': ['miniscope', ],
     'lighting': ['normal', ],
@@ -63,7 +63,7 @@ for search_query in search_queries:
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
-                   'interval': [2, 3],
+                   'interval': [1, 1],
                    }
     # write the file
     with open(paths.snakemake_config, 'w') as f:
