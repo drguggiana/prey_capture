@@ -51,24 +51,24 @@ def remove_nans(files, tar_columns):
     return perfile_array
 
 
-def trim_bounds(files):
+def trim_bounds(files, time, dates):
     """Based on rig specific heuristics, trim the trace"""
-    # get the time
-    time = [datetime.datetime.strptime(el[1][:-7], '%Y-%m-%dT%H:%M:%S.%f') for el in files]
-
+    # # get the time
+    # time = [datetime.datetime.strptime(el[1][:-7], '%Y-%m-%dT%H:%M:%S.%f') for el in files]
+    # TODO: remove arbitrary thresholds
     # define the arena left boundary (based on the date of the experiment to be retrocompatible)
-    if time[0] > datetime.datetime(year=2019, month=11, day=10):
+    if dates[0] > datetime.datetime(year=2019, month=11, day=10):
         left_bound_mouse = 0
         left_bound_cricket = 0
     else:
         left_bound_mouse = 110
         left_bound_cricket = 100
 
-    time = [(el - time[0]).total_seconds() for el in time]  # print the frame rate
-    print('Frame rate:' + str(1 / np.mean(np.diff(time))) + 'fps')
+    # time = [(el - time[0]).total_seconds() for el in time]  # print the frame rate
+    # print('Frame rate:' + str(1 / np.mean(np.diff(time))) + 'fps')
 
-    # get just the coordinate data
-    files = np.vstack(np.array([el[0] for el in files]))
+    # # get just the coordinate data
+    # files = np.vstack(np.array([el[0] for el in files]))
     # eliminate any pieces of the trace until the mouse track doesn't have NaNs
     if sum(np.isnan(files[:, 0])) > 0:
         nan_pointer = np.max(np.argwhere(np.isnan(files[:, 0])))
@@ -86,6 +86,20 @@ def trim_bounds(files):
         time = time[nan_pointer + 1:]
 
     return files, time
+
+
+def get_time(files):
+    """Separate the Bonsai time and data"""
+    # get the time
+    dates = [datetime.datetime.strptime(el[1][:-7], '%Y-%m-%dT%H:%M:%S.%f') for el in files]
+    # convert to seconds
+    time = [(el - dates[0]).total_seconds() for el in dates]
+    # print the frame rate
+    print('Frame rate:' + str(1 / np.mean(np.diff(time))) + 'fps')
+    # get just the coordinate data
+    files = np.vstack(np.array([el[0] for el in files]))
+
+    return files, time, dates
 
 
 def remove_discontinuities(files, tar_columns, max_step_euc):
@@ -450,3 +464,25 @@ def build_interval_tree(intervals):
     root = IntervalNode(intervals[0])
     return reduce(lambda tree, x: tree.insert(x),
                   intervals[1:], root)
+
+
+def parse_bonsai(path_in):
+    """Parse bonsai files"""
+    parsed_data = []
+    last_nan = 0
+    with open(path_in) as f:
+        for ex_line in f:
+            ex_list = ex_line.split(' ')
+            ex_list.remove('\n')
+            # TODO: check what happens with older data using the new line
+            # if (float(ex_list[0]) < 110 or ex_list[0] == 'NaN') and last_nan == 0:
+            if (ex_list[0] == 'NaN') and last_nan == 0:
+                continue
+            else:
+                last_nan = 1
+
+            timestamp = ex_list.pop()
+            ex_list = [float(el) for el in ex_list]
+
+            parsed_data.append([ex_list, timestamp])
+    return parsed_data

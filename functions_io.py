@@ -1,6 +1,7 @@
 import numpy as np
 import csv
 import os
+from os import path
 import shutil
 import datetime
 from skimage import io
@@ -115,3 +116,28 @@ def delete_contents(folder_path):
                 shutil.rmtree(file_path)
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+
+def parse_path(in_path):
+    """Parse the input path into a dict"""
+    path_parts = path.basename(in_path)[:-4].split('_')
+
+    # check whether the rig is miniscope or social
+    if path_parts[6] == 'miniscope':
+        rig = 'miniscope'
+        counter = 7
+    elif path_parts[6] == 'social':
+        rig = 'social'
+        counter = 7
+    elif path_parts[6] == 'VPrey':
+        rig = 'VPrey'
+        counter = 7
+    else:
+        rig = 'VR'
+        counter = 6
+
+    out_path = {'datetime': datetime.datetime.strptime('_'.join((path_parts[:6])), '%m_%d_%Y_%H_%M_%S'),
+                'rig': rig,
+                'animal': '_'.join((path_parts[counter:counter+3])),
+                'result': path_parts[counter+3]}
+    return out_path

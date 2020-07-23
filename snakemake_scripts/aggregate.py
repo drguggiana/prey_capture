@@ -69,104 +69,81 @@ def aggregate_encounters(data_all):
     """Aggregate the traces in the queryset based on encounters"""
     # TODO: fix the constant distance to define an encounter
     # define the time window width, centered on the encounter (in seconds)
-    encounter_window = 5
+    encounter_window = 2.5
     # allocate memory for the animal encounters
     encounter_pertrial = []
 
     # for all the trials
     for idx_in, data_in in enumerate(data_all):
-        # TODO: improve encounter determination (don't eliminate beginning of a sequence if
-        #  it doesn't overlap with the end)
-        # # identify the regions with encounters
-        # [encounter_idx, encounter_number] = label(data_in.mouse_cricket_distance.to_numpy() < 100)
-        # # calculate the frame rate
-        # framerate = np.round(1/np.mean(np.diff(data_in['time_vector']))).astype(int)
-        # # get the frames per window
-        # window_frames = encounter_window*framerate
 
         # define the thresholding function
         def thres_function(param, thres):
             return param < thres
-        # get the encounters
-        encounters_local = fp.timed_event_finder(data_in, 'mouse_cricket_distance', 100, thres_function, window=2.5)
+
+        # set a list for concatenation
+        encounter_list = []
+        # if there are virtual crickets, iterate through them
+        if 'vrcricket_0_x' in data_in.columns:
+            # get the number of crickets
+            vr_cricket_list = np.unique([el[:11] for el in data_in.columns if 'vrcricket' in el])
+
+            # for all the vr crickets
+            for vrcricket in vr_cricket_list:
+
+                # get the encounters
+                encounters_temp = fp.timed_event_finder(data_in, vrcricket+'_mouse_distance', 0.03, thres_function,
+                                                        window=encounter_window)
+
+                # if no encounters were found, skip
+                if len(encounters_temp) == 0:
+                    continue
+                # drop all columns not having to do with this cricket
+                for column in encounters_temp.columns:
+                    if 'vrcricket' in column and vrcricket not in column:
+                        encounters_temp.drop([column], axis=1, inplace=True)
+                    elif vrcricket in column:
+                        encounters_temp.rename(columns={column: column.replace(vrcricket, 'vrcricket_0')},
+                                               inplace=True)
+
+                encounter_list.append(encounters_temp)
+                # if it's not the first one, concatenate to the previous ones
+        # if a real cricket
+        if 'cricket_0_x' in data_in.columns:
+            # get the encounters
+            # 100 was used for the poster
+            encounters_temp = fp.timed_event_finder(data_in, 'cricket_0_mouse_distance', 19.5, thres_function,
+                                                    window=encounter_window)
+            # if no encounters were found, skip
+            if len(encounters_temp) == 0:
+                continue
+
+            # before appending, eliminate the conflicting fields
+            # TODO: REMOVE THIS HACK
+            for column in encounters_temp.columns:
+                if column in ['head_direction', 'head_height', 'cricket_0_delta_head']:
+                    encounters_temp.drop([column], axis=1, inplace=True)
+
+            encounter_list.append(encounters_temp)
+
         # if no encounters were found, skip
-        if len(encounters_local) == 0:
+        if len(encounter_list) == 0:
             continue
+
+        # concatenate the list
+        encounters_local = pd.concat(encounter_list, axis=0)
+
         # add the trial ID
         encounters_local.loc[:, 'trial_id'] = idx_in
+        if encounters_local.shape[1] != 15:
+            print('stop')
+
         # append to the list
         encounter_pertrial.append(encounters_local)
-
-        # # run through the encounters
-        # # for encounters in range
-        # time_temp = data_in.loc[:, 'time_vector'].to_numpy()
-        # # set an encounter counter
-        # encounter_counter = 0
-        # # for all the encounters
-        # for encounters in range(1, encounter_number):
-        #     # get the first coordinate of the encounter and grab the surroundings
-        #     encounter_hit = np.nonzero(encounter_idx == encounters)[0][0]
-        #
-        #     # get the starting time point of the encounter
-        #     time_start = data_in.loc[encounter_hit, 'time_vector']
-        #     # get the number of positions for this encounter
-        #     encounter_start = np.argmin(np.abs(time_temp - (time_start-encounter_window/2)))
-        #     encounter_end = np.argmin(np.abs(time_temp - (time_start+encounter_window/2)))
-        #     if ((time_temp[-1] - encounter_window/2) < time_start) or \
-        #             ((time_temp[0] + encounter_window/2) > time_start):
-        #         continue
-        #
-        #     # also for the next encounter, unless it's the last one
-        #     if encounters < encounter_number:
-        #         encounter_hit2 = np.nonzero(encounter_idx == encounters+1)[0][0]
-        #         time_start2 = data_in.loc[encounter_hit2, 'time_vector']
-        #         encounter_start2 = np.argmin(np.abs(time_temp - (time_start2-encounter_window/2)))
-        #
-        #         if encounter_start2 < encounter_end:
-        #             continue
-        #
-        #     # store the distance and the speed around the encounter
-        #     encounter_pertrial.append(data_in.iloc[encounter_start:encounter_end+1, :].copy())
-        #     # correct the time axis
-        #     encounter_pertrial[-1].loc[:, 'time_vector'] -= time_start
-        #     # add the trial id
-        #     encounter_pertrial[-1]['trial_id'] = idx_in
-        #     # add the encounter id
-        #     encounter_pertrial[-1]['encounter_id'] = encounter_counter
-        #     # update the counter
-        #     encounter_counter += 1
 
     # if there were no encounters, return an empty
     if len(encounter_pertrial) == 0:
         return []
-    # interpolate the traces to match the one with the most points
-    # # determine the trace with the most points
-    # size_array = [el.shape[0] for el in encounter_pertrial]
-    # max_coord = np.argmax(size_array)
 
-    # max_time = encounter_pertrial[max_coord].time_vector.to_numpy()
-    # # allocate memory for the interpolated traces
-    # encounter_interpolated = []
-    # # for all the traces, if it doesn't have the same number of points as the max, interpolate to it
-    # for index, traces in enumerate(encounter_pertrial):
-    #     if index != max_time:
-    #
-    #         encounter_interpolated.append(traces.drop(['time_vector', 'trial_id', 'encounter_id'],
-    #                                                   axis=1).apply(fm.interp_trace, raw=False,
-    #                                                                 args=(traces.time_vector.to_numpy(), max_time)))
-    #
-    #     else:
-    #         encounter_interpolated.append(encounter_pertrial[index].drop(['time_vector', 'trial_id', 'encounter_id'],
-    #                                                                      axis=1))
-    #
-    #     # add the time and id vectors back
-    #     encounter_interpolated[-1]['time_vector'] = max_time
-    #     encounter_interpolated[-1]['trial_id'] = traces.trial_id.iloc[0]
-    #     encounter_interpolated[-1]['encounter_id'] = traces.encounter_id.iloc[0]
-    #     # add the frame
-    #     encounter_interpolated[-1]['frame'] = np.arange(max_time.shape[0])
-    # concatenate the encounters
-    # encounter_matrix = pd.concat(encounter_interpolated)
     encounter_matrix = pd.concat(encounter_pertrial)
 
     return encounter_matrix
@@ -189,9 +166,9 @@ try:
     date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in path_info]
 except NameError:
     # define the analysis type
-    analysis_type = 'aggEncCA'
+    analysis_type = 'aggEnc'
     # define the search query
-    search_query = 'result:succ,lighting:normal,rig:miniscope, imaging:doric'
+    search_query = 'result:succ,lighting:normal,rig:vr'
     # define the origin model
     ori_type = 'preprocessing'
     # get a dictionary with the search terms

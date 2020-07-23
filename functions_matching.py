@@ -2,7 +2,7 @@ from sklearn.preprocessing import scale
 from scipy.interpolate import interp1d
 import cv2
 from functions_plotting import *
-from functions_misc import add_edges, interp_trace
+from functions_misc import add_edges, interp_trace, normalize_matrix
 import h5py
 import pandas as pd
 import os
@@ -240,3 +240,89 @@ def match_calcium(calcium_path, sync_path, kinematics_data):
     full_dataframe['time_vector'] = np.array([el - old_time[0] for el in old_time])
 
     return full_dataframe
+
+
+def match_motive(motive_traces, sync_path, kinematics_data):
+    """Match the motive and video traces based on the sync file"""
+
+    # # get the number of frames from the bonsai file
+    # n_frames_bonsai_file = kinematics_data.shape[0]
+
+    # load the sync data
+    sync_data = pd.read_csv(sync_path, names=['Time', 'projector_frames', 'bonsai_frames',
+                                              'optitrack_frames', 'mini_frames'])
+    # # get the number of miniscope frames on the sync file
+    # n_frames_motive_sync = np.sum(np.abs(np.diff(sync_data.projector_frames)) > 0)
+
+    # match the sync frames with the actual miniscope frames
+    frame_times_motive_sync = sync_data.loc[
+        np.concatenate(([0], np.abs(np.diff(sync_data.projector_frames)) > 0)) > 0, 'Time'].to_numpy()
+    # get the number of motive frames
+    n_frames_motive_sync = frame_times_motive_sync.shape[0]
+    # trim the trace to where the tracking starts
+    first_frame = np.argwhere(motive_traces['time_m'])[0][0]
+    trimmed_traces = motive_traces.iloc[first_frame:n_frames_motive_sync, :].reset_index(drop=True)
+    # # get the number of frames in motive (assuming the extras in sync are at the end and therefore will be cropped)
+    # n_frames_motive_sync = trimmed_traces.shape[0]
+    # also trim the frame times (assuming frame 1 in both is the same)
+    frame_times_motive_sync = frame_times_motive_sync[first_frame:n_frames_motive_sync+first_frame]
+    # plot_2d([[sync_data['projector_frames']]], dpi=100)
+    plot_2d([[sync_data['projector_frames'], sync_data['bonsai_frames']]], dpi=100)
+    # get the frame times for bonsai
+    frame_times_bonsai_sync = sync_data.loc[
+                                  np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0,
+                                  'Time'].to_numpy() # [-n_frames_bonsai_file:]
+
+    # trim the frame times to start the same time as motive
+    bonsai_start = np.argmin(np.abs(frame_times_motive_sync[0]-frame_times_bonsai_sync))
+    frame_times_bonsai_sync = frame_times_bonsai_sync[bonsai_start:]
+    # get the number of frames from bonsai
+    n_frames_bonsai_file = frame_times_bonsai_sync.shape[0]
+    # check if there are extra bonsai frames (most likely at the end) and trim them if so
+    if kinematics_data.shape[0] < n_frames_bonsai_file:
+        n_frames_bonsai_file = kinematics_data.shape[0]
+        frame_times_bonsai_sync = frame_times_bonsai_sync[:n_frames_bonsai_file]
+    # trim the bonsai data accordingly (assumption is that the frames go all the way to the end)
+    kinematics_data = kinematics_data.iloc[-n_frames_bonsai_file:].reset_index(drop=True)
+
+    # interpolate the bonsai traces to match the mini frames
+    matched_bonsai = kinematics_data.drop(['time_vector', 'mouse', 'datetime'], axis=1).apply(interp_trace, raw=False,
+                                                                         args=(frame_times_bonsai_sync,
+                                                                               frame_times_motive_sync))
+
+    # add the correct time vector from the interpolated traces
+    matched_bonsai['time_vector'] = frame_times_motive_sync
+    matched_bonsai['mouse'] = kinematics_data.loc[0, 'mouse']
+    matched_bonsai['datetime'] = kinematics_data.loc[0, 'datetime']
+
+    # trim the motive data
+
+    # # if the motive data has less frames than the ones detected during triggers, show a warning
+    # delta_frames = n_frames_motive_sync - motive_traces.shape[0]
+
+    # concatenate both data frames
+    full_dataframe = pd.concat([matched_bonsai, trimmed_traces.drop(['time_m'], axis=1)], axis=1)
+
+    # reset the time vector
+    old_time = full_dataframe['time_vector']
+    full_dataframe['time_vector'] = np.array([el - old_time[0] for el in old_time])
+
+    return full_dataframe
+
+
+def align_spatial(input_traces):
+    """Align the temporally aligned bonsai and motive traces in space"""
+
+    bonsai_position = input_traces[['mouse_x', 'mouse_y']].to_numpy()
+    motive_position = input_traces[['mouse_x_m', 'mouse_y_m']].to_numpy()
+
+    plot_2d([[motive_position]], dpi=100)
+    bonsai_position = normalize_matrix(bonsai_position, motive_position)
+
+    bonsai_position[:, 0] = -bonsai_position[:, 0]
+    bonsai_position[:, 1] = -bonsai_position[:, 1]
+    # plot the x and y of the 2 sources
+    plot_2d([[bonsai_position, motive_position]], dpi=100)
+
+    output_traces = []
+    return output_traces

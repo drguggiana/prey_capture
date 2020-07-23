@@ -3,6 +3,15 @@ import paths
 import json
 import tkinter as tk
 from collections import defaultdict
+import functions_data_handling as fd
+
+
+# define the dictionary between query characters and lookups
+LOOKUPS = {
+    'gtdate': 'date__gt',
+    'ltdate': 'date__lt',
+
+}
 
 
 class SearchBon:
@@ -67,8 +76,30 @@ def query_database(target_model, query=None):
         r = requests.get(paths.bondjango_url + '/' + target_model + '/from_python/',
                          auth=(paths.bondjango_username, paths.bondjango_password))
     else:
+        # parse the query
+        parsed_query = fd.parse_search_string(query)
+        # initialize the url
+        url_string = '/?'
+        # for all the fields
+        for key in parsed_query.keys():
+            # if the item is ALL, skip since it's not relevant for the search
+            if parsed_query[key] == 'ALL':
+                continue
+            if key in LOOKUPS:
+                # find the T
+                t_idx = parsed_query[key].find('T')
+                formatted_time = parsed_query[key][t_idx:].replace('-', '%3A')
+                formatted_date = parsed_query[key][:t_idx]
+                url_field = LOOKUPS[key] + '=' + formatted_date + formatted_time + '&'
+            else:
+                url_field = key + '=' + parsed_query[key] + '&'
+            # add it to the url
+            url_string += url_field
+        # remove the last ampersand as it is extra
+        url_string = url_string[:-1]
+
         # make the request to the server
-        r = requests.get(paths.bondjango_url + '/' + target_model + '/from_python' + '/?search=' + query,
+        r = requests.get(paths.bondjango_url + '/' + target_model + '/from_python' + url_string,
                          auth=(paths.bondjango_username, paths.bondjango_password))
     # read the data
     data = json.loads(r.text)
@@ -88,28 +119,5 @@ def update_entry(url, data):
 def create_entry(url, data):
     """Create a database entry"""
     return requests.post(url, data=data, auth=(paths.bondjango_username, paths.bondjango_password))
-
-
-def parse_query(query):
-    """Parse a search query for rig, result and lighting"""
-    # allocate memory for the output
-    parsed_query = {
-        'result': '',
-        'rig': '',
-        'lighting': ''
-    }
-    if ',' in query:
-        split_query = query.replace(',', ' ').split()
-    else:
-        split_query = tuple(query)
-    for el in split_query:
-        if 'result=' in el:
-            parsed_query['result'] = el.replace('result=', '')
-        if 'rig=' in el:
-            parsed_query['rig'] = el.replace('rig=', '')
-        if 'lighting=' in el:
-            parsed_query['lighting'] = el.replace('lighting=', '')
-
-    return parsed_query
 
 

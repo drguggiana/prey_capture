@@ -50,14 +50,19 @@ def parse_search_string(string_in):
         'slug': '',
         'notes': '',
         'imaging': '',
+        'date': '',
+        'gtdate': '',
+        'ltdate': '',
         'analysis_type': '',
     }
     # for all the keys, find the matching terms and fill in the required entries
     for key in string_dict.keys():
         # for all the elements in string_parts
         for parts in string_parts:
-            if key in parts:
-                string_dict[key] = parts.split(':')[1]
+            subparts = parts.split(':')
+            if key == subparts[0]:
+                # parse the different arguments
+                string_dict[key] = subparts[1]
         # fill it up with ALL if not present
         if string_dict[key] == '':
             string_dict[key] = 'ALL'
