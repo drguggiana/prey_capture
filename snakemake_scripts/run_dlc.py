@@ -14,8 +14,8 @@ import functions_io as fi
 import functions_misc as fm
 import json
 
-# define the config_path
-config_path = paths.config_path
+# # define the config_path
+# config_path = paths.config_path
 
 try:
     # get the target video path
@@ -39,7 +39,14 @@ shutil.copyfile(video_path, temp_video_path)
 
 # analyze the video
 # dlc.analyze_videos?
-dlc.analyze_videos(config_path, [temp_video_path], destfolder=paths.temp_path)
+
+# select which network to use
+if video_data['rig'] == 'miniscope':
+    dlc.analyze_videos(paths.config_path, [temp_video_path], destfolder=paths.temp_path)
+else:
+    dlc.analyze_videos(paths.config_path, [temp_video_path], destfolder=paths.temp_path)
+    # uncomment when the vr network is trained
+    # dlc.analyze_videos(paths.config_path_vr, [temp_video_path], destfolder=paths.temp_path)
 
 # filter the data
 # dlc.filterpredictions(config_path, [temp_video_path], filtertype='median',
