@@ -35,13 +35,13 @@ except NameError:
     # USE FOR DEBUGGING ONLY (need to edit the search query and the object selection)
     # define the search string
     # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
-    # search_string = '03_04_2020_15_54_26_miniscope_MM_200129_a_succ'
+    search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
     # search_string = 'result:succ, lighting:normal, rig:miniscope'
     # search_string = '07_17_2020_16_21_27_dg_200526_d_test_nocricket_dark'
-    search_string = '06_30_2020_15_06_59_VPrey_DG_200526_b_succ_real_lowFR'
+    # search_string = '06_30_2020_15_06_59_VPrey_DG_200526_b_succ_real_lowFR'
     # search_string = '06_29_2020_14_45_04_VPrey_DG_200526_c_succ_real_lowFR'
     # define the target model
-    target_model = 'vr_experiment'
+    target_model = 'video_experiment'
     # get the queryset
     files = bd.query_database(target_model, search_string)[0]
     raw_path = files['bonsai_path']
@@ -57,11 +57,12 @@ file_date = datetime.datetime.strptime(files['date'], '%Y-%m-%dT%H:%M:%SZ')
 # if miniscope but no imaging, run bonsai only
 if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     # run the first stage of preprocessing
-    # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
-    #                                               save_path)
     out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
-    # TODO: add corner detection to calibrate the coordinate to real size
-    # in the meantime, add a rough manual correction based on the size of the arena and the number of pixels
+
+    # define the dimensions of the arena with 0,0 at the center
+    miniscope_arena = [[0, 40], [0, 0], [40, 0], [40, 40]]
+    # scale the traces accordingly
+    filtered_traces = fp.rescale_pixels(filtered_traces, files, miniscope_arena)
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
 
@@ -71,7 +72,11 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
     #                                               save_path)
     out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
-    [] = fp.rescale_pixels(filtered_traces, files)
+
+    # define the dimensions of the arena with 0,0 at the center
+    miniscope_arena = [[0, 40], [0, 0], [40, 0], [40, 40]]
+    # scale the traces accordingly
+    filtered_traces = fp.rescale_pixels(filtered_traces, files, miniscope_arena)
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)

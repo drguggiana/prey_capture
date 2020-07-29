@@ -4,10 +4,12 @@ import datetime
 from scipy.signal import medfilt
 from functions_misc import interp_trace
 import cv2
+import functions_plotting as fp
 import matplotlib.pyplot as plt
 from quicksect import IntervalNode, Interval
 from functools import reduce
 import pandas as pd
+from scipy.stats import mode
 
 
 def remove_nans(files, tar_columns):
@@ -342,51 +344,98 @@ def nan_jumps_dlc(files, max_jump=200):
     return corrected_trace
 
 
-def rescale_pixels(traces, db_data):
+def rescale_pixels(traces, db_data, reference):
     """Use OpenCV to find corners in the image and rescale the data"""
     # get the moded image
-    corner_coordinates = find_corners(db_data['avi_path'])
+    corner_coordinates = find_corners(db_data['avi_path'], num_frames=50)
+    # center the corners on 0
+    # corner_coordinates = np.vstack((corner_coordinates[:, 0] - np.mean(corner_coordinates[:, 0]),
+    #                                 corner_coordinates[:, 1] - np.mean(corner_coordinates[:, 1]))).T
 
-    return []
+    # get the transformation between the reference and the real corners
+    perspective_matrix = cv2.getPerspectiveTransform(corner_coordinates.astype('float32'),
+                                                     np.array(reference).astype('float32'))
+
+    # copy the traces
+    new_traces = traces.copy()
+    # transform the traces
+
+    # get the unique column names, excluding the letter at the end
+    column_names = np.unique([el[:-1] for el in traces.columns])
+    # for all the unique names
+    for column in column_names:
+        # if the name + x exists, transform
+        if column+'x' in traces.columns:
+            # get the x and y data
+            original_data = traces[[column + 'x', column + 'y']].to_numpy()
+            # add a vector of ones for the matrix multiplication
+            original_data = np.concatenate((original_data, np.ones((original_data.shape[0], 1))), axis=1)
+
+            # transform
+            new_data = np.matmul(perspective_matrix, original_data.T).T
+
+            # replace the original data
+            new_traces[[column + 'x', column + 'y']] = new_data[:, :2]
+
+            # fp.plot_2d([[original_data[:, :2]]], dpi=100)
+            # plt.axis('equal')
+            # fp.plot_2d([[new_data]], dpi=100)
+            # plt.axis('equal')
+
+    return new_traces
 
 
-def find_corners(video_path, mode_frames=10):
+def find_corners(video_path, num_frames=10):
     """Take the mode of a video to use the image to find corners"""
     # create the video object
     cap = cv2.VideoCapture(video_path)
-    # allocate memory for the frames
-    corner_list = []
+    # allocate memory for the corners
     corners = []
+
     # get the frames to mode
-    for frames in np.arange(mode_frames):
+    for frames in np.arange(num_frames):
         img = cap.read()[1]
-        # # get the corners
-        # corners = np.int0(cv2.goodFeaturesToTrack(current_frame[:, :, 0], 25, 0.001, 500))
-        # dst = cv2.cornerHarris(current_frame[:, :, 0], 2, 3, 0.04)
-        # corner_list.append(corners)
+
+        img2 = cv2.Canny(img, 50, 200)
+        frame_corners = np.int0(cv2.goodFeaturesToTrack(img2, 25, 0.001, 500))
+
+        # if there aren't 4 corners, skip
+        if frame_corners.shape[0] != 4:
+            continue
+
+        # if there's too many corners, take the first 4
+
+        # for c in frame_corners:
+        #     x, y = c.ravel()
+        #     cv2.circle(img2, (x, y), 10, 255, -1)
         #
-        # for i in corners:
-        #     x, y = i.ravel()
-        #     cv2.circle(current_frame, (x, y), 10, 255, -1)
+        # plt.imshow(img2)
 
-        # Initiate FAST object with default values
-        fast = cv2.FastFeatureDetector_create(threshold=10, type=2)
-        # find and draw the keypoints
-        kp = fast.detect(img, None)
-        img2 = cv2.drawKeypoints(img, kp, None, color=(255, 0, 0))
-        # Print all default params
-        print("Threshold: {}".format(fast.getThreshold()))
-        print("nonmaxSuppression:{}".format(fast.getNonmaxSuppression()))
-        print("neighborhood: {}".format(fast.getType()))
-        print("Total Keypoints with nonmaxSuppression: {}".format(len(kp)))
-
-        plt.imshow(img2)
-    plt.show()
+        # turn into a numpy array and squeeze
+        frame_corners = np.squeeze(frame_corners)
+        # sort the rows
+        sort_idx = np.argsort(frame_corners[:, 0], axis=0)
+        # append to the list
+        corners.append(frame_corners[sort_idx, :])
 
     # release the video file
     cap.release()
+    # take the mode of the corners
+    # corners, _ = mode(np.squeeze(corners), axis=0)
 
-    return corners
+    # turn the corners list into an array
+    corners = np.array(corners)
+    # allocate memory for the output list
+    corner_list = []
+    # for all corners
+    for corner in np.arange(4):
+        # get the unique and the counts
+        temp_corner, idx, inv, counts = np.unique(corners[:, corner, :],
+                                          axis=0, return_index=True, return_inverse=True, return_counts=True)
+        # store the one with the most counts
+        corner_list.append(temp_corner[np.argmax(counts)])
+
+    return np.array(corner_list)
 
 
 def timed_event_finder(dframe_in, parameter, threshold, function, window=5):
