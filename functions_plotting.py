@@ -64,7 +64,7 @@ font_sizes_raw = {
 
 
 def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-', color=None,
-            xerr=None, yerr=None, fig=None, fontsize=None, dpi=None):
+            xerr=None, yerr=None, fig=None, fontsize=None, dpi=None, **kwargs):
     """Wrapper for 2D plotting data into subplots"""
     # create a new figure window
     if fig is None:
@@ -148,6 +148,9 @@ def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-'
             # add labels if provided
             if labels is not None:
                 plt.legend(labels[plot_counter - 1])
+
+            # apply kwargs
+            # TODO: implement kwargs
             # update the plot counter
             plot_counter += 1
     return fig
