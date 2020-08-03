@@ -2,6 +2,7 @@
 import functions_misc as fm
 import functions_kinematic as fk
 import functions_data_handling as fd
+import functions_preprocessing as fp
 import paths
 from scipy.ndimage.measurements import label
 import pandas as pd
@@ -17,17 +18,22 @@ def aggregate_full_traces(partial_data):
     # create a frame vector for each dataset
     frame = [list(range(el.shape[0])) for el in partial_data]
     frame = np.concatenate(frame, axis=0)
+    # also add the trial id
+    trial_id = [[index]*el.shape[0] for index, el in enumerate(partial_data)]
+    trial_id = np.concatenate(trial_id, axis=0)
+
     # concatenate the data
-    partial_data = pd.concat(partial_data)
+    out_data = pd.concat(partial_data)
 
     # wrap angles
-    partial_data.mouse_heading = fk.wrap(partial_data.mouse_heading)
-    partial_data.cricket_heading = fk.wrap(partial_data.cricket_heading)
+    out_data.mouse_heading = fk.wrap(out_data.mouse_heading)
+    out_data.cricket_heading = fk.wrap(out_data.cricket_heading)
 
     # add the frame as a column
-    partial_data['frame'] = frame
+    out_data['frame'] = frame
+    out_data['trial_id'] = trial_id
 
-    return partial_data
+    return out_data
 
 
 def aggregate_bin_time(data_all):
@@ -71,79 +77,97 @@ def aggregate_encounters(data_all):
     for idx_in, data_in in enumerate(data_all):
         # TODO: improve encounter determination (don't eliminate beginning of a sequence if
         #  it doesn't overlap with the end)
-        # identify the regions with encounters
-        [encounter_idx, encounter_number] = label(data_in.mouse_cricket_distance.to_numpy() < 100)
+        # # identify the regions with encounters
+        # [encounter_idx, encounter_number] = label(data_in.mouse_cricket_distance.to_numpy() < 100)
+        # # calculate the frame rate
+        # framerate = np.round(1/np.mean(np.diff(data_in['time_vector']))).astype(int)
+        # # get the frames per window
+        # window_frames = encounter_window*framerate
 
-        # run through the encounters
-        # for encounters in range
-        time_temp = data_in.loc[:, 'time_vector'].to_numpy()
-        # set an encounter counter
-        encounter_counter = 0
-        # for all the encounters
-        for encounters in range(1, encounter_number):
-            # get the first coordinate of the encounter and grab the surroundings
-            encounter_hit = np.nonzero(encounter_idx == encounters)[0][0]
+        # define the thresholding function
+        def thres_function(param, thres):
+            return param < thres
+        # get the encounters
+        encounters_local = fp.timed_event_finder(data_in, 'mouse_cricket_distance', 100, thres_function, window=2.5)
+        # if no encounters were found, skip
+        if len(encounters_local) == 0:
+            continue
+        # add the trial ID
+        encounters_local.loc[:, 'trial_id'] = idx_in
+        # append to the list
+        encounter_pertrial.append(encounters_local)
 
-            # get the starting time point of the encounter
-            time_start = data_in.loc[encounter_hit, 'time_vector']
-            # get the number of positions for this encounter
-            encounter_start = np.argmin(np.abs(time_temp - (time_start-encounter_window/2)))
-            encounter_end = np.argmin(np.abs(time_temp - (time_start+encounter_window/2)))
-            if ((time_temp[-1] - encounter_window/2) < time_start) or \
-                    ((time_temp[0] + encounter_window/2) > time_start):
-                continue
-
-            # also for the next encounter, unless it's the last one
-            if encounters < encounter_number:
-                encounter_hit2 = np.nonzero(encounter_idx == encounters+1)[0][0]
-                time_start2 = data_in.loc[encounter_hit2, 'time_vector']
-                encounter_start2 = np.argmin(np.abs(time_temp - (time_start2-encounter_window/2)))
-
-                if encounter_start2 < encounter_end:
-                    continue
-
-            # store the distance and the speed around the encounter
-            encounter_pertrial.append(data_in.iloc[encounter_start:encounter_end+1, :].copy())
-            # correct the time axis
-            encounter_pertrial[-1].loc[:, 'time_vector'] -= time_start
-            # add the trial id
-            encounter_pertrial[-1]['trial_id'] = idx_in
-            # add the encounter id
-            encounter_pertrial[-1]['encounter_id'] = encounter_counter
-            # update the counter
-            encounter_counter += 1
+        # # run through the encounters
+        # # for encounters in range
+        # time_temp = data_in.loc[:, 'time_vector'].to_numpy()
+        # # set an encounter counter
+        # encounter_counter = 0
+        # # for all the encounters
+        # for encounters in range(1, encounter_number):
+        #     # get the first coordinate of the encounter and grab the surroundings
+        #     encounter_hit = np.nonzero(encounter_idx == encounters)[0][0]
+        #
+        #     # get the starting time point of the encounter
+        #     time_start = data_in.loc[encounter_hit, 'time_vector']
+        #     # get the number of positions for this encounter
+        #     encounter_start = np.argmin(np.abs(time_temp - (time_start-encounter_window/2)))
+        #     encounter_end = np.argmin(np.abs(time_temp - (time_start+encounter_window/2)))
+        #     if ((time_temp[-1] - encounter_window/2) < time_start) or \
+        #             ((time_temp[0] + encounter_window/2) > time_start):
+        #         continue
+        #
+        #     # also for the next encounter, unless it's the last one
+        #     if encounters < encounter_number:
+        #         encounter_hit2 = np.nonzero(encounter_idx == encounters+1)[0][0]
+        #         time_start2 = data_in.loc[encounter_hit2, 'time_vector']
+        #         encounter_start2 = np.argmin(np.abs(time_temp - (time_start2-encounter_window/2)))
+        #
+        #         if encounter_start2 < encounter_end:
+        #             continue
+        #
+        #     # store the distance and the speed around the encounter
+        #     encounter_pertrial.append(data_in.iloc[encounter_start:encounter_end+1, :].copy())
+        #     # correct the time axis
+        #     encounter_pertrial[-1].loc[:, 'time_vector'] -= time_start
+        #     # add the trial id
+        #     encounter_pertrial[-1]['trial_id'] = idx_in
+        #     # add the encounter id
+        #     encounter_pertrial[-1]['encounter_id'] = encounter_counter
+        #     # update the counter
+        #     encounter_counter += 1
 
     # if there were no encounters, return an empty
     if len(encounter_pertrial) == 0:
         return []
     # interpolate the traces to match the one with the most points
-    # determine the trace with the most points
-    size_array = [el.shape[0] for el in encounter_pertrial]
-    max_coord = np.argmax(size_array)
+    # # determine the trace with the most points
+    # size_array = [el.shape[0] for el in encounter_pertrial]
+    # max_coord = np.argmax(size_array)
 
-    max_time = encounter_pertrial[max_coord].time_vector.to_numpy()
-    # allocate memory for the interpolated traces
-    encounter_interpolated = []
-    # for all the traces, if it doesn't have the same number of points as the max, interpolate to it
-    for index, traces in enumerate(encounter_pertrial):
-        if index != max_coord:
-
-            encounter_interpolated.append(traces.drop(['time_vector', 'trial_id', 'encounter_id'],
-                                                      axis=1).apply(fm.interp_trace, raw=False,
-                                                                    args=(traces.time_vector.to_numpy(), max_time)))
-
-        else:
-            encounter_interpolated.append(encounter_pertrial[index].drop(['time_vector', 'trial_id', 'encounter_id'],
-                                                                         axis=1))
-
-        # add the time and id vectors back
-        encounter_interpolated[-1]['time_vector'] = max_time
-        encounter_interpolated[-1]['trial_id'] = traces.trial_id.iloc[0]
-        encounter_interpolated[-1]['encounter_id'] = traces.encounter_id.iloc[0]
-        # add the frame
-        encounter_interpolated[-1]['frame'] = np.arange(max_time.shape[0])
-    # average and sem across encounters
-    encounter_matrix = pd.concat(encounter_interpolated)
+    # max_time = encounter_pertrial[max_coord].time_vector.to_numpy()
+    # # allocate memory for the interpolated traces
+    # encounter_interpolated = []
+    # # for all the traces, if it doesn't have the same number of points as the max, interpolate to it
+    # for index, traces in enumerate(encounter_pertrial):
+    #     if index != max_time:
+    #
+    #         encounter_interpolated.append(traces.drop(['time_vector', 'trial_id', 'encounter_id'],
+    #                                                   axis=1).apply(fm.interp_trace, raw=False,
+    #                                                                 args=(traces.time_vector.to_numpy(), max_time)))
+    #
+    #     else:
+    #         encounter_interpolated.append(encounter_pertrial[index].drop(['time_vector', 'trial_id', 'encounter_id'],
+    #                                                                      axis=1))
+    #
+    #     # add the time and id vectors back
+    #     encounter_interpolated[-1]['time_vector'] = max_time
+    #     encounter_interpolated[-1]['trial_id'] = traces.trial_id.iloc[0]
+    #     encounter_interpolated[-1]['encounter_id'] = traces.encounter_id.iloc[0]
+    #     # add the frame
+    #     encounter_interpolated[-1]['frame'] = np.arange(max_time.shape[0])
+    # concatenate the encounters
+    # encounter_matrix = pd.concat(encounter_interpolated)
+    encounter_matrix = pd.concat(encounter_pertrial)
 
     return encounter_matrix
 
