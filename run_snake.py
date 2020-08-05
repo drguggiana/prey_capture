@@ -14,7 +14,7 @@ input_dictionary = {
     # 'analysis_type': ['trigAveCA'],
     # 'result': ['test', ],
     # 'result': ['test'],
-    'rig': ['miniscope', ],
+    'rig': ['VPrey', 'VR'],
     'lighting': ['normal', ],
     # 'gtdate': ['2020-03-01T00-00-00'],
     # 'notes': ['crickets_0_vrcrickets_1'],
