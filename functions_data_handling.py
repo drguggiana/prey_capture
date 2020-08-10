@@ -59,10 +59,12 @@ def parse_search_string(string_in):
     for key in string_dict.keys():
         # for all the elements in string_parts
         for parts in string_parts:
+            # split by the separator
             subparts = parts.split(':')
-            if key == subparts[0]:
-                # parse the different arguments
-                string_dict[key] = subparts[1]
+            # compare removing spaces
+            if key == subparts[0].strip():
+                # parse the different arguments, also removing external spaces
+                string_dict[key] = subparts[1].strip()
         # fill it up with ALL if not present
         if string_dict[key] == '':
             string_dict[key] = 'ALL'

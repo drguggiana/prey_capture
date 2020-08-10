@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from quicksect import IntervalNode, Interval
 from functools import reduce
 import pandas as pd
-from scipy.stats import mode
+from sklearn.metrics.pairwise import euclidean_distances
 
 
 def remove_nans(files, tar_columns):
@@ -346,15 +346,43 @@ def nan_jumps_dlc(files, max_jump=200):
 
 def rescale_pixels(traces, db_data, reference):
     """Use OpenCV to find corners in the image and rescale the data"""
-    # get the moded image
-    corner_coordinates = find_corners(db_data['avi_path'], num_frames=50)
-    # center the corners on 0
-    # corner_coordinates = np.vstack((corner_coordinates[:, 0] - np.mean(corner_coordinates[:, 0]),
-    #                                 corner_coordinates[:, 1] - np.mean(corner_coordinates[:, 1]))).T
 
-    # get the transformation between the reference and the real corners
-    perspective_matrix = cv2.getPerspectiveTransform(corner_coordinates.astype('float32'),
-                                                     np.array(reference).astype('float32'))
+    # set up the looping flag
+    valid_corners = False
+    # loop until proper corners are found
+    while not valid_corners:
+
+        # get the corners
+        corner_coordinates = find_corners(db_data['avi_path'], num_frames=50)
+
+        # get the transformation between the reference and the real corners
+        perspective_matrix = cv2.getPerspectiveTransform(corner_coordinates.astype('float32'),
+                                                         np.array(reference).astype('float32'))
+        # get the new corners
+        new_corners = np.concatenate((corner_coordinates, np.ones((corner_coordinates.shape[0], 1))), axis=1)
+        new_corners = np.matmul(perspective_matrix, new_corners.T).T
+        new_corners = np.array([el[:2] / el[2] for el in new_corners])
+
+        # get a single set of coordinates
+        test_coordinates = traces[['mouse_x', 'mouse_y']].to_numpy()
+        # add a vector of ones for the matrix multiplication
+        test_coordinates = np.concatenate((test_coordinates, np.ones((test_coordinates.shape[0], 1))), axis=1)
+        # transform
+        test_data = np.matmul(perspective_matrix, test_coordinates.T).T
+        test_data = np.array([el[:2] / el[2] for el in test_data])
+
+        # # check if the data is within the boundaries
+        # if (np.max(test_data[:, 0]) > np.max(new_corners[:, 0])+5 and
+        #     np.min(test_data[:, 0]) < np.min(new_corners[:, 0])-5) or \
+        #         (np.max(test_data[:, 1]) > np.max(new_corners[:, 1]) + 5 and
+        #          np.min(test_data[:, 1]) < np.min(new_corners[:, 1]) - 5):
+
+
+
+
+
+
+        valid_corners = True
 
     # copy the traces
     new_traces = traces.copy()
@@ -370,19 +398,20 @@ def rescale_pixels(traces, db_data, reference):
             original_data = traces[[column + 'x', column + 'y']].to_numpy()
             # add a vector of ones for the matrix multiplication
             original_data = np.concatenate((original_data, np.ones((original_data.shape[0], 1))), axis=1)
-
             # transform
             new_data = np.matmul(perspective_matrix, original_data.T).T
+            new_data = np.array([el[:2]/el[2] for el in new_data])
 
             # replace the original data
             new_traces[[column + 'x', column + 'y']] = new_data[:, :2]
 
-            # fp.plot_2d([[original_data[:, :2]]], dpi=100)
+            # fp.plot_2d([[original_data[:, :2], corner_coordinates]], dpi=100)
             # plt.axis('equal')
-            # fp.plot_2d([[new_data]], dpi=100)
+            #
+            # fp.plot_2d([[new_data, new_corners]], dpi=100)
             # plt.axis('equal')
 
-    return new_traces
+    return new_traces, new_corners
 
 
 def find_corners(video_path, num_frames=10):
@@ -391,28 +420,40 @@ def find_corners(video_path, num_frames=10):
     cap = cv2.VideoCapture(video_path)
     # allocate memory for the corners
     corners = []
-
+    # # define sigma for the edge detection parameters
+    # sigma = 0.2
     # get the frames to mode
     for frames in np.arange(num_frames):
+
+        # read the image
         img = cap.read()[1]
+        # blur to remove noise
+        img2 = cv2.medianBlur(img, 5)
 
-        img2 = cv2.Canny(img, 50, 200)
-        frame_corners = np.int0(cv2.goodFeaturesToTrack(img2, 25, 0.001, 500))
-
-        # if there aren't 4 corners, skip
-        if frame_corners.shape[0] != 4:
-            continue
-
-        # if there's too many corners, take the first 4
-
-        # for c in frame_corners:
-        #     x, y = c.ravel()
-        #     cv2.circle(img2, (x, y), 10, 255, -1)
-        #
+        im_median = np.median(img2)
+        # find edges
+        # img2 = cv2.Canny(img2, 30, 100)
+        img2 = cv2.Canny(img2, 30, im_median)
         # plt.imshow(img2)
 
-        # turn into a numpy array and squeeze
-        frame_corners = np.squeeze(frame_corners)
+        # find the corners
+        frame_corners = np.squeeze(np.int0(cv2.goodFeaturesToTrack(img2, 25, 0.0001, 100)))
+
+        for c in frame_corners:
+            x, y = c.ravel()
+            cv2.circle(img2, (x, y), 10, 255, -1)
+
+        plt.imshow(img2)
+
+        # if there aren't 4 corners, skip
+        if frame_corners.shape[0] > 4:
+            frame_corners = exclude_non_corners(frame_corners, np.array(img2.shape))
+            # if it comes out empty as not all 4 corners were found, skip
+            if len(frame_corners) == 0:
+                continue
+        elif frame_corners.shape[0] < 4:
+            continue
+
         # sort the rows
         sort_idx = np.argsort(frame_corners[:, 0], axis=0)
         # append to the list
@@ -431,11 +472,64 @@ def find_corners(video_path, num_frames=10):
     for corner in np.arange(4):
         # get the unique and the counts
         temp_corner, idx, inv, counts = np.unique(corners[:, corner, :],
-                                          axis=0, return_index=True, return_inverse=True, return_counts=True)
+                                                  axis=0, return_index=True, return_inverse=True, return_counts=True)
         # store the one with the most counts
         corner_list.append(temp_corner[np.argmax(counts)])
 
     return np.array(corner_list)
+
+
+def exclude_non_corners(frame_corners, im_size, center_percentage=0.1):
+    """Use quadrants and euclidean distances to exclude the non-corner extra points"""
+    # allocate memory for the final set of points
+    real_points = []
+    # exclude points too close to the center of the image
+    # get the center of the image
+    image_center = im_size/2
+    frame_corners = np.array([el for el in frame_corners if
+                              (np.abs(el[0] - image_center[0]) > im_size[0]*center_percentage) and
+                              (np.abs(el[1] - image_center[1]) > im_size[1]*center_percentage)])
+
+    # calculate the middle of the image
+    middle = np.mean(frame_corners, axis=0)
+    # get the point angles
+    angles = np.rad2deg(np.arctan2(frame_corners[:, 0] - middle[0], frame_corners[:, 1] - middle[1]))
+    # determine the middle of the 4 corners via averaging
+    for quadrants in np.arange(4):
+        # get the points in this quadrant
+        if quadrants == 0:
+            low_bound = 0
+            high_bound = 90
+        elif quadrants == 1:
+            low_bound = 90.1
+            high_bound = 180
+        elif quadrants == 2:
+            low_bound = -90
+            high_bound = 0
+        else:
+            low_bound = -180
+            high_bound = -90.1
+        # get the locations of the points
+        point_locations = np.argwhere(np.logical_and(low_bound < angles, angles < high_bound))
+        # if a point is missing, skip the whole frame
+        if point_locations.shape[0] == 0:
+            return []
+        else:
+            # get the points
+            quadrant_points = point_locations[0]
+
+        # if there's only 1 point, add it to the list
+        if quadrant_points.shape[0] == 1:
+            real_points.append(frame_corners[quadrant_points[0], :])
+        # otherwise, get the euclidean distance
+        else:
+            target_points = frame_corners[quadrant_points, :]
+            distances = np.linalg.norm(target_points - middle)
+            # get the max distance as the point
+            real_points.append(target_points[np.argmax(distances), :])
+
+    # return the cleaned up corners
+    return np.array(real_points)
 
 
 def timed_event_finder(dframe_in, parameter, threshold, function, window=5):
