@@ -35,11 +35,13 @@ except NameError:
     # USE FOR DEBUGGING ONLY (need to edit the search query and the object selection)
     # define the search string
     # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
-    search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
+    # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
     # search_string = 'result:succ, lighting:normal, rig:miniscope'
-    # search_string = '07_17_2020_16_21_27_dg_200526_d_test_nocricket_dark'
-    # search_string = '06_30_2020_15_06_59_VPrey_DG_200526_b_succ_real_lowFR'
-    # search_string = '06_29_2020_14_45_04_VPrey_DG_200526_c_succ_real_lowFR'
+    # search_string = 'slug:11_25_2019_15_28_57_miniscope_MM_191106_a_fail_nomini'
+    # search_string = 'slug:03_05_2020_15_56_12_miniscope_MM_200129_b_succ'
+    search_string = 'slug:03_13_2020_13_20_21_miniscope_MM_200129_a_succ'
+    # search_string = 'slug:12_04_2019_15_56_34_miniscope_MM_191107_a_succ_nomini'
+
     # define the target model
     target_model = 'video_experiment'
     # get the queryset
@@ -59,10 +61,12 @@ if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     # run the first stage of preprocessing
     out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
 
-    # define the dimensions of the arena with 0,0 at the center
-    miniscope_arena = [[0, 40], [0, 0], [40, 0], [40, 40]]
+    # define the dimensions of the arena
+    reference_coordinates = paths.arena_coordinates[files['rig']]
     # scale the traces accordingly
-    filtered_traces = fp.rescale_pixels(filtered_traces, files, miniscope_arena)
+    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates)
+    # corners = miniscope_arena
+
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
 
@@ -73,11 +77,11 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     #                                               save_path)
     out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
 
-    # define the dimensions of the arena with 0,0 at the center
-    miniscope_arena = [[0, 40], [0, 0], [40, 0], [40, 40]]
+    # define the dimensions of the arena
+    reference_coordinates = paths.arena_coordinates[files['rig']]
     # scale the traces accordingly
-    filtered_traces = fp.rescale_pixels(filtered_traces, files, miniscope_arena)
-
+    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates)
+    # corners = miniscope_arena
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
 
@@ -100,7 +104,13 @@ elif files['rig'] in ['VR', 'VPrey'] and file_date <= datetime.datetime(year=202
     #                                               save_path)
     out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
 
+    # define the dimensions of the arena
+    reference_coordinates = paths.arena_coordinates['VR']
+
     # TODO: add the old motive-bonsai alignment as a function
+
+    # placeholder corners list
+    corners = []
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
@@ -113,6 +123,12 @@ else:
 
     # get the video tracking data
     out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
+
+    # define the dimensions of the arena
+    reference_coordinates = paths.arena_coordinates['VR']
+
+    # placeholder corners list
+    corners = []
     # get the motive tracking data
     motive_traces = s1.extract_motive(files['track_path'], files['rig'])
     # align them temporally based on the sync file
@@ -132,6 +148,11 @@ plt.gca().invert_yaxis()
 # plot the filtered trace
 ax.plot(filtered_traces.mouse_x,
         filtered_traces.mouse_y, marker='o', linestyle='-')
+ax.axis('equal')
+# plot the found corners if existent
+if len(corners) > 0:
+    for corner in corners:
+        ax.scatter(corner[0], corner[1], c='black')
 # for all the real crickets
 for real_cricket in range(real_crickets):
     ax.plot(filtered_traces['cricket_'+str(real_cricket)+'_x'],
