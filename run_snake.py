@@ -14,10 +14,10 @@ input_dictionary = {
     # 'analysis_type': ['trigAveCA'],
     # 'result': ['test', ],
     # 'result': ['test'],
-    'rig': ['VPrey', 'VR', ],
+    'rig': ['VPrey', ],
     'lighting': ['normal', ],
     # 'gtdate': ['2020-03-01T00-00-00'],
-    # 'notes': ['crickets_0_vrcrickets_1'],
+    'notes': ['blackCr'],
 }
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
