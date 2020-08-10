@@ -14,7 +14,7 @@ input_dictionary = {
     # 'analysis_type': ['trigAveCA'],
     # 'result': ['test', ],
     # 'result': ['test'],
-    'rig': ['miniscope', ],
+    'rig': ['VPrey', 'VR', ],
     'lighting': ['normal', ],
     # 'gtdate': ['2020-03-01T00-00-00'],
     # 'notes': ['crickets_0_vrcrickets_1'],
@@ -80,6 +80,9 @@ for search_query in search_queries:
 
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
+                              # '-F',         # (hard) force rerun everything
+                              # '-f',         # (soft) force rerun last step
+                              # '--unlock',   # unlocks the files after force quit
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)
