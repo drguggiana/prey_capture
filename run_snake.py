@@ -9,15 +9,15 @@ import os
 # define the type of analysis
 input_dictionary = {
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
-    'analysis_type': ['aggFull'],
+    'analysis_type': ['aggEnc', 'aggBin', ],
     # 'analysis_type': ['trigAveCA'],
     # 'analysis_type': ['trigAveCA'],
-    # 'result': ['test', ],
+    'result': ['succ', 'fail', ],
     # 'result': ['test'],
-    'rig': ['VPrey', ],
-    'lighting': ['normal', ],
+    'rig': ['VR', ],
+    'lighting': ['normal', 'dark', ],
     # 'gtdate': ['2020-03-01T00-00-00'],
-    'notes': ['blackCr'],
+    # 'notes': ['blackCr', ],
 }
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
