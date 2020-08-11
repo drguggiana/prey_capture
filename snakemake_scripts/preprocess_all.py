@@ -36,14 +36,15 @@ except NameError:
     # define the search string
     # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
     # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
+    search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
     # search_string = 'result:succ, lighting:normal, rig:miniscope'
     # search_string = 'slug:11_25_2019_15_28_57_miniscope_MM_191106_a_fail_nomini'
     # search_string = 'slug:03_05_2020_15_56_12_miniscope_MM_200129_b_succ'
-    search_string = 'slug:03_13_2020_13_20_21_miniscope_MM_200129_a_succ'
+    # search_string = 'slug:03_13_2020_13_20_21_miniscope_MM_200129_a_succ'
     # search_string = 'slug:12_04_2019_15_56_34_miniscope_MM_191107_a_succ_nomini'
 
     # define the target model
-    target_model = 'video_experiment'
+    target_model = 'vr_experiment'
     # get the queryset
     files = bd.query_database(target_model, search_string)[0]
     raw_path = files['bonsai_path']
@@ -177,10 +178,24 @@ entry_data = {
     'lighting': files['lighting'],
     'imaging': files['imaging'],
     'slug': files['slug'] + '_preprocessing',
-    'notes': files['notes'] + '_crickets_' + str(real_crickets) + '_vrcrickets_' + str(vr_crickets),
+    'notes': 'crickets_' + str(real_crickets) + '_vrcrickets_' + str(vr_crickets) if files['notes'] == 'BLANK' else
+             files['notes'] + '_crickets_' + str(real_crickets) + '_vrcrickets_' + str(vr_crickets),
     'video_analysis': [files['url']] if files['rig'] == 'miniscope' else [],
     'vr_analysis': [] if files['rig'] == 'miniscope' else [files['url']],
 }
+
+# if the notes field hasn't been updated
+if '_vrcrickets_' not in files['notes']:
+    # update the notes field from the original file
+    url_original = files['url']
+    update_notes = {'notes': entry_data['notes'],
+                    'mouse': '/'.join((paths.bondjango_url, 'mouse', files['mouse']))+'/',
+                    'experiment_type': ['/'.join((paths.bondjango_url, 'experiment_type',
+                                                  files['experiment_type'][0]))+'/'],
+                    }
+    update_original = bd.update_entry(url_original, update_notes)
+    if update_original.status_code == 404 or update_original.status_code == 400:
+        print('Original entry for {} was not updated'.format(files['slug']))
 
 # check if the entry already exists, if so, update it, otherwise, create it
 update_url = '/'.join((paths.bondjango_url, 'analyzed_data', entry_data['slug'], ''))

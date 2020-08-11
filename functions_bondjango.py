@@ -10,7 +10,7 @@ import functions_data_handling as fd
 LOOKUPS = {
     'gtdate': 'date__gt',
     'ltdate': 'date__lt',
-    'slug': 'slug__iexact',
+    'slug': 'slug__icontains',
     'notes': 'notes__icontains',
 }
 
