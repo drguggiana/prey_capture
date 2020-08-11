@@ -18,6 +18,7 @@ input_dictionary = {
     'lighting': ['normal', ],
     # 'gtdate': ['2020-03-01T00-00-00'],
     # 'notes': ['crickets_0_vrcrickets_1'],
+    'notes': ['vrcrickets_3']
 }
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
