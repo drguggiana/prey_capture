@@ -12,13 +12,13 @@ input_dictionary = {
     'analysis_type': ['aggEnc', 'aggBin', ],
     # 'analysis_type': ['trigAveCA'],
     # 'analysis_type': ['trigAveCA'],
-    'result': ['succ', 'fail', ],
+    'result': ['test', ],
     # 'result': ['test'],
-    'rig': ['VR', ],
-    'lighting': ['normal', 'dark', ],
+    'rig': ['VPrey', ],
+    'lighting': ['normal', ],
     # 'gtdate': ['2020-03-01T00-00-00'],
     # 'notes': ['crickets_0_vrcrickets_1'],
-    'notes': ['vrcrickets_3']
+    'notes': ['vrcrickets_1']
 }
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
