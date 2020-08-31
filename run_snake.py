@@ -10,15 +10,12 @@ import os
 input_dictionary = {
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
     'analysis_type': ['aggFull', 'aggBin', 'aggEnc', ],
-    # 'analysis_type': ['trigAveCA'],
-    # 'analysis_type': ['trigAveCA'],
-    # 'result': ['succ', ],
-    # 'result': ['test'],
-    'rig': ['VR', ],
-    'lighting': ['normal', 'dark', ],
+    'result': ['test'],
+    'rig': ['VPrey', ],
+    'lighting': ['normal', ],
     'gtdate': ['2020-06-19T00-00-00'],
-    'notes': ['crickets_1_vrcrickets_0', ],
-    # 'notes': ['nocricket_dark', 'nocricket_light', ]
+    'notes': ['blackCr_crickets_0_vrcrickets_1', ],
+
 }
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
@@ -81,7 +78,7 @@ for search_query in search_queries:
 
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
-                              # '-F',         # (hard) force rerun everything
+                              '-F',         # (hard) force rerun everything
                               # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               '-s', paths.snakemake_scripts,
