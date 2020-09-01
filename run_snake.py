@@ -9,16 +9,18 @@ import os
 # define the type of analysis
 input_dictionary = {
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
-    'analysis_type': ['aggFull'],
+    # 'analysis_type': ['aggFull'],
     # 'analysis_type': ['trigAveCA'],
     # 'analysis_type': ['trigAveCA'],
+    'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
     # 'result': ['test', ],
-    # 'result': ['test'],
-    'rig': ['VPrey', 'VR', ],
+    'result': ['succ', ],
+    # 'rig': ['VPrey', 'VR', ],
+    'rig': ['miniscope', ],
     'lighting': ['normal', ],
     # 'gtdate': ['2020-03-01T00-00-00'],
     # 'notes': ['crickets_0_vrcrickets_1'],
-    'notes': ['vrcrickets_3']
+    # 'notes': ['vrcrickets_3']
 }
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
