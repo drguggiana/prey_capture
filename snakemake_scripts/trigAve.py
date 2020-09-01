@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from scipy.signal import find_peaks
 import datetime
+import random
 import functions_plotting as fp
 
 try:
@@ -43,7 +44,7 @@ except NameError:
     basic_name = '_'.join(dict_path.values())
     raw_path = os.path.join(paths.analysis_path, '_'.join((ori_type, basic_name))+'.hdf5')
     # define the interval for ATA calculation (in seconds, before and after)
-    interval = [2, 3]
+    interval = [1, 1]
 
 
 # read the data
@@ -103,11 +104,26 @@ for mouse in unique_mice:
                         continue
                     # do the same with the calcium
                     current_calcium = cell_data[(peak[0] - frames[0]):(peak[0] + frames[1])]
+                    # # add randomized versions of the variables too
+                    # for col in variables.columns:
+                    #     # skip the index and time
+                    #     if col in ['index', 'time_vector']:
+                    #         continue
+                    #     temp_var = variables[col].to_numpy()
+                    #     # allocate memory for the reps
+                    #     temp_list = []
+                    #     # for all the reps
+                    #     for reps in np.arange(100):
+                    #         temp_list.append(random.sample(list(temp_var), current_calcium.shape[0]))
+                    #     # average the reps
+                    #     peak_interval['random_' + col] = np.nanmean(temp_list, axis=0)
                     # include it in the frame
                     peak_interval['calcium'] = current_calcium
                     # combine it with a peak id vector
                     peak_interval['peak_id'] = idx
                     peak_interval['peak_frame'] = list(np.arange(sum(frames)))
+                    # # also add a random set of bins
+                    # peak_interval['random'] = random.sample(list(cell_data), current_calcium.shape[0])
                     # save the peak
                     ata_list.append(peak_interval)
 
@@ -143,11 +159,14 @@ for mouse in unique_mice:
 
         # average the variables for each cell
         ata_final = peaks_final.groupby(['cell', 'peak_frame']).mean()
+        ata_sem = peaks_final.groupby(['cell', 'peak_frame']).sem()
         # assemble the group key for the hdf5 file (making sure the date is natural)
         group_key2 = '/'.join(('', mouse, 'd' + str(date)[:10].replace('-', '_'), analysis_type, 'average'))
+        group_key3 = '/'.join(('', mouse, 'd' + str(date)[:10].replace('-', '_'), analysis_type, 'sem'))
 
         # save to file
         fd.save_create_snake(ata_final, paths_all, raw_path, group_key2, dict_path, action='save', mode=mode)
+        fd.save_create_snake(ata_sem, paths_all, raw_path, group_key3, dict_path, action='save', mode=mode)
     # create the entry
     fd.save_create_snake([], paths_all, raw_path, analysis_type, dict_path, action='create')
 

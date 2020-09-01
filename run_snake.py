@@ -8,12 +8,19 @@ import os
 
 # define the type of analysis
 input_dictionary = {
-    'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA'],
-    # 'analysis_type': ['aggEnc', 'aggEncCA'],
+    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
+    # 'analysis_type': ['aggFull'],
     # 'analysis_type': ['trigAveCA'],
-    'result': ['succ', 'fail', ],
+    # 'analysis_type': ['trigAveCA'],
+    'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
+    # 'result': ['test', ],
+    'result': ['succ', ],
+    # 'rig': ['VPrey', 'VR', ],
     'rig': ['miniscope', ],
     'lighting': ['normal', ],
+    # 'gtdate': ['2020-03-01T00-00-00'],
+    # 'notes': ['crickets_0_vrcrickets_1'],
+    # 'notes': ['vrcrickets_3']
 }
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
@@ -57,9 +64,9 @@ for search_query in search_queries:
                              for el in target_entries},
                    'file_info': {os.path.basename(el['bonsai_path'])[:-4]: yaml.dump(el)
                                  for el in target_entries},
-                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
-                                else False for el in target_entries},
-                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
+                   #              else False for el in target_entries},
+                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
@@ -76,6 +83,9 @@ for search_query in search_queries:
 
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
+                              # '-F',         # (hard) force rerun everything
+                              # '-f',         # (soft) force rerun last step
+                              # '--unlock',   # unlocks the files after force quit
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)

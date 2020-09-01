@@ -2,10 +2,69 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib import animation
 import numpy as np
+import sklearn.cluster as clu
+
+# define the standard font sizes
+small = 7
+medium = 10
+large = 12
+# define the conversion constant from pt to cm
+pt2cm = 0.0352778
+# define the font size default dictionary for figures
+font_sizes_raw = {
+    'small': {
+        'xlabel': small,
+        'ylabel': small,
+        'zlabel': small,
+        'labels': small,
+        'xticks': small,
+        'yticks': small,
+        'zticks': small-2,
+        'ticks': small,
+        'minor_xticks': small,
+        'minor_yticks': small,
+        'minor_ticks': small,
+        'title': small,
+        'legend': small-1,
+        'legend_title': small,
+    },
+    'medium': {
+        'xlabel': medium,
+        'ylabel': medium,
+        'zlabel': medium,
+        'labels': medium,
+        'xticks': medium,
+        'yticks': medium,
+        'zticks': medium,
+        'ticks': medium,
+        'minor_xticks': medium,
+        'minor_yticks': medium,
+        'minor_ticks': medium,
+        'title': medium,
+        'legend': medium-1,
+        'legend_title': medium,
+    },
+    'large': {
+        'xlabel': large,
+        'ylabel': large,
+        'zlabel': large,
+        'labels': large,
+        'xticks': large,
+        'yticks': large,
+        'zticks': large,
+        'ticks': large,
+        'minor_xticks': large,
+        'minor_yticks': large,
+        'minor_ticks': large,
+        'title': large,
+        'legend': large-1,
+        'legend_title': large,
+    },
+}
 
 
 def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-', color=None,
-            xerr=None, yerr=None, fig=None, fontsize=None, dpi=None):
+            xerr=None, yerr=None, fig=None, fontsize=None, dpi=None, **kwargs):
     """Wrapper for 2D plotting data into subplots"""
     # create a new figure window
     if fig is None:
@@ -89,6 +148,9 @@ def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-'
             # add labels if provided
             if labels is not None:
                 plt.legend(labels[plot_counter - 1])
+
+            # apply kwargs
+            # TODO: implement kwargs
             # update the plot counter
             plot_counter += 1
     return fig
@@ -344,3 +406,42 @@ def show():
     """Wrapper for plt.show"""
     return plt.show()
 
+
+def sort_traces(data_in):
+    """Sort the traces in a data matrix based on hierarchical clustering"""
+
+    # cluster the data and return the labels
+    labels = clu.AgglomerativeClustering(n_clusters=10).fit_predict(data_in)
+    # get the sorted idx of labels
+    sorted_idx = np.argsort(labels)
+    # return the sorted matrix
+    return data_in[sorted_idx, :], sorted_idx, labels
+
+
+def margin(plot, element):
+    """Function to prevent me from clipping the xlabel when saving the fig"""
+    plot.handles['plot'].min_border_bottom = 50
+    plot.handles['plot'].min_border_top = 50
+    plot.handles['xaxis'].axis_line_width = 5
+    plot.handles['yaxis'].axis_line_width = 5
+
+
+def pix(cm_value, dpi=600):
+    """Function to convert figure sizes in cm to pixels based on a dpi requirement"""
+    return int(np.round((cm_value/2.54)*dpi))
+
+
+def search2path(search_string):
+    """Turn the input search string into a path entry for figures"""
+    search_string = search_string.replace(':', '_')
+    search_string = search_string.replace('=', '')
+    search_string = search_string.replace(', ', '_')
+    return search_string
+
+
+# calculate the actual font sizes in pixels
+font_sizes = {
+    'small':    {key: pix(value*pt2cm) for key, value in font_sizes_raw['small'].items()},
+    'medium':   {key: pix(value*pt2cm) for key, value in font_sizes_raw['medium'].items()},
+    'large':    {key: pix(value*pt2cm) for key, value in font_sizes_raw['large'].items()},
+}
