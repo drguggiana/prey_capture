@@ -36,8 +36,10 @@ except NameError:
     # define the search string
     # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
     # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
-    search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
+    # search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
+    search_string = '07_17_2020_16_21_27_dg_200526_d_test_nocricket_dark'
     # search_string = 'result:succ, lighting:normal, rig:miniscope'
+
     # search_string = 'slug:11_25_2019_15_28_57_miniscope_MM_191106_a_fail_nomini'
     # search_string = 'slug:03_05_2020_15_56_12_miniscope_MM_200129_b_succ'
     # search_string = 'slug:03_13_2020_13_20_21_miniscope_MM_200129_a_succ'
@@ -127,9 +129,12 @@ else:
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates['VR']
+    manual_coordinates = paths.arena_coordinates['VR_manual']
 
-    # placeholder corners list
-    corners = []
+    # scale the traces accordingly
+    filtered_traces, corners = \
+        fp.rescale_pixels(filtered_traces, files, reference_coordinates, manual_coordinates=manual_coordinates)
+
     # get the motive tracking data
     motive_traces = s1.extract_motive(files['track_path'], files['rig'])
     # align them temporally based on the sync file

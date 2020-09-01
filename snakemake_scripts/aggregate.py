@@ -134,8 +134,8 @@ def aggregate_encounters(data_all):
 
         # add the trial ID
         encounters_local.loc[:, 'trial_id'] = idx_in
-        if encounters_local.shape[1] != 15:
-            print('stop')
+        # if encounters_local.shape[1] != 15:
+        #     print('stop')
 
         # append to the list
         encounter_pertrial.append(encounters_local)
