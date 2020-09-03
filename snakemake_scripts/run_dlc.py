@@ -43,10 +43,12 @@ shutil.copyfile(video_path, temp_video_path)
 # select which network to use
 if video_data['rig'] == 'miniscope':
     dlc.analyze_videos(paths.config_path, [temp_video_path], destfolder=paths.temp_path)
+    target_model = 'video_experiment'
 else:
     # dlc.analyze_videos(paths.config_path, [temp_video_path], destfolder=paths.temp_path)
     # uncomment when the vr network is trained
     dlc.analyze_videos(paths.config_path_vr, [temp_video_path], destfolder=paths.temp_path)
+    target_model = 'vr_experiment'
 
 # filter the data
 # dlc.filterpredictions(config_path, [temp_video_path], filtertype='median',
@@ -73,7 +75,7 @@ mouse = ori_data['mouse']
 ori_data['mouse'] = '/'.join((paths.bondjango_url, 'mouse', mouse, ''))
 ori_data['experiment_type'] = '/'.join((paths.bondjango_url, 'experiment_type', 'Free_behavior', ''))
 
-update_url = '/'.join((paths.bondjango_url, 'video_experiment', ori_data['slug'], ''))
+update_url = '/'.join((paths.bondjango_url, target_model, ori_data['slug'], ''))
 output_entry = bd.update_entry(update_url, ori_data)
 
 print(output_entry.status_code)
