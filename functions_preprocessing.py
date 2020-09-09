@@ -344,45 +344,47 @@ def nan_jumps_dlc(files, max_jump=200):
     return corrected_trace
 
 
-def rescale_pixels(traces, db_data, reference):
+def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
     """Use OpenCV to find corners in the image and rescale the data"""
 
-    # set up the looping flag
-    valid_corners = False
-    # loop until proper corners are found
-    while not valid_corners:
+    # # set up the looping flag
+    # valid_corners = False
 
-        # get the corners
-        corner_coordinates = find_corners(db_data['avi_path'], num_frames=50)
+    # set the crop flag
+    crop_flag = False if 'miniscope' in db_data['rig'] else True
+    # # loop until proper corners are found
+    # while not valid_corners:
 
-        # get the transformation between the reference and the real corners
-        perspective_matrix = cv2.getPerspectiveTransform(corner_coordinates.astype('float32'),
-                                                         np.array(reference).astype('float32'))
-        # get the new corners
-        new_corners = np.concatenate((corner_coordinates, np.ones((corner_coordinates.shape[0], 1))), axis=1)
-        new_corners = np.matmul(perspective_matrix, new_corners.T).T
-        new_corners = np.array([el[:2] / el[2] for el in new_corners])
+    # get the corners
+    if manual_coordinates is None:
+        corner_coordinates = find_corners(db_data['avi_path'], num_frames=50, crop_flag=crop_flag)
+    else:
+        corner_coordinates = np.array(manual_coordinates)
 
-        # get a single set of coordinates
-        test_coordinates = traces[['mouse_x', 'mouse_y']].to_numpy()
-        # add a vector of ones for the matrix multiplication
-        test_coordinates = np.concatenate((test_coordinates, np.ones((test_coordinates.shape[0], 1))), axis=1)
-        # transform
-        test_data = np.matmul(perspective_matrix, test_coordinates.T).T
-        test_data = np.array([el[:2] / el[2] for el in test_data])
+    # get the transformation between the reference and the real corners
+    perspective_matrix = cv2.getPerspectiveTransform(corner_coordinates.astype('float32'),
+                                                     np.array(reference).astype('float32'))
+    # get the new corners
+    new_corners = np.concatenate((corner_coordinates, np.ones((corner_coordinates.shape[0], 1))), axis=1)
+    new_corners = np.matmul(perspective_matrix, new_corners.T).T
+    new_corners = np.array([el[:2] / el[2] for el in new_corners])
 
+        # # get a single set of coordinates
+        # test_coordinates = traces[['mouse_x', 'mouse_y']].to_numpy()
+        # # add a vector of ones for the matrix multiplication
+        # test_coordinates = np.concatenate((test_coordinates, np.ones((test_coordinates.shape[0], 1))), axis=1)
+        # # transform
+        # test_data = np.matmul(perspective_matrix, test_coordinates.T).T
+        # test_data = np.array([el[:2] / el[2] for el in test_data])
+        #
         # # check if the data is within the boundaries
         # if (np.max(test_data[:, 0]) > np.max(new_corners[:, 0])+5 and
         #     np.min(test_data[:, 0]) < np.min(new_corners[:, 0])-5) or \
         #         (np.max(test_data[:, 1]) > np.max(new_corners[:, 1]) + 5 and
         #          np.min(test_data[:, 1]) < np.min(new_corners[:, 1]) - 5):
+        #     valid_corners = True
 
-
-
-
-
-
-        valid_corners = True
+        # valid_corners = True
 
     # copy the traces
     new_traces = traces.copy()
@@ -410,11 +412,12 @@ def rescale_pixels(traces, db_data, reference):
             #
             # fp.plot_2d([[new_data, new_corners]], dpi=100)
             # plt.axis('equal')
+            # plt.show()
 
     return new_traces, new_corners
 
 
-def find_corners(video_path, num_frames=10):
+def find_corners(video_path, num_frames=10, crop_flag=False):
     """Take the mode of a video to use the image to find corners"""
     # create the video object
     cap = cv2.VideoCapture(video_path)
@@ -427,27 +430,40 @@ def find_corners(video_path, num_frames=10):
 
         # read the image
         img = cap.read()[1]
+        # save the original image for plotting
+        img_ori = img.copy()
+
+        # if it's not a miniscope movie, crop the frame
+        if crop_flag:
+            img = img[300:750, 250:950, :]
+
         # blur to remove noise
-        img2 = cv2.medianBlur(img, 5)
+        # img2 = cv2.medianBlur(img, 3)
+        img2 = cv2.equalizeHist(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY))
+        # plt.imshow(img2)
 
         im_median = np.median(img2)
         # find edges
-        # img2 = cv2.Canny(img2, 30, 100)
-        img2 = cv2.Canny(img2, 30, im_median)
-        # plt.imshow(img2)
+        # img2 = cv2.Canny(img2, 30, 60)
+        # img2 = cv2.Canny(img2, 30, im_median/4)
+        img2 = cv2.Canny(img2, im_median, im_median*2)
+        plt.imshow(img2)
 
         # find the corners
         frame_corners = np.squeeze(np.int0(cv2.goodFeaturesToTrack(img2, 25, 0.0001, 100)))
 
-        for c in frame_corners:
-            x, y = c.ravel()
-            cv2.circle(img2, (x, y), 10, 255, -1)
+        # if the pic was cropped, correct the coordinates
+        if crop_flag:
+            frame_corners = np.array([el+[250, 300] for el in frame_corners])
 
-        plt.imshow(img2)
+        # for c in frame_corners:
+        #     x, y = c.ravel()
+        #     cv2.circle(img_ori, (x, y), 10, 255, -1)
+        # plt.imshow(img_ori)
 
         # if there aren't 4 corners, skip
         if frame_corners.shape[0] > 4:
-            frame_corners = exclude_non_corners(frame_corners, np.array(img2.shape))
+            frame_corners = exclude_non_corners(frame_corners, np.array(img_ori.shape[:2]))
             # if it comes out empty as not all 4 corners were found, skip
             if len(frame_corners) == 0:
                 continue

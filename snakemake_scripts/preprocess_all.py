@@ -37,8 +37,9 @@ except NameError:
     # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
     # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
     # search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
-    search_string = 'slug:07_15_2020_15_17_40_vprey_dg_200526_d_succ_real_blackcr'
+    search_string = 'slug:08_24_2020_11_24_27_VPrey_DG_200526_b_test_whiteCr_blackBG_rewarded'
     # search_string = 'result:succ, lighting:normal, rig:miniscope'
+
     # search_string = 'slug:11_25_2019_15_28_57_miniscope_MM_191106_a_fail_nomini'
     # search_string = 'slug:03_05_2020_15_56_12_miniscope_MM_200129_b_succ'
     # search_string = 'slug:03_13_2020_13_20_21_miniscope_MM_200129_a_succ'
@@ -128,12 +129,16 @@ else:
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates['VR']
+    manual_coordinates = paths.arena_coordinates['VR_manual']
 
-    # placeholder corners list
-    corners = []
+    # scale the traces accordingly
+    filtered_traces, corners = \
+        fp.rescale_pixels(filtered_traces, files, reference_coordinates, manual_coordinates=manual_coordinates)
+
     # get the motive tracking data
     motive_traces = s1.extract_motive(files['track_path'], files['rig'])
     # align them temporally based on the sync file
+    # TODO add spatial matching
     filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
     # align the data spatially
     # filtered_traces = functions_matching.align_spatial(filtered_traces)
@@ -163,7 +168,7 @@ for real_cricket in range(real_crickets):
 # for all the virtual crickets
 for vr_cricket in range(vr_crickets):
     ax.plot(filtered_traces['vrcricket_'+str(vr_cricket)+'_x'],
-            filtered_traces['vrcricket_'+str(vr_cricket)+'_y'], marker='o', linestyle='-')
+            filtered_traces['vrcricket_'+str(vr_cricket)+'_z'], marker='o', linestyle='-')
 
 # define the path for the figure
 fig_final.savefig(pic_path, bbox_inches='tight')
