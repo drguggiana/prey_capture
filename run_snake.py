@@ -9,19 +9,22 @@ import os
 # define the type of analysis
 input_dictionary = {
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
-    # 'analysis_type': ['aggFull'],
+    # 'analysis_type': ['aggFull', ],
     # 'analysis_type': ['trigAveCA'],
     # 'analysis_type': ['trigAveCA'],
-    'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
+    'analysis_type': ['aggBin', 'aggFull', 'aggEnc', ],
     # 'result': ['test', ],
-    'result': ['succ', ],
-    # 'rig': ['VPrey', 'VR', ],
-    'rig': ['miniscope', ],
-    'lighting': ['normal', ],
-    # 'gtdate': ['2020-03-01T00-00-00'],
-    # 'notes': ['crickets_0_vrcrickets_1'],
+    'result': ['succ', 'test', ],
+    'rig': ['VPrey', ],
+    # 'rig': ['miniscope', ],
+    # 'lighting': ['normal', 'dark', ],
+    'gtdate': ['2020-08-23T00-00-00'],
+    # 'ltdate': ['2020-08-23T00-00-00'],
+    'notes': ['blackCr_crickets_1_vrcrickets_1', 'blackCr_rewarded_crickets_0_vrcrickets_1',
+              'whiteCr_blackBG_crickets_1_vrcrickets_1', 'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_1', ],
     # 'notes': ['vrcrickets_3']
 }
+
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
 # for all the search queries
@@ -64,9 +67,9 @@ for search_query in search_queries:
                              for el in target_entries},
                    'file_info': {os.path.basename(el['bonsai_path'])[:-4]: yaml.dump(el)
                                  for el in target_entries},
-                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
-                   #              else False for el in target_entries},
-                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
+                                else False for el in target_entries},
+                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,

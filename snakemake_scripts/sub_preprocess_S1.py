@@ -87,22 +87,38 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     # get the column names
     column_names = raw_h5.columns
     # take only the relevant columns
-    filtered_traces = pd.DataFrame(raw_h5[[
-        [el for el in column_names if ('mouseHead' in el) and ('x' in el)][0],
-        [el for el in column_names if ('mouseHead' in el) and ('y' in el)][0],
-        [el for el in column_names if ('mouseBody' in el) and ('x' in el)][0],
-        [el for el in column_names if ('mouseBody' in el) and ('y' in el)][0],
-        [el for el in column_names if ('mouseBase' in el) and ('x' in el)][0],
-        [el for el in column_names if ('mouseBase' in el) and ('y' in el)][0],
-        [el for el in column_names if ('cricketHead' in el) and ('x' in el)][0],
-        [el for el in column_names if ('cricketHead' in el) and ('y' in el)][0],
-        [el for el in column_names if ('cricketBody' in el) and ('x' in el)][0],
-        [el for el in column_names if ('cricketBody' in el) and ('y' in el)][0],
-    ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
-                            'cricket_0_head_x', 'cricket_0_head_y', 'cricket_0_x', 'cricket_0_y'])
+    try:
+        # DLC in small arena
+        filtered_traces = pd.DataFrame(raw_h5[[
+            [el for el in column_names if ('mouseHead' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseHead' in el) and ('y' in el)][0],
+            [el for el in column_names if ('mouseBody' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseBody' in el) and ('y' in el)][0],
+            [el for el in column_names if ('mouseBase' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseBase' in el) and ('y' in el)][0],
+            [el for el in column_names if ('cricketHead' in el) and ('x' in el)][0],
+            [el for el in column_names if ('cricketHead' in el) and ('y' in el)][0],
+            [el for el in column_names if ('cricketBody' in el) and ('x' in el)][0],
+            [el for el in column_names if ('cricketBody' in el) and ('y' in el)][0],
+        ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
+                                'cricket_0_head_x', 'cricket_0_head_y', 'cricket_0_x', 'cricket_0_y'])
+    except IndexError:
+        # DLC in VR arena
+        filtered_traces = pd.DataFrame(raw_h5[[
+            [el for el in column_names if ('head' in el) and ('x' in el)][0],
+            [el for el in column_names if ('head' in el) and ('y' in el)][0],
+            [el for el in column_names if ('body_center' in el) and ('x' in el)][0],
+            [el for el in column_names if ('body_center' in el) and ('y' in el)][0],
+            [el for el in column_names if ('tail_base' in el) and ('x' in el)][0],
+            [el for el in column_names if ('tail_base' in el) and ('y' in el)][0],
+            [el for el in column_names if ('cricket' in el) and ('x' in el)][0],
+            [el for el in column_names if ('cricket' in el) and ('y' in el)][0],
+        ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
+                                'cricket_0_x', 'cricket_0_y'])
 
     # eliminate the cricket if there is no real cricket
-    if 'nocricket' in file_info['notes'] and 'vr' in file_info['rig']:
+    if ('nocricket' in file_info['notes'] and 'vr' in file_info['rig']) or \
+            ('test' in file_info['result'] and 'VPrey' in file_info['rig']):
         # for all the columns
         for column in filtered_traces.columns:
             if 'cricket' in column:
