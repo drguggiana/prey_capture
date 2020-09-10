@@ -1,5 +1,7 @@
 from sklearn.preprocessing import scale
 from scipy.interpolate import interp1d
+from scipy.signal import correlate2d
+from scipy import signal
 import cv2
 from functions_plotting import *
 from functions_misc import add_edges, interp_trace, normalize_matrix
@@ -267,7 +269,7 @@ def match_motive(motive_traces, sync_path, kinematics_data):
     # also trim the frame times (assuming frame 1 in both is the same)
     frame_times_motive_sync = frame_times_motive_sync[first_frame:n_frames_motive_sync+first_frame]
     # plot_2d([[sync_data['projector_frames']]], dpi=100)
-    plot_2d([[sync_data['projector_frames'], sync_data['bonsai_frames']]], dpi=100)
+    # plot_2d([[sync_data['projector_frames'], sync_data['bonsai_frames']]], dpi=100)
     # get the frame times for bonsai
     frame_times_bonsai_sync = sync_data.loc[
                                   np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0,
@@ -315,16 +317,57 @@ def match_motive(motive_traces, sync_path, kinematics_data):
 def align_spatial(input_traces):
     """Align the temporally aligned bonsai and motive traces in space"""
 
-    bonsai_position = input_traces[['mouse_x', 'mouse_y']].to_numpy()
-    motive_position = input_traces[['mouse_x_m', 'mouse_y_m']].to_numpy()
+    # copy the traces
+    output_traces = input_traces.copy()
 
-    plot_2d([[motive_position]], dpi=100)
-    bonsai_position = normalize_matrix(bonsai_position, motive_position)
+    # Grab the mouse data
+    bonsai_position = input_traces[['mouse_head_x', 'mouse_head_y', ]].to_numpy()
+    motive_position = input_traces[['mouse_z_m', 'mouse_x_m', ]].to_numpy()
 
-    bonsai_position[:, 0] = -bonsai_position[:, 0]
-    bonsai_position[:, 1] = -bonsai_position[:, 1]
-    # plot the x and y of the 2 sources
-    plot_2d([[bonsai_position, motive_position]], dpi=100)
+    # fig0 = plot_2d([[bonsai_position, motive_position]], dpi=100)
+    # plt.show()
 
-    output_traces = []
+    # Low-pass filter the data
+    b, a = signal.butter(2, 0.01)
+    filt_bonsai_position = signal.filtfilt(b, a, bonsai_position, axis=0)
+    filt_motive_position = signal.filtfilt(b, a, motive_position, axis=0)
+
+    fig1 = plot_2d([[filt_bonsai_position, filt_motive_position]],
+                   rows=1, columns=1, dpi=100)
+    plt.show()
+
+    # Get spatial correlation between motive and bonsai/DLC tracking
+    # TODO - make this better, is hacky
+    corr = correlate2d(filt_motive_position, filt_bonsai_position, mode='same') / filt_motive_position.shape[0]
+    shift_idx = np.argmax(corr, axis=0)
+    y_shift = filt_motive_position[shift_idx[1], 0] - filt_bonsai_position[shift_idx[1], 0]
+    x_shift = filt_motive_position[shift_idx[0], 1] - filt_bonsai_position[shift_idx[0], 1]
+
+    # Align bonsai/DLC to motive coordinates
+    bonsai_position_new = filt_bonsai_position
+    bonsai_position_new[:, 0] = bonsai_position_new[:, 0] + y_shift
+    bonsai_position_new[:, 1] = bonsai_position_new[:, 1] + x_shift
+
+    fig2 = plot_2d([[bonsai_position_new, filt_motive_position]],
+                   rows=1, columns=1, dpi=100)
+    plt.show()
+
+    # Adjust all DLC traces to match motive
+    # Note that unity traces (VR crickets) are already in scaled to motive space
+    # get the unique column names, excluding the letter at the end
+    column_names = np.unique([el[:-1] for el in input_traces.columns])
+    # for all the unique names
+    for column in column_names:
+        # if the name + x exists, transform
+        if column + 'x' in input_traces.columns:
+            # get the x and y data
+            new_data = input_traces[[column + 'x', column + 'y']].to_numpy()
+
+            # add the translation
+            new_data[:, 0] = new_data[:, 0] + x_shift
+            new_data[:, 1] = new_data[:, 1] + y_shift
+
+            # replace the original data
+            output_traces[[column + 'x', column + 'y']] = new_data[:, :2]
+
     return output_traces

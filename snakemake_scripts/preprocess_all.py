@@ -137,11 +137,12 @@ else:
 
     # get the motive tracking data
     motive_traces = s1.extract_motive(files['track_path'], files['rig'])
+
     # align them temporally based on the sync file
-    # TODO add spatial matching
     filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
+
     # align the data spatially
-    # filtered_traces = functions_matching.align_spatial(filtered_traces)
+    filtered_traces = functions_matching.align_spatial(filtered_traces)
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
@@ -167,8 +168,8 @@ for real_cricket in range(real_crickets):
 
 # for all the virtual crickets
 for vr_cricket in range(vr_crickets):
-    ax.plot(filtered_traces['vrcricket_'+str(vr_cricket)+'_x'],
-            filtered_traces['vrcricket_'+str(vr_cricket)+'_z'], marker='o', linestyle='-')
+    ax.plot(filtered_traces['vrcricket_'+str(vr_cricket)+'_z'],
+            filtered_traces['vrcricket_'+str(vr_cricket)+'_x'], marker='o', linestyle='-', c='g')
 
 # define the path for the figure
 fig_final.savefig(pic_path, bbox_inches='tight')
