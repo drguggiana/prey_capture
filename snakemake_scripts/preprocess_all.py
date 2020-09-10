@@ -37,7 +37,7 @@ except NameError:
     # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
     # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
     # search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
-    search_string = 'slug:08_24_2020_11_24_27_VPrey_DG_200526_b_test_whiteCr_blackBG_rewarded'
+    search_string = 'slug:07_09_2020_12_14_14_VPrey_DG_200526_d_test_nonrewarded_blackCr'
     # search_string = 'result:succ, lighting:normal, rig:miniscope'
 
     # search_string = 'slug:11_25_2019_15_28_57_miniscope_MM_191106_a_fail_nomini'
