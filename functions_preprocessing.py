@@ -359,7 +359,7 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
     if manual_coordinates is None:
         corner_coordinates = find_corners(db_data['avi_path'], num_frames=50, crop_flag=crop_flag)
     else:
-        corner_coordinates = manual_coordinates
+        corner_coordinates = np.array(manual_coordinates)
 
     # get the transformation between the reference and the real corners
     perspective_matrix = cv2.getPerspectiveTransform(corner_coordinates.astype('float32'),
@@ -412,6 +412,7 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
             #
             # fp.plot_2d([[new_data, new_corners]], dpi=100)
             # plt.axis('equal')
+            # plt.show()
 
     return new_traces, new_corners
 
