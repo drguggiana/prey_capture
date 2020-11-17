@@ -194,33 +194,34 @@ def extract_motive(file_path_motive, rig):
     if rig == 'VR':
         # if it's before the sync files, exclude the last column
         if parsed_path['datetime'] <= datetime.datetime(year=2019, month=11, day=10):
-            column_names = ['time_m', 'mouse_x_m', 'mouse_y_m', 'mouse_z_m'
-                            , 'mouse_xrot_m', 'mouse_yrot_m', 'mouse_zrot_m'
-                            , 'vrcricket_0_x_m', 'vrcricket_0_y_m', 'vrcricket_0_z_m'
+            column_names = ['time_m', 'mouse_x_m', 'mouse_z_m', 'mouse_y_m'
+                            , 'mouse_xrot_m', 'mouse_zrot_m', 'mouse_yrot_m'
+                            , 'vrcricket_0_x_m', 'vrcricket_0_z_m', 'vrcricket_0_y_m'
                             ]
         elif parsed_path['datetime'] <= datetime.datetime(year=2020, month=6, day=22):
-            column_names = ['time_m', 'mouse_x_m', 'mouse_y_m', 'mouse_z_m'
-                            , 'mouse_xrot_m', 'mouse_yrot_m', 'mouse_zrot_m'
-                            , 'vrcricket_0_x_m', 'vrcricket_0_y_m', 'vrcricket_0_z_m'
+            column_names = ['time_m', 'mouse_x_m', 'mouse_z_m', 'mouse_y_m'
+                            , 'mouse_xrot_m', 'mouse_zrot_m', 'mouse_yrot_m'
+                            , 'vrcricket_0_x_m', 'vrcricket_0_z_m', 'vrcricket_0_y_m'
                             , 'color_factor'
                             ]
         else:
-            column_names = ['time_m', 'mouse_x_m', 'mouse_y_m', 'mouse_z_m'
-                            , 'mouse_xrot_m', 'mouse_yrot_m', 'mouse_zrot_m'
+            column_names = ['time_m', 'mouse_x_m', 'mouse_z_m', 'mouse_y_m'
+                            , 'mouse_xrot_m', 'mouse_zrot_m', 'mouse_yrot_m'
                             , 'color_factor'
                             ]
     else:
         # get the number of vr crickets
+        # TODO: make this not arbitrary
         cricket_number = (raw_data.shape[1] - 8)/10
         # define the cricket template
-        cricket_template = ['_x', '_y', '_z', '_xrot', '_yrot', '_zrot',
+        cricket_template = ['_x', '_z', '_y', '_xrot', '_zrot', '_yrot',
                             '_speed', '_state', '_motion', '_encounter']
         # assemble the cricket fields
         cricket_fields = ['vrcricket_'+str(int(number))+el
                           for number in np.arange(cricket_number) for el in cricket_template]
 
-        column_names = ['time_m', 'mouse_x_m', 'mouse_y_m', 'mouse_z_m'
-                        , 'mouse_xrot_m', 'mouse_yrot_m', 'mouse_zrot_m'
+        column_names = ['time_m', 'mouse_x_m', 'mouse_z_m', 'mouse_y_m'
+                        , 'mouse_xrot_m', 'mouse_zrot_m', 'mouse_yrot_m'
                         ] + cricket_fields + [
                         'color_factor'
                         ]
