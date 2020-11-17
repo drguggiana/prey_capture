@@ -168,7 +168,7 @@ for real_cricket in range(real_crickets):
 # for all the virtual crickets
 for vr_cricket in range(vr_crickets):
     ax.plot(filtered_traces['vrcricket_'+str(vr_cricket)+'_x'],
-            filtered_traces['vrcricket_'+str(vr_cricket)+'_z'], marker='o', linestyle='-')
+            filtered_traces['vrcricket_'+str(vr_cricket)+'_y'], marker='o', linestyle='-')
 
 # define the path for the figure
 fig_final.savefig(pic_path, bbox_inches='tight')
