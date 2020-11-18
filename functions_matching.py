@@ -286,9 +286,9 @@ def match_motive(motive_traces, sync_path, kinematics_data):
     kinematics_data = kinematics_data.iloc[-n_frames_bonsai_file:].reset_index(drop=True)
 
     # interpolate the bonsai traces to match the mini frames
-    matched_bonsai = kinematics_data.drop(['time_vector', 'mouse', 'datetime'], axis=1).apply(interp_trace, raw=False,
-                                                                         args=(frame_times_bonsai_sync,
-                                                                               frame_times_motive_sync))
+    matched_bonsai = kinematics_data.drop(['time_vector', 'mouse', 'datetime'],
+                                          axis=1).apply(interp_trace, raw=False, args=(frame_times_bonsai_sync,
+                                                        frame_times_motive_sync))
 
     # add the correct time vector from the interpolated traces
     matched_bonsai['time_vector'] = frame_times_motive_sync

@@ -31,4 +31,4 @@ for idx, video in enumerate(video_sample):
     cap.release()
 
     # print the image to the target path
-    cv2.imwrite(os.path.join(paths.corner_path, target_variable, 'pics', str(idx)+'.jpg'), img)
+    cv2.imwrite(os.path.join(paths.corner_path, target_variable, 'pics', target_variable+str(idx)+'.jpg'), img)
