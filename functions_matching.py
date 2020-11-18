@@ -312,8 +312,6 @@ def match_motive(motive_traces, sync_path, kinematics_data):
     old_time = full_dataframe['time_vector']
     full_dataframe['time_vector'] = np.array([el - old_time[0] for el in old_time])
 
-    # TODO spatial matching
-
     return full_dataframe
 
 def consecutive(data, stepsize=1):

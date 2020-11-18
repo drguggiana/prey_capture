@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from quicksect import IntervalNode, Interval
 from functools import reduce
 import pandas as pd
+import csv
+from json import loads
 from sklearn.metrics.pairwise import euclidean_distances
 
 
@@ -584,6 +586,42 @@ def timed_event_finder(dframe_in, parameter, threshold, function, window=5):
         event.loc[:, 'event_id'] = idx
     # concatenate and output
     return pd.concat(output_events)
+
+
+def read_motive_header(file_path):
+    """ Make variables to hold arena corner coordinates, obstacle coordinates, and
+    the dataframe itself. The header first contains information about the arena
+    corner coordinates and the position of objects in the arena, followed by a
+    blank line and then the main dataframe. """
+    arena_corners = []
+    obstacle_positions = []
+
+    with open(file_path) as f:
+        # Read the file line by  line
+        reader = csv.reader(f, delimiter=" ")
+
+        for line_num, line in enumerate(reader):
+            if line:
+                # Read the lines related to arena and obstacle positions
+                if "arena_corners" in line[0]:
+                    arena_corners_temp = loads(line[-1])
+                    # Arena coordinates need to be put into a format that aligns with DLC tracking.
+                    # Need to negate the x coordinate to match video mirroring, then flip the x and z coordinates
+                    # arena_corners_temp = [[-corner[0], corner[1]] for corner in arena_corners_temp]
+                    arena_corners = [[corner[1], -corner[0]] for corner in arena_corners_temp]
+                else:
+                    obs_name = line[0]
+                    obs_centroid = loads(line[-1])
+                    obstacle_positions.append([obs_name, obs_centroid])
+            else:
+                # We have reached the blank line delimiting the positions
+                break
+
+    return arena_corners, obstacle_positions, line_num
+
+
+
+
 
 # class and functions taken from https://stackoverflow.com/questions/16312871/python-removing-overlapping-lists
 

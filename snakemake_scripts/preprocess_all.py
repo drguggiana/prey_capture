@@ -37,7 +37,7 @@ except NameError:
     # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
     # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
     # search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
-    search_string = 'slug:09_01_2020_11_07_48_VPrey_DG_200526_b_succ_real_blackCr'
+    search_string = 'slug:11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d'
     # 07_03_2020_15_36_49_VPrey_DG_200526_d_test_rewarded
     # 07_10_2020_12_22_01_VPrey_DG_200526_a_test_nonrewarded_blackCr
     # 07_06_2020_14_49_52_VPrey_DG_200526_b_test_rewarded_obstacle
@@ -149,6 +149,30 @@ elif files['rig'] in ['VR', 'VPrey'] and \
 
     # align the data spatially
     filtered_traces = functions_matching.align_spatial(filtered_traces)
+
+    # run the preprocessing kinematic calculations
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+
+elif files['rig'] in ['VScreen']:
+
+    # TODO: make sure the constants are set to values that make sense for the vr arena
+
+    # get the video tracking data
+    out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
+
+    # define the dimensions of the arena
+    manual_coordinates = paths.arena_coordinates['VR_manual']
+
+    # get the motive tracking data
+    motive_traces, reference_coordinates, obstacle_coordinates = \
+        s1.extract_motive(files['track_path'], files['rig'])
+
+    # scale the traces accordingly
+    filtered_traces, corners = \
+        fp.rescale_pixels(filtered_traces, files, reference_coordinates, manual_coordinates=manual_coordinates)
+
+    # align them temporally based on the sync file
+    filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
