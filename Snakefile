@@ -45,6 +45,20 @@ rule preprocess:
           "snakemake_scripts/preprocess_all.py"
 
 
+rule just_preprocess:
+    input:
+          expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files'])
+    output:
+          os.path.join(paths.analysis_path, "just_preprocess.txt")
+    wildcard_constraints:
+          query=".*_agg.*"
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/just_preprocess.py"
+
+
 rule aggregate_preprocessed:
     input:
           expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files'])
