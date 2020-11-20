@@ -608,7 +608,7 @@ def read_motive_header(file_path):
                     # Arena coordinates need to be put into a format that aligns with DLC tracking.
                     # Need to negate the x coordinate to match video mirroring, then flip the x and z coordinates
                     # arena_corners_temp = [[-corner[0], corner[1]] for corner in arena_corners_temp]
-                    arena_corners = [[corner[1], -corner[0]] for corner in arena_corners_temp]
+                    arena_corners = [[-corner[1], corner[0]] for corner in arena_corners_temp]
                 else:
                     obs_name = line[0]
                     obs_centroid = loads(line[-1])

@@ -38,6 +38,8 @@ except NameError:
     # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
     # search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
     search_string = 'slug:11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d'
+    # 11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d
+    # 09_01_2020_11_07_48_VPrey_DG_200526_b_succ_real_blackCr
     # 07_03_2020_15_36_49_VPrey_DG_200526_d_test_rewarded
     # 07_10_2020_12_22_01_VPrey_DG_200526_a_test_nonrewarded_blackCr
     # 07_06_2020_14_49_52_VPrey_DG_200526_b_test_rewarded_obstacle
@@ -133,6 +135,9 @@ elif files['rig'] in ['VR', 'VPrey'] and \
     # get the video tracking data
     out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
 
+    # get the motive tracking data
+    motive_traces, _, _ = s1.extract_motive(files['track_path'], files['rig'])
+
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates['VR']
     manual_coordinates = paths.arena_coordinates['VR_manual']
@@ -140,9 +145,6 @@ elif files['rig'] in ['VR', 'VPrey'] and \
     # scale the traces accordingly
     filtered_traces, corners = \
         fp.rescale_pixels(filtered_traces, files, reference_coordinates, manual_coordinates=manual_coordinates)
-
-    # get the motive tracking data
-    motive_traces = s1.extract_motive(files['track_path'], files['rig'])
 
     # align them temporally based on the sync file
     filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
@@ -195,7 +197,7 @@ else:
         fp.rescale_pixels(filtered_traces, files, reference_coordinates, manual_coordinates=manual_coordinates)
 
     # get the motive tracking data
-    motive_traces = s1.extract_motive(files['track_path'], files['rig'])
+    motive_traces, _, _ = s1.extract_motive(files['track_path'], files['rig'])
 
     # align them temporally based on the sync file
     filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
@@ -207,26 +209,30 @@ else:
 # save the filtered trace
 fig_final = plt.figure()
 ax = fig_final.add_subplot(111)
-plt.gca().invert_yaxis()
+# plt.gca().invert_yaxis()
 
 # plot the filtered trace
 ax.plot(filtered_traces.mouse_x,
-        filtered_traces.mouse_y, marker='o', linestyle='-')
+        filtered_traces.mouse_y, marker='o', linestyle='-', c='blue')
 ax.axis('equal')
-# plot the found corners if existent
-if len(corners) > 0:
-    for corner in corners:
-        ax.scatter(corner[0], corner[1], c='black')
 
 # for all the real crickets
 for real_cricket in range(real_crickets):
     ax.plot(filtered_traces['cricket_'+str(real_cricket)+'_x'],
-            filtered_traces['cricket_'+str(real_cricket)+'_y'], marker='o', linestyle='-')
+            filtered_traces['cricket_'+str(real_cricket)+'_y'], marker='o', linestyle='-', c='orange')
 
 # for all the virtual crickets
 for vr_cricket in range(vr_crickets):
-    ax.plot(filtered_traces['vrcricket_'+str(vr_cricket)+'_x'],
-            filtered_traces['vrcricket_'+str(vr_cricket)+'_y'], marker='o', linestyle='-')
+    try:
+        ax.plot(filtered_traces['vrcricket_' + str(vr_cricket) + '_x'],
+                filtered_traces['vrcricket_' + str(vr_cricket) + '_y'], marker='o', linestyle='-', c='green')
+    except:
+        ax.plot(filtered_traces['target_x_m'], filtered_traces['target_y_m'], marker='o', linestyle='-', c='green')
+
+# plot the found corners if existent
+if len(corners) > 0:
+    for corner in corners:
+        ax.scatter(corner[0], corner[1], c='black')
 
 # define the path for the figure
 fig_final.savefig(pic_path, bbox_inches='tight')
