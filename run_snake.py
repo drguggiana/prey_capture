@@ -12,12 +12,12 @@ input_dictionary = {
     'analysis_type': ['aggFull', ],
     # 'analysis_type': ['trigAveCA'],
     # 'analysis_type': ['trigAveCA'],
-    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', ],
-    'result': ['test', ],
-    # 'result': ['succ', 'fail', 'test'],
-    'rig': ['VScreen', ],
-    # 'rig': ['VPrey', 'VR'],
-    # 'rig': ['miniscope', ],
+    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
+    'analysis_type': ['just_preprocess'],
+    # 'result': ['test', ],
+    'result': ['succ', ],
+    # 'rig': ['VPrey', 'VR', ],
+    'rig': ['miniscope', ],
     'lighting': ['normal', ],
     # 'gtdate': ['2020-06-23T00-00-00'],
     # 'ltdate': ['2020-07-08T00-00-00'],
@@ -89,7 +89,12 @@ for search_query in search_queries:
         target_file = yaml.dump(config_dict, f)
 
     # assemble the output path
-    out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
+    if parsed_search['analysis_type'] == 'just_preprocess':
+        # feed the generic txt file for preprocessing
+        out_path = os.path.join(paths.analysis_path, 'just_preprocess.txt')
+    else:
+        # feed the aggregation path
+        out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
 
     # out_path = os.path.join(paths.figures_path, '_'.join(('averages', *parsed_search.values())) + '.html')
 
@@ -104,4 +109,9 @@ for search_query in search_queries:
 
     stdout = preprocess_sp.communicate()[0]
     print(stdout.decode())
+
+    # assemble the output path
+    if parsed_search['analysis_type'] == 'just_preprocess':
+        # delete the just_preprocess file (specify de novo to no run risks)
+        os.remove(os.path.join(paths.analysis_path, 'just_preprocess.txt'))
 print('yay')
