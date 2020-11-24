@@ -37,7 +37,7 @@ except NameError:
     # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
     # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
     # search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
-    search_string = 'slug:11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d'
+    search_string = 'slug:11_16_2020_10_07_12_VScreen_DG_200526_a_test_3D'
     # 11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d
     # 09_01_2020_11_07_48_VPrey_DG_200526_b_succ_real_blackCr
     # 07_03_2020_15_36_49_VPrey_DG_200526_d_test_rewarded
@@ -209,25 +209,31 @@ else:
 # save the filtered trace
 fig_final = plt.figure()
 ax = fig_final.add_subplot(111)
+plt.gca().invert_xaxis()
 # plt.gca().invert_yaxis()
 
 # plot the filtered trace
-ax.plot(filtered_traces.mouse_x,
-        filtered_traces.mouse_y, marker='o', linestyle='-', c='blue')
+a = ax.scatter(filtered_traces.mouse_x,
+        filtered_traces.mouse_y, c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Blues')
+cbar = fig_final.colorbar(a, ax=ax)
+cbar.set_label('Time (s)')
 ax.axis('equal')
 
 # for all the real crickets
 for real_cricket in range(real_crickets):
-    ax.plot(filtered_traces['cricket_'+str(real_cricket)+'_x'],
-            filtered_traces['cricket_'+str(real_cricket)+'_y'], marker='o', linestyle='-', c='orange')
+    ax.scatter(filtered_traces['cricket_'+str(real_cricket)+'_x'],
+            filtered_traces['cricket_'+str(real_cricket)+'_y'],
+            c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Oranges')
 
-# for all the virtual crickets
+# for all the virtual crickets or virtual targets
 for vr_cricket in range(vr_crickets):
     try:
-        ax.plot(filtered_traces['vrcricket_' + str(vr_cricket) + '_x'],
-                filtered_traces['vrcricket_' + str(vr_cricket) + '_y'], marker='o', linestyle='-', c='green')
+        ax.scatter(filtered_traces['vrcricket_' + str(vr_cricket) + '_x'],
+                filtered_traces['vrcricket_' + str(vr_cricket) + '_y'],
+                c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
     except:
-        ax.plot(filtered_traces['target_x_m'], filtered_traces['target_y_m'], marker='o', linestyle='-', c='green')
+        ax.scatter(filtered_traces['target_x_m'], filtered_traces['target_y_m'],
+                c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
 
 # plot the found corners if existent
 if len(corners) > 0:

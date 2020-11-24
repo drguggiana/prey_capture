@@ -9,15 +9,16 @@ import os
 # define the type of analysis
 input_dictionary = {
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
-    'analysis_type': ['aggFull', ],
+    # 'analysis_type': ['aggFull', ],
     # 'analysis_type': ['trigAveCA'],
     # 'analysis_type': ['trigAveCA'],
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
     'analysis_type': ['just_preprocess'],
     # 'result': ['test', ],
-    'result': ['succ', ],
+    'result': ['test', ],
     # 'rig': ['VPrey', 'VR', ],
-    'rig': ['miniscope', ],
+    # 'rig': ['miniscope', ],
+    'rig': ['VScreen', ],
     'lighting': ['normal', ],
     # 'gtdate': ['2020-06-23T00-00-00'],
     # 'ltdate': ['2020-07-08T00-00-00'],
@@ -103,6 +104,7 @@ for search_query in search_queries:
                               # '-F',         # (hard) force rerun everything
                               '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
+                              # '--rerun-incomplete',
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)

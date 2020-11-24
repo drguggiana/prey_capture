@@ -4,7 +4,7 @@ import functions_plotting as fp
 from paths import *
 from functions_misc import tk_killwindow
 from functions_preprocessing import trim_bounds, median_discontinuities, interpolate_segments, eliminate_singles, \
-    nan_large_jumps, find_frozen_tracking, nan_jumps_dlc, get_time, parse_bonsai, read_motive_header
+    nan_large_jumps, find_frozen_tracking, nan_jumps_dlc, get_time, parse_bonsai, read_motive_header, flip_DLC_y
 from functions_io import parse_path
 import numpy as np
 import pandas as pd
@@ -117,6 +117,10 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
         ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
                                 'cricket_0_x', 'cricket_0_y'])
 
+        # The camera that records video in the VR arena flips the video about the
+        # horizontal axis when saving. To correct, flip the y coordinates from DLC
+        filtered_traces = flip_DLC_y(filtered_traces)
+
     # eliminate the cricket if there is no real cricket or this is a VScreen experiment
     if ('nocricket' in file_info['notes'] and 'VR' in file_info['rig']) or \
             ('test' in file_info['result'] and 'VPrey' in file_info['rig']) or \
@@ -220,9 +224,9 @@ def extract_motive(file_path_motive, rig):
         if rig == 'VR':
             # if it's before the sync files, exclude the last column
             if parsed_path['datetime'] <= datetime.datetime(year=2019, month=11, day=10):
-                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m'
-                                , 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
-                                , 'vrcricket_0_z_m', 'vrcricket_0_z_m', 'vrcricket_0_y_m'
+                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                                'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
+                                'vrcricket_0_y_m', 'vrcricket_0_z_m', 'vrcricket_0_x_m'
                                 ]
             elif parsed_path['datetime'] <= datetime.datetime(year=2020, month=6, day=22):
                 column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m'
@@ -258,14 +262,14 @@ def extract_motive(file_path_motive, rig):
         # raw_data = pd.read_csv(file_path_motive, names=column_names)
         raw_data.rename(columns=column_dict, inplace=True)
 
-    except pd.errors.ParserError:
+    except:
         # This occurs for files that have more complicated headers
         arena_corners, obstacle_positions, df_line = read_motive_header(file_path_motive)
         raw_data = pd.read_csv(file_path_motive, header=0, skiprows=df_line)
 
-        # Correct for mistakes in naming convention
+        # Correct for mistakes in coordinate convention
         if rig == 'VScreen':
-            if parsed_path['datetime'] <= datetime.datetime(year=2020, month=11, day=18):
+            if parsed_path['datetime'] <= datetime.datetime(year=2020, month=11, day=24):
                 column_names = ['time_m', 'trial_num',
                                 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
                                 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
@@ -274,6 +278,11 @@ def extract_motive(file_path_motive, rig):
                 # create the column name dictionary
                 column_dict = {old_col: column for old_col, column in zip(raw_data.columns, column_names)}
                 raw_data.rename(columns=column_dict, inplace=True)
+
+                # Arena coordinates need to be put into a format that aligns with DLC tracking.
+                # Need to negate the x coordinate to match video mirroring, then flip the x and z coordinates
+                arena_corners_temp = arena_corners.copy()
+                arena_corners = [[corner[1], corner[0]] for corner in arena_corners_temp]
 
     return raw_data, arena_corners, obstacle_positions
 

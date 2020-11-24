@@ -604,11 +604,7 @@ def read_motive_header(file_path):
             if line:
                 # Read the lines related to arena and obstacle positions
                 if "arena_corners" in line[0]:
-                    arena_corners_temp = loads(line[-1])
-                    # Arena coordinates need to be put into a format that aligns with DLC tracking.
-                    # Need to negate the x coordinate to match video mirroring, then flip the x and z coordinates
-                    # arena_corners_temp = [[-corner[0], corner[1]] for corner in arena_corners_temp]
-                    arena_corners = [[-corner[1], corner[0]] for corner in arena_corners_temp]
+                    arena_corners = loads(line[-1])
                 else:
                     obs_name = line[0]
                     obs_centroid = loads(line[-1])
@@ -620,6 +616,23 @@ def read_motive_header(file_path):
     return arena_corners, obstacle_positions, line_num
 
 
+def flip_DLC_y(traces):
+    # copy the traces
+    new_traces = traces.copy()
+    # Get unique column names
+    column_names = np.unique([el[:-1] for el in traces.columns])
+    # for all the unique names
+    for column in column_names:
+        # if the name + x exists, transform
+        if column + 'y' in traces.columns:
+            # get the y data
+            original_data = traces[[column + 'y']].to_numpy()
+            # transform
+            new_data = original_data * -1
+            # replace the original data
+            new_traces[[column + 'y']] = new_data
+
+    return new_traces
 
 
 
