@@ -7,6 +7,7 @@ import datetime
 from skimage import io
 from skimage.external import tifffile as tif
 import pandas as pd
+import psutil
 
 
 def load_preprocessed(file_path_in):
@@ -141,3 +142,16 @@ def parse_path(in_path):
                 'animal': '_'.join((path_parts[counter:counter+3])),
                 'result': path_parts[counter+3]}
     return out_path
+
+
+def has_handle(fpath):
+    """Check whether there's a process with a handle on this file"""
+    for proc in psutil.process_iter():
+        try:
+            for item in proc.open_files():
+                if fpath == item.path:
+                    return True
+        except Exception:
+            pass
+
+    return False
