@@ -117,7 +117,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
                                 'cricket_0_x', 'cricket_0_y'])
 
     # eliminate the cricket if there is no real cricket
-    if ('nocricket' in file_info['notes'] and 'vr' in file_info['rig']) or \
+    if ('nocricket' in file_info['notes'] and 'VR' in file_info['rig']) or \
             ('test' in file_info['result'] and 'VPrey' in file_info['rig']):
         # for all the columns
         for column in filtered_traces.columns:
@@ -225,6 +225,11 @@ def extract_motive(file_path_motive, rig):
                             , 'mouse_xrot_m', 'mouse_yrot_m', 'mouse_zrot_m'
                             , 'color_factor'
                             ]
+
+            # Correct for a stupid mistake in early programming
+            if raw_data.shape[1] > len(column_names):
+                raw_data.drop(raw_data.columns[7:-1], axis=1, inplace=True)
+                raw_data.columns = range(raw_data.shape[1])
     else:
         # get the number of vr crickets
         cricket_number = (raw_data.shape[1] - 8)/10

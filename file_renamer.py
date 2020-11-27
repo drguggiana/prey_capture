@@ -5,8 +5,8 @@ import re
 # Simple script to rename files. This was used to fix file names before a convention was decided upon.
 
 
-base_path = r"C:\Users\setup\Documents\VR_files"
-# base_path = r"J:\Drago Guggiana Nilo\Prey_capture\VRExperiment"
+# base_path = r"C:\Users\setup\Documents\VR_files"
+base_path = r"J:\Drago Guggiana Nilo\Prey_capture\VRExperiment"
 all_files = [f for f in os.listdir(base_path) if os.path.isfile(os.path.join(base_path, f))]
 
 # Renaming 15 July 2020
@@ -43,6 +43,6 @@ for ref in ref_flags:
     files_to_reference = [f for f in all_files if ref in f]
     for file in files_to_reference:
         # Find dates and match closest files
-        if "succ" in file:
+        if ("succ" in file) and ("succ_real" not in file):
             new_name = file.replace("succ", "succ_real")
             os.rename(os.path.join(base_path, file), os.path.join(base_path, new_name))

@@ -300,6 +300,7 @@ def kinematic_calculations(name, data):
         real_crickets = 1
     else:
         real_crickets = 0
+
     # check for vr crickets
     if 'vrcricket_0_x' in data.columns:
         # get the number of vr crickets

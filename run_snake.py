@@ -13,16 +13,24 @@ input_dictionary = {
     # 'analysis_type': ['trigAveCA'],
     # 'analysis_type': ['trigAveCA'],
     'analysis_type': ['aggBin', 'aggFull', 'aggEnc', ],
-    # 'result': ['test', ],
-    'result': ['succ', 'test', ],
-    'rig': ['VPrey', ],
+    # 'result': ['succ', 'test',],
+    'result': ['succ', 'fail', 'test'],
+    'rig': ['VPrey', 'VR'],
     # 'rig': ['miniscope', ],
-    # 'lighting': ['normal', 'dark', ],
-    'gtdate': ['2020-08-23T00-00-00'],
-    # 'ltdate': ['2020-08-23T00-00-00'],
-    'notes': ['blackCr_crickets_1_vrcrickets_1', 'blackCr_rewarded_crickets_0_vrcrickets_1',
-              'whiteCr_blackBG_crickets_1_vrcrickets_1', 'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_1', ],
-    # 'notes': ['vrcrickets_3']
+    'lighting': ['normal', ],
+    'gtdate': ['2020-06-23T00-00-00'],
+    # 'ltdate': ['2020-07-08T00-00-00'],
+    # 'notes': ['whiteCr_blackBG_crickets_1_vrcrickets_1', 'whiteCr_blackBG_crickets_1_vrcrickets_3',
+    #           'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_1', 'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_3',
+    #           ],
+    # 'notes': [# 'blackCr_crickets_1',
+    #           'blackCr_rewarded',
+    #           'blackCr_grayBG',
+    #           'blackCr',
+    #           'whiteCr_blackBG',
+    #           'whiteCr',
+    #           ]
+
 }
 
 # assemble the possible search query
@@ -87,7 +95,7 @@ for search_query in search_queries:
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
                               # '-F',         # (hard) force rerun everything
-                              # '-f',         # (soft) force rerun last step
+                              '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
