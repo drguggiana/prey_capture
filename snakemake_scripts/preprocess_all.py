@@ -71,8 +71,8 @@ if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates[files['rig']]
     # scale the traces accordingly
-    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates)
-    # corners = miniscope_arena
+    # filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates)
+    corners = []
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
