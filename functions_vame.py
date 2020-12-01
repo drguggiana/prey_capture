@@ -124,7 +124,7 @@ def background(path_to_file, filename, file_format='.mp4', num_frames=1000):
 
 
 def align_mouse(path_to_file, filename, file_format, crop_size, pose_list, pose_ref_index,
-                pose_flip_ref, bg, frame_count, use_video=True):
+                pose_flip_ref, bg, frame_count, use_video=True, interp_flag=True):
     # returns: list of cropped images (if video is used) and list of cropped DLC points
     #
     # parameters:
@@ -142,13 +142,15 @@ def align_mouse(path_to_file, filename, file_format, crop_size, pose_list, pose_
     images = []
     points = []
 
-    for i in pose_list:
-        for j in i:
-            if j[2] <= 0.8:
-                j[0], j[1] = np.nan, np.nan
+    # interpolate if the flag is present
+    if interp_flag:
+        for i in pose_list:
+            for j in i:
+                if j[2] <= 0.8:
+                    j[0], j[1] = np.nan, np.nan
 
-    for i in pose_list:
-        i = interpol(i)
+        for i in pose_list:
+            i = interpol(i)
 
     if use_video:
         # generate the video path
@@ -253,23 +255,37 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format, crop_size, use_
     if '_dlc.h5' in path_to_dlc:
         # data = pd.read_hdf(os.path.join(path_to_dlc, filename + '_dlc.h5'))
         data = pd.read_hdf(path_to_dlc)
-
-        # get only the columns with mouse information
-        column_list = [True if 'mouse' in el else False for el in [el[1] for el in np.array(data.columns)]]
-        data = data.iloc[:, column_list]
-
-        data_mat = pd.DataFrame.to_numpy(data)
+        # get the column names
+        column_list = [el[1] for el in np.array(data.columns)]
         # data_mat = data_mat[:, 1:]
+        # set interpolation flag
+        interp_flag = True
     else:
-        data = pd.read_hdf(path_to_dlc, 'matched_calcium')
+        data = pd.read_hdf(path_to_dlc, 'full_traces')
+        # get the column names
+        column_list = list(data.columns)
+        # set interpolation flag
+        interp_flag = False
 
+    # get only the columns with mouse information
+    column_list = [True if ('mouse' in el) and (('x' in el) or ('y' in el)) else False
+                   for el in column_list]
+    data = data.iloc[:, column_list]
+
+    data_mat = pd.DataFrame.to_numpy(data)
     # # get the filename from the dlc path
     # filename = os.path.splitext(os.path.basename(path_to_dlc))[0]
     # get the coordinates for alignment from data table
     pose_list = []
 
-    for i in range(int(data_mat.shape[1] / 3)):
-        pose_list.append(data_mat[:, i * 3:(i + 1) * 3])
+    # select the factor depending on the interpolation
+    if interp_flag:
+        factor = 3
+    else:
+        factor = 2
+
+    for i in range(int(data_mat.shape[1] / factor)):
+        pose_list.append(data_mat[:, i * factor:(i + 1) * factor])
 
         # list of reference coordinate indices for alignment
     # 0: snout, 1: forehand_left, 2: forehand_right,
@@ -294,7 +310,7 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format, crop_size, use_
         frame_count = len(data)  # Change this to an arbitrary number if you first want to test the code
 
     a, n, time_series = align_mouse(path_to_file, filename, file_format, crop_size, pose_list, pose_ref_index,
-                                    pose_flip_ref, bg, frame_count, use_video)
+                                    pose_flip_ref, bg, frame_count, use_video, interp_flag)
 
     if check_video:
         play_aligned_video(a, n, frame_count)
@@ -326,7 +342,7 @@ if __name__ == '__main__':
     # config parameters
     # path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\VideoExperiment"
     path_dlc = \
-        r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\03_13_2020_13_20_21_miniscope_MM_200129_a_succ_preproc.hdf5"
+        r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\11_14_2019_17_24_28_miniscope_dg_190806_a_succ_nofluo_preproc.hdf5"
     path_vame = r"F:\VAME_projects\VAME_prey-Nov24-2020"
     # fname = r"03_13_2020_13_20_21_miniscope_MM_200129_a_succ"
     file_format = '.avi'
