@@ -85,9 +85,13 @@ def cnmfe_function(fnames, save_path):
 
     # create the cnmf online element
     cnmf_online = cnmf.online_cnmf.OnACID(params=online_opts, dview=dview)
-    # fit the data
-    cnmf_online.fit_online()
 
+    # try, if no ROIs are found, skip
+    try:
+        # fit the data
+        cnmf_online.fit_online()
+    except ValueError:
+        print(f'no ROIs found in file {fnames}')
     # kill the server
     if 'dview' in locals():
         cm.stop_server(dview=dview)
