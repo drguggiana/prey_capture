@@ -22,7 +22,7 @@ try:
     video_path = sys.argv[1]
     out_path = sys.argv[2]
     video_data = json.loads(sys.argv[3])
-except NameError:
+except IndexError:
     # define the search string
     search_string = 'result:succ, lighting:normal, rig:miniscope, imaging:doric'
     # query the database for data to plot

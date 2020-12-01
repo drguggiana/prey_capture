@@ -19,6 +19,8 @@ input_dictionary = {
     # 'rig': ['VPrey', 'VR', ],
     'rig': ['miniscope', ],
     'lighting': ['normal', ],
+    # 'slug': ['08_21_2020_16_24_35_miniscope_DG_200617_b_succ'],
+    # 'slug': ['DG_200701_a'],
     # 'gtdate': ['2020-03-01T00-00-00'],
     # 'notes': ['crickets_0_vrcrickets_1'],
     # 'notes': ['vrcrickets_3']
@@ -65,12 +67,16 @@ for search_query in search_queries:
                              for el in target_entries},
                    'file_info': {os.path.basename(el['bonsai_path'])[:-4]: yaml.dump(el)
                                  for el in target_entries},
-                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
-                   #              else False for el in target_entries},
-                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
+                                else False for el in target_entries},
+                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
+                                    else False for el in target_entries},
+                   # 'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
+                   'cnmfe_path': paths.calcium_script,
                    'interval': [2, 3],
                    }
     # write the file
@@ -100,7 +106,8 @@ for search_query in search_queries:
     print(stdout.decode())
 
     # assemble the output path
-    if parsed_search['analysis_type'] == 'just_preprocess':
+    if parsed_search['analysis_type'] == 'just_preprocess' and \
+            os.path.isfile(os.path.join(paths.analysis_path, 'just_preprocess.txt')):
         # delete the just_preprocess file (specify de novo to no run risks)
         os.remove(os.path.join(paths.analysis_path, 'just_preprocess.txt'))
 print('yay')
