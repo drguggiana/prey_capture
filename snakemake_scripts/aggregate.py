@@ -91,7 +91,7 @@ def aggregate_encounters(data_all):
             for vrcricket in vr_cricket_list:
 
                 # get the encounters
-                encounters_temp = fp.timed_event_finder(data_in, vrcricket+'_mouse_distance', 0.03, thres_function,
+                encounters_temp = fp.timed_event_finder(data_in, vrcricket+'_mouse_distance', 0.05, thres_function,
                                                         window=encounter_window)
 
                 # if no encounters were found, skip
