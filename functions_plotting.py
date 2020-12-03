@@ -407,11 +407,11 @@ def show():
     return plt.show()
 
 
-def sort_traces(data_in):
+def sort_traces(data_in, nclusters=10):
     """Sort the traces in a data matrix based on hierarchical clustering"""
 
     # cluster the data and return the labels
-    labels = clu.AgglomerativeClustering(n_clusters=10).fit_predict(data_in)
+    labels = clu.AgglomerativeClustering(n_clusters=nclusters).fit_predict(data_in)
     # get the sorted idx of labels
     sorted_idx = np.argsort(labels)
     # return the sorted matrix

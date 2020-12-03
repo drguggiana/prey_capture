@@ -4,7 +4,7 @@ import functions_plotting as fp
 from paths import *
 from functions_misc import tk_killwindow
 from functions_preprocessing import trim_bounds, median_discontinuities, interpolate_segments, eliminate_singles, \
-    nan_large_jumps, find_frozen_tracking, nan_jumps_dlc, get_time, parse_bonsai
+    nan_large_jumps, find_frozen_tracking, nan_jumps_dlc, get_time, parse_bonsai, read_motive_header, flip_DLC_y
 from functions_io import parse_path
 import numpy as np
 import pandas as pd
@@ -58,9 +58,10 @@ def run_preprocess(file_path_bonsai, save_file, file_info,
     filtered_traces['mouse'] = parsed_path['animal']
     filtered_traces['datetime'] = parsed_path['datetime']
 
-    # eliminate the cricket if there is no real cricket
+    # eliminate the cricket if there is no real cricket or this is a VScreen experiment
     if ('nocricket' in file_info['notes'] and 'VR' in file_info['rig']) or \
-            ('real' not in file_info['notes'] and 'VPrey' in file_info['rig']):
+            ('real' not in file_info['notes'] and 'VPrey' in file_info['rig']) or \
+            ('VScreen' in file_info['rig']):
         # for all the columns
         for column in filtered_traces.columns:
             if 'cricket' in column:
@@ -87,22 +88,43 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     # get the column names
     column_names = raw_h5.columns
     # take only the relevant columns
-    filtered_traces = pd.DataFrame(raw_h5[[
-        [el for el in column_names if ('mouseHead' in el) and ('x' in el)][0],
-        [el for el in column_names if ('mouseHead' in el) and ('y' in el)][0],
-        [el for el in column_names if ('mouseBody' in el) and ('x' in el)][0],
-        [el for el in column_names if ('mouseBody' in el) and ('y' in el)][0],
-        [el for el in column_names if ('mouseBase' in el) and ('x' in el)][0],
-        [el for el in column_names if ('mouseBase' in el) and ('y' in el)][0],
-        [el for el in column_names if ('cricketHead' in el) and ('x' in el)][0],
-        [el for el in column_names if ('cricketHead' in el) and ('y' in el)][0],
-        [el for el in column_names if ('cricketBody' in el) and ('x' in el)][0],
-        [el for el in column_names if ('cricketBody' in el) and ('y' in el)][0],
-    ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
-                            'cricket_0_head_x', 'cricket_0_head_y', 'cricket_0_x', 'cricket_0_y'])
+    try:
+        # DLC in small arena
+        filtered_traces = pd.DataFrame(raw_h5[[
+            [el for el in column_names if ('mouseHead' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseHead' in el) and ('y' in el)][0],
+            [el for el in column_names if ('mouseBody' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseBody' in el) and ('y' in el)][0],
+            [el for el in column_names if ('mouseBase' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseBase' in el) and ('y' in el)][0],
+            [el for el in column_names if ('cricketHead' in el) and ('x' in el)][0],
+            [el for el in column_names if ('cricketHead' in el) and ('y' in el)][0],
+            [el for el in column_names if ('cricketBody' in el) and ('x' in el)][0],
+            [el for el in column_names if ('cricketBody' in el) and ('y' in el)][0],
+        ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
+                                'cricket_0_head_x', 'cricket_0_head_y', 'cricket_0_x', 'cricket_0_y'])
+    except IndexError:
+        # DLC in VR arena
+        filtered_traces = pd.DataFrame(raw_h5[[
+            [el for el in column_names if ('head' in el) and ('x' in el)][0],
+            [el for el in column_names if ('head' in el) and ('y' in el)][0],
+            [el for el in column_names if ('body_center' in el) and ('x' in el)][0],
+            [el for el in column_names if ('body_center' in el) and ('y' in el)][0],
+            [el for el in column_names if ('tail_base' in el) and ('x' in el)][0],
+            [el for el in column_names if ('tail_base' in el) and ('y' in el)][0],
+            [el for el in column_names if ('cricket' in el) and ('x' in el)][0],
+            [el for el in column_names if ('cricket' in el) and ('y' in el)][0],
+        ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
+                                'cricket_0_x', 'cricket_0_y'])
 
-    # eliminate the cricket if there is no real cricket
-    if 'nocricket' in file_info['notes'] and 'vr' in file_info['rig']:
+        # The camera that records video in the VR arena flips the video about the
+        # horizontal axis when saving. To correct, flip the y coordinates from DLC
+        filtered_traces = flip_DLC_y(filtered_traces)
+
+    # eliminate the cricket if there is no real cricket or this is a VScreen experiment
+    if ('nocricket' in file_info['notes'] and 'VR' in file_info['rig']) or \
+            ('test' in file_info['result'] and 'VPrey' in file_info['rig']) or \
+            ('VScreen' in file_info['rig']):
         # for all the columns
         for column in filtered_traces.columns:
             if 'cricket' in column:
@@ -185,53 +207,85 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
 def extract_motive(file_path_motive, rig):
     """Extract the encoded traces in the current motive file"""
 
-    # read the data
-    raw_data = pd.read_csv(file_path_motive, header=None)
-
     # parse the path
     parsed_path = parse_path(file_path_motive)
-    # select the appropriate header
-    if rig == 'VR':
-        # if it's before the sync files, exclude the last column
-        if parsed_path['datetime'] <= datetime.datetime(year=2019, month=11, day=10):
-            column_names = ['time_m', 'mouse_x_m', 'mouse_z_m', 'mouse_y_m'
-                            , 'mouse_xrot_m', 'mouse_zrot_m', 'mouse_yrot_m'
-                            , 'vrcricket_0_x_m', 'vrcricket_0_z_m', 'vrcricket_0_y_m'
-                            ]
-        elif parsed_path['datetime'] <= datetime.datetime(year=2020, month=6, day=22):
-            column_names = ['time_m', 'mouse_x_m', 'mouse_z_m', 'mouse_y_m'
-                            , 'mouse_xrot_m', 'mouse_zrot_m', 'mouse_yrot_m'
-                            , 'vrcricket_0_x_m', 'vrcricket_0_z_m', 'vrcricket_0_y_m'
-                            , 'color_factor'
-                            ]
+
+    # set up empty variables for arena corner and obstacle positions
+    arena_corners = []
+    obstacle_positions = []
+
+    # read the data
+    try:
+        raw_data = pd.read_csv(file_path_motive, header=None)
+
+        # parse the path
+        parsed_path = parse_path(file_path_motive)
+        # select the appropriate header
+        if rig == 'VR':
+            # if it's before the sync files, exclude the last column
+            if parsed_path['datetime'] <= datetime.datetime(year=2019, month=11, day=10):
+                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                                'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
+                                'vrcricket_0_y_m', 'vrcricket_0_z_m', 'vrcricket_0_x_m'
+                                ]
+            elif parsed_path['datetime'] <= datetime.datetime(year=2020, month=6, day=22):
+                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m'
+                                , 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
+                                , 'vrcricket_0_y_m', 'vrcricket_0_z_m', 'vrcricket_0_x_m'
+                                , 'color_factor'
+                                ]
+            else:
+                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m'
+                                , 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
+                                , 'color_factor'
+                                ]
         else:
-            column_names = ['time_m', 'mouse_x_m', 'mouse_z_m', 'mouse_y_m'
-                            , 'mouse_xrot_m', 'mouse_zrot_m', 'mouse_yrot_m'
-                            , 'color_factor'
+            # get the number of vr crickets
+            # TODO: make this not arbitrary
+            cricket_number = (raw_data.shape[1] - 8)/10
+            # define the cricket template
+            cricket_template = ['_y', '_z', '_x', '_yrot', '_zrot', '_xrot',
+                                '_speed', '_state', '_motion', '_encounter']
+            # assemble the cricket fields
+            cricket_fields = ['vrcricket_'+str(int(number))+el
+                              for number in np.arange(cricket_number) for el in cricket_template]
+
+            column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m'
+                            , 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
+                            ] + cricket_fields + [
+                            'color_factor'
                             ]
-    else:
-        # get the number of vr crickets
-        # TODO: make this not arbitrary
-        cricket_number = (raw_data.shape[1] - 8)/10
-        # define the cricket template
-        cricket_template = ['_x', '_z', '_y', '_xrot', '_zrot', '_yrot',
-                            '_speed', '_state', '_motion', '_encounter']
-        # assemble the cricket fields
-        cricket_fields = ['vrcricket_'+str(int(number))+el
-                          for number in np.arange(cricket_number) for el in cricket_template]
+        # create the column name dictionary
+        column_dict = {idx: column for idx, column in enumerate(column_names)}
 
-        column_names = ['time_m', 'mouse_x_m', 'mouse_z_m', 'mouse_y_m'
-                        , 'mouse_xrot_m', 'mouse_zrot_m', 'mouse_yrot_m'
-                        ] + cricket_fields + [
-                        'color_factor'
-                        ]
-    # create the column name dictionary
-    column_dict = {idx: column for idx, column in enumerate(column_names)}
+        # # read the data
+        # raw_data = pd.read_csv(file_path_motive, names=column_names)
+        raw_data.rename(columns=column_dict, inplace=True)
 
-    # # read the data
-    # raw_data = pd.read_csv(file_path_motive, names=column_names)
-    raw_data.rename(columns=column_dict, inplace=True)
-    return raw_data
+    except:
+        # This occurs for files that have more complicated headers
+        arena_corners, obstacle_positions, df_line = read_motive_header(file_path_motive)
+        raw_data = pd.read_csv(file_path_motive, header=0, skiprows=df_line)
+
+        # Correct for mistakes in coordinate convention
+        if rig == 'VScreen':
+            if parsed_path['datetime'] <= datetime.datetime(year=2020, month=11, day=24):
+                column_names = ['time_m', 'trial_num',
+                                'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                                'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
+                                'target_y_m', 'target_z_m', 'target_x_m', 'color_factor']
+
+                # create the column name dictionary
+                column_dict = {old_col: column for old_col, column in zip(raw_data.columns, column_names)}
+                raw_data.rename(columns=column_dict, inplace=True)
+
+                # Arena coordinates need to be put into a format that aligns with DLC tracking.
+                # Need to negate the x coordinate to match video mirroring, then flip the x and z coordinates
+                arena_corners_temp = arena_corners.copy()
+                arena_corners = [[corner[1], corner[0]] for corner in arena_corners_temp]
+
+    return raw_data, arena_corners, obstacle_positions
+
 
 
 # if __name__ == '__main__':

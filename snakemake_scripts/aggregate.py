@@ -91,7 +91,7 @@ def aggregate_encounters(data_all):
             for vrcricket in vr_cricket_list:
 
                 # get the encounters
-                encounters_temp = fp.timed_event_finder(data_in, vrcricket+'_mouse_distance', 0.03, thres_function,
+                encounters_temp = fp.timed_event_finder(data_in, vrcricket+'_mouse_distance', 0.05, thres_function,
                                                         window=encounter_window)
 
                 # if no encounters were found, skip
@@ -111,8 +111,12 @@ def aggregate_encounters(data_all):
         if 'cricket_0_x' in data_in.columns:
             # get the encounters
             # 100 was used for the poster
-            encounters_temp = fp.timed_event_finder(data_in, 'cricket_0_mouse_distance', 19.5, thres_function,
+            # encounters_temp = fp.timed_event_finder(data_in, 'cricket_0_mouse_distance', 19.5, thres_function,
+            #                                         window=encounter_window)
+            # This was changed to real units with the DLC to Motive transformation
+            encounters_temp = fp.timed_event_finder(data_in, 'cricket_0_mouse_distance', 0.03, thres_function,
                                                     window=encounter_window)
+
             # if no encounters were found, skip
             if len(encounters_temp) == 0:
                 continue
