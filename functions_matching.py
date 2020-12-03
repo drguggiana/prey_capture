@@ -1,6 +1,5 @@
 from sklearn.preprocessing import scale
 from scipy.interpolate import interp1d
-from scipy.signal import correlate2d
 from scipy import signal
 import cv2
 from functions_plotting import *
@@ -314,6 +313,7 @@ def match_motive(motive_traces, sync_path, kinematics_data):
 
     return full_dataframe
 
+
 def consecutive(data, stepsize=1):
     return np.split(data, np.where(np.diff(data) != stepsize)[0]+1)
 
@@ -440,7 +440,6 @@ def align_nonaffine(input_traces):
             output_traces[[column + 'x', column + 'y']] = new_data[:, :2]
 
     return output_traces
-
 
 
 def align_spatial(input_traces):

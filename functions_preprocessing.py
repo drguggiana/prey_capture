@@ -635,7 +635,6 @@ def flip_DLC_y(traces):
     return new_traces
 
 
-
 # class and functions taken from https://stackoverflow.com/questions/16312871/python-removing-overlapping-lists
 
 
