@@ -147,7 +147,7 @@ def kinematic_calculations(name, data):
         real_crickets = 0
 
     # check for vr crickets
-    if 'vrcricket_0_x' or 'target_x_m' in data.columns:
+    if ('vrcricket_0_x' in data.columns) or ('target_x_m' in data.columns):
         # get the number of vr crickets
         vr_cricket_list = np.unique([el[:11] for el in data.columns if 'vrcricket' in el])
         # If there is no vr_cricket, but this is instead a vr_target

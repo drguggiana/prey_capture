@@ -254,11 +254,19 @@ entry_data = {
     'lighting': files['lighting'],
     'imaging': files['imaging'],
     'slug': files['slug'] + '_preprocessing',
-    'notes': 'crickets_' + str(real_crickets) + '_vrcrickets_' + str(vr_crickets) if files['notes'] == 'BLANK' else
-             files['notes'] + '_crickets_' + str(real_crickets) + '_vrcrickets_' + str(vr_crickets),
     'video_analysis': [files['url']] if files['rig'] == 'miniscope' else [],
     'vr_analysis': [] if files['rig'] == 'miniscope' else [files['url']],
 }
+
+# Assemble the notes section for the entry data
+if '_vrcrickets_' in files['notes']:
+    # Add nothing to the notes section. It's already been done
+    entry_data['notes'] = files['notes']
+elif files['notes'] == 'BLANK':
+    # If it's blank, then add
+    entry_data['notes'] = 'crickets_' + str(real_crickets) + '_vrcrickets_' + str(vr_crickets)
+else:
+    entry_data['notes'] = files['notes'] + '_crickets_' + str(real_crickets) + '_vrcrickets_' + str(vr_crickets),
 
 # if the notes field hasn't been updated
 if '_vrcrickets_' not in files['notes']:
