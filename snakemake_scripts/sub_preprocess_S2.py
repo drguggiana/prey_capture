@@ -319,8 +319,10 @@ def kinematic_calculations(name, data):
             # process the cricket related data
             cricket_data = cricket_processing(cricket_coord, data, mouse_coord_hd, mouse_heading,
                                               kine_data, vr=True, cricket_name=vr_cricket)
+            # also grab the vr cricket states
+            cricket_states = data[[vr_cricket+'_state', vr_cricket+'_motion', vr_cricket+'_encounter']]
             # concatenate the cricket data
-            kine_data = pd.concat([kine_data, cricket_data], axis=1)
+            kine_data = pd.concat([kine_data, cricket_data, cricket_states], axis=1)
         # set the cricket number
         vr_crickets = len(vr_cricket_list)
     else:
