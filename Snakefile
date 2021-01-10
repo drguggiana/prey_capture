@@ -104,6 +104,19 @@ rule triggered_averages:
           "snakemake_scripts/trigAve.py"
 
 
+rule match_cells:
+    input:
+        expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files']),
+    output:
+        os.path.join(paths.analysis_path, 'cellMatch_{query}.hdf5'),
+    params:
+        cnmfe_path=config['cnmfe_path'],
+        info=yaml_to_json,
+    shell:
+          r'conda activate caiman & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
+
+
+
 rule visualize_aggregates:
     input:
         os.path.join(paths.analysis_path, "preprocessing_{query}.hdf5")
