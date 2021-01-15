@@ -9,6 +9,7 @@ import functions_bondjango as bd
 import os
 import yaml
 import matplotlib.pyplot as plt
+from pandas import read_hdf
 
 
 def preprocess_selector(csv_path, saving_path, file_info):
@@ -37,7 +38,7 @@ except NameError:
     # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
     # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
     # search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
-    search_string = 'slug:07_09_2020_11_14_45_VPrey_DG_200526_c_blackCr_rewarded'
+    search_string = 'slug:11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d'
     # 11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d
     # 09_01_2020_11_07_48_VPrey_DG_200526_b_succ_real_blackCr
     # 07_03_2020_15_36_49_VPrey_DG_200526_d_test_rewarded
@@ -157,7 +158,9 @@ elif files['rig'] in ['VR', 'VPrey'] and \
 
 elif files['rig'] in ['VScreen']:
 
-    # TODO: make sure the constants are set to values that make sense for the vr arena
+    # load the data for the trial structure and parameters
+    trials = read_hdf(files['screen_path'], key='trial_set')
+    params = read_hdf(files['screen_path'], key='params')
 
     # get the video tracking data
     out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
@@ -177,7 +180,12 @@ elif files['rig'] in ['VScreen']:
     filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
 
     # run the preprocessing kinematic calculations
+    # also saves the data
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+
+    # For these trials, save the trial set and the trial parameters to the output file
+    trials.to_hdf(out_path, key='trial_set', mode='a')
+    params.to_hdf(out_path, key='params', mode='a')
 
 else:
     # TODO: make sure the constants are set to values that make sense for the vr arena
