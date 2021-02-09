@@ -9,22 +9,52 @@ import os
 # define the type of analysis
 input_dictionary = {
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
-    # 'analysis_type': ['aggFull'],
+    # 'analysis_type': ['aggFull', ],
     # 'analysis_type': ['trigAveCA'],
     # 'analysis_type': ['trigAveCA'],
-    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
-    'analysis_type': ['just_preprocess'],
+    'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
+    # 'analysis_type': ['just_preprocess'],
     # 'result': ['test', ],
     'result': ['fail', ],
+
     # 'rig': ['VPrey', 'VR', ],
-    'rig': ['miniscope', ],
+    # 'rig': ['miniscope', ],
+    'rig': ['VPrey'],
     'lighting': ['normal', ],
-    # 'slug': ['08_21_2020_16_24_35_miniscope_DG_200617_b_succ'],
-    # 'slug': ['DG_200701_a'],
-    # 'gtdate': ['2020-03-01T00-00-00'],
-    # 'notes': ['crickets_0_vrcrickets_1'],
-    # 'notes': ['vrcrickets_3']
+
+    # 'gtdate': ['2020-08-24T00-00-00'],
+    'gtdate': ['2020-07-07T00-00-00'],
+    # 'ltdate': ['2020-07-06T00-00-00'],
+    # 'notes': ['real_crickets_1_vrcrickets_1', 'real_crickets_1_vrcrickets_3',
+    #           'rewarded_crickets_0_vrcrickets_1', 'rewarded_crickets_0_vrcrickets_3'
+    #           ]
+    # 'notes': ['blackCr_crickets_1_vrcrickets_1', 'blackCr_rewarded_crickets_0_vrcrickets_1',
+    #           'blackCr_nonrewarded_crickets_0_vrcrickets_1',
+    #           'blackCr_crickets_1_vrcrickets_3', 'blackCr_rewarded_crickets_0_vrcrickets_3',
+    #           'blackCr_nonrewarded_crickets_0_vrcrickets_3',
+    #           'blackCr_crickets_1_vrcrickets_0',
+    #           'blackCr_grayBG_crickets_1_vrcrickets_1', 'blackCr_grayBG_rewarded_crickets_0_vrcrickets_1',
+    #           'blackCr_grayBG_crickets_1_vrcrickets_3', 'blackCr_grayBG_rewarded_crickets_0_vrcrickets_3',
+    #           'whiteCr_blackBG_crickets_1_vrcrickets_1', 'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_1',
+    #           'whiteCr_blackBG_crickets_1_vrcrickets_3', 'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_3',
+    #           'whiteCr_grayBG_crickets_1_vrcrickets_1', 'whiteCr_grayBG_rewarded_crickets_0_vrcrickets_1',
+    #           'whiteCr_grayBG_crickets_1_vrcrickets_3', 'whiteCr_grayBG_rewarded_crickets_0_vrcrickets_3',
+    #           ],
+    # 'notes': ['obstacle_crickets_1_vrcrickets_1', 'obstacle_rewarded_crickets_0_vrcrickets_1',
+    #           'obstacle_crickets_1_vrcrickets_3', 'obstacle_rewarded_crickets_0_vrcrickets_3',
+    #           ]
+    # 'notes': ['blackCr_crickets_1',
+    #           'blackCr_rewarded',
+    #           'blackCr_grayBG_crickets_1',
+    #           'blackCr_grayBG_rewarded',
+    #           'whiteCr_blackBG_crickets_1',
+    #           'whiteCr_blackBG_rewarded',
+    #           'whiteCr_grayBG_crickets_1',
+    #           'whiteCr_grayBG_rewarded',
+    #           ]
+
 }
+
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
 # for all the search queries
@@ -73,6 +103,7 @@ for search_query in search_queries:
                    'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
                                     else False for el in target_entries},
                    # 'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
@@ -96,8 +127,9 @@ for search_query in search_queries:
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
                               # '-F',         # (hard) force rerun everything
-                              # '-f',         # (soft) force rerun last step
+                              '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
+                              # '--rerun-incomplete',
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)
