@@ -357,7 +357,10 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
 
     # get the corners
     if manual_coordinates is None:
-        corner_coordinates = find_corners(db_data['avi_path'], num_frames=50, crop_flag=crop_flag)
+        try:
+            corner_coordinates = find_corners(db_data['avi_path'], num_frames=50, crop_flag=crop_flag)
+        except IndexError:
+            corner_coordinates = find_corners(db_data['avi_path'], num_frames=150, crop_flag=crop_flag)
     else:
         corner_coordinates = np.array(manual_coordinates)
 

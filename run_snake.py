@@ -10,14 +10,14 @@ import numpy as np
 # define the type of analysis
 input_dictionary = {
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
-    # 'analysis_type': ['aggFull'],
+    'analysis_type': ['aggFullCA'],
     # 'analysis_type': ['trigAveCA'],
     # 'analysis_type': ['trigAveCA'],
-    'analysis_type': ['cellMatch', ],
+    # 'analysis_type': ['cellMatch', ],
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
     # 'analysis_type': ['just_preprocess'],
     # 'result': ['test', ],
-    'result': ['succ', 'fail'],
+    'result': ['succ', ],
     # 'rig': ['VPrey', 'VR', ],
     'rig': ['miniscope', ],
     'lighting': ['normal', ],
@@ -116,8 +116,9 @@ for idx, target_entries in enumerate(new_queries):
                    # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
                    #              else False for el in target_entries},
                    'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
-                   'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
-                                    else False for el in target_entries},
+                   # 'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
+                   #                  else False for el in target_entries},
+                   'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
