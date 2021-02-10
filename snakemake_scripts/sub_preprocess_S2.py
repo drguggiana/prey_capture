@@ -164,8 +164,15 @@ def kinematic_calculations(name, data):
             # process the cricket related data
             cricket_data = cricket_processing(cricket_coord, data, mouse_coord_hd, mouse_heading,
                                               kine_data, vr=True, cricket_name=vr_cricket)
+            # also grab the vr cricket states
+            try:
+                cricket_states = data[[vr_cricket+'_state', vr_cricket+'_motion', vr_cricket+'_encounter']]
+            except KeyError:
+                # There are no cricket animation in the VScreens trial, but we do
+                # need the trial number data for later
+                cricket_states = data[['trial_num']]
             # concatenate the cricket data
-            kine_data = pd.concat([kine_data, cricket_data], axis=1)
+            kine_data = pd.concat([kine_data, cricket_data, cricket_states], axis=1)
         # set the cricket number
         vr_crickets = len(vr_cricket_list)
     else:
