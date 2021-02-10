@@ -39,19 +39,16 @@ except NameError:
     # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
     # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
     # search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
-    search_string = 'slug:09_15_2020_14_23_02_VPrey_DG_200526_d_test_whiteCr_grayBG_rewarded'
-    # 11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d
-    # 09_01_2020_11_07_48_VPrey_DG_200526_b_succ_real_blackCr
-    # 07_03_2020_15_36_49_VPrey_DG_200526_d_test_rewarded
-    # 07_10_2020_12_22_01_VPrey_DG_200526_a_test_nonrewarded_blackCr
-    # 07_06_2020_14_49_52_VPrey_DG_200526_b_test_rewarded_obstacle
-    # 07_09_2020_12_14_14_VPrey_DG_200526_d_test_nonrewarded_blackCr
-    # 06_24_2020_11_20_55_VPrey_DG_200526_a_test
-    # 07_03_2020_14_58_41_DG_200526_c_succ
-    # 06_30_2020_16_48_19_VPrey_DG_200526_d_test_lowFR
-    # search_string = 'result:succ, lighting:normal, rig:miniscope'
 
-    search_string = 'slug:03_12_2020_16_52_33_miniscope_MM_200129_b_succ'
+    # search_string = 'slug:08_24_2020_11_24_27_VPrey_DG_200526_b_test_whiteCr_blackBG_rewarded'
+    # search_string = 'slug:08_06_2020_18_07_32_miniscope_DG_200701_a_succ'
+    search_string = 'slug:09_08_2020_15_00_07_miniscope_DG_200701_a_succ'
+    # search_string = 'result:fail, lighting:normal, rig:miniscope'
+
+    # search_string = 'slug:11_25_2019_15_28_57_miniscope_MM_191106_a_fail_nomini'
+    # search_string = 'slug:03_05_2020_15_56_12_miniscope_MM_200129_b_succ'
+    # search_string = 'slug:03_13_2020_13_20_21_miniscope_MM_200129_a_succ'
+    # search_string = 'slug:12_04_2019_15_56_34_miniscope_MM_191107_a_succ_nomini'
 
     # define the target model
     target_model = 'video_experiment'

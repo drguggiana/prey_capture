@@ -170,9 +170,9 @@ try:
     date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in path_info]
 except NameError:
     # define the analysis type
-    analysis_type = 'aggEnc'
+    analysis_type = 'aggFullCA'
     # define the search query
-    search_query = 'result:succ,lighting:normal,rig:vr'
+    search_query = 'result:succ,lighting:normal,rig:miniscope,imaging:doric,slug:08_06_2020'
     # define the origin model
     ori_type = 'preprocessing'
     # get a dictionary with the search terms
@@ -180,7 +180,7 @@ except NameError:
 
     # get the info and paths
     path_info, paths_all, parsed_query, date_list, animal_list = \
-        fd.fetch_preprocessing(search_query + ', =analysis_type:' + ori_type)
+        fd.fetch_preprocessing(search_query + ', analysis_type:' + ori_type)
     # get the raw output_path
     dict_path['analysis_type'] = analysis_type
     basic_name = '_'.join(dict_path.values())
