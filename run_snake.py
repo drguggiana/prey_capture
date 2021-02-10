@@ -4,6 +4,7 @@ import functions_bondjango as bd
 import paths
 import functions_data_handling as fd
 import os
+import numpy as np
 
 
 # define the type of analysis
@@ -61,10 +62,20 @@ input_dictionary = {
     #           'whiteCr_grayBG_rewarded',
     #           ]
 
+
+    # 'slug': ['08_10_2020_16_41_32_miniscope_DG_200701_a_succ'],
+    # 'slug': ['DG_200701_a'],
+    # 'gtdate': ['2020-03-01T00-00-00'],
+    # 'notes': ['crickets_0_vrcrickets_1'],
+    # 'notes': ['vrcrickets_3']
 }
 
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
+# allocate a list to store the full queries
+full_queries = []
+full_paths = []
+full_parsed = []
 # for all the search queries
 for search_query in search_queries:
 
@@ -99,18 +110,62 @@ for search_query in search_queries:
         continue
     else:
         print(str(len(target_entries)) + ' entries: ' + search_query)
+    # add the queries to the list
+    full_queries.append(target_entries)
+    full_paths.append(target_path)
+    full_parsed.append(parsed_search)
 
+# allocate a list for the mice
+new_queries = []
+new_paths = []
+new_parsed = []
+mouse_list = []
+# for all the search queries
+for idx, search_query in enumerate(full_parsed):
+    # modify query if cellMatch
+    if search_query['analysis_type'] == 'cellMatch':
+        # extract only the mice from the search query that have calcium
+        mouse_list.append(np.unique([el['mouse'] for el in full_queries[idx] if len(el['fluo_path']) > 0]))
+    else:
+        new_queries.append(full_queries[idx])
+        new_paths.append(full_paths[idx])
+        new_parsed.append(search_query)
+# consolidate the mice in the list
+mouse_list = np.unique([el for sublist in mouse_list for el in sublist])
+
+# get the entries
+for idx, mouse in enumerate(mouse_list):
+    target_entries = bd.query_database('vr_experiment', 'slug:' + mouse)
+    target_entries.append(bd.query_database('video_experiment', 'slug:' + mouse))
+
+    target_entries = [el for sublist in target_entries for el in sublist]
+    # filter out the no fluo
+    target_entries = [el for el in target_entries if len(el['fluo_path']) > 0]
+    # append to the query list
+    new_queries.append(target_entries)
+    new_parsed.append({'analysis_type': 'cellMatch'})
+    new_paths.append([])
+
+# for all the full queries
+for idx, target_entries in enumerate(new_queries):
+
+    parsed_search = new_parsed[idx]
+    target_path = new_paths[idx]
     # create the config file
     config_dict = {'files': {os.path.basename(el['bonsai_path'])[:-4]: os.path.basename(el['bonsai_path'])[:-4]
                              for el in target_entries},
                    'file_info': {os.path.basename(el['bonsai_path'])[:-4]: yaml.dump(el)
                                  for el in target_entries},
-                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
-                                else False for el in target_entries},
-                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
+                   #              else False for el in target_entries},
+                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   # 'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
+                   #                  else False for el in target_entries},
+                   'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
+                   'cnmfe_path': paths.calcium_script,
                    'interval': [2, 3],
                    }
     # write the file
@@ -141,7 +196,8 @@ for search_query in search_queries:
     print(stdout.decode())
 
     # assemble the output path
-    if parsed_search['analysis_type'] == 'just_preprocess':
+    if parsed_search['analysis_type'] == 'just_preprocess' and \
+            os.path.isfile(os.path.join(paths.analysis_path, 'just_preprocess.txt')):
         # delete the just_preprocess file (specify de novo to no run risks)
         os.remove(os.path.join(paths.analysis_path, 'just_preprocess.txt'))
 print('yay')

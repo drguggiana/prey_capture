@@ -7,6 +7,7 @@ from functions_misc import add_edges, interp_trace, normalize_matrix
 import h5py
 import pandas as pd
 import os
+import time
 
 
 def align_traces_maxrate(frame_rate_1, frame_rate_2, data_1, data_2, sign_vector, frame_times, cricket, z=1):
@@ -184,9 +185,24 @@ def match_traces(data_3d, data_2d, frame_time_list, coordinate_list, cricket):
 
 def match_calcium(calcium_path, sync_path, kinematics_data):
     """Match the kinematic and calcium data provided based on the sync file provided"""
-    # load the calcium data
+
+    # # iteratively check the file is there, wait, and after 5 attempts skip
+    # for i in np.arange(5):
+    #     # check if the file is there
+    #     if os.path.isfile(calcium_path):
+
+    # time.sleep(30)
+            # load the calcium data
+    # try:
     with h5py.File(calcium_path) as f:
-        calcium_data = np.array(f['calcium_data'])
+        # calcium_data = np.array(f['calcium_data'])
+        calcium_data = np.array(f['estimates/C'])
+                # break
+    # except:
+    #     raise NameError(calcium_path)
+        # else:
+        #     # wait 5 seconds and go to the next iteration
+        #     time.sleep(5)
 
     # # get the time vector from bonsai
     # bonsai_time = filtered_traces.time

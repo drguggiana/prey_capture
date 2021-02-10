@@ -28,6 +28,7 @@ def preprocess_selector(csv_path, saving_path, file_info):
 try:
     # get the path to the file, parse and turn into a dictionary
     raw_path = snakemake.input[0]
+    calcium_path = snakemake.input[1]
     files = yaml.load(snakemake.params.info, Loader=yaml.FullLoader)
     # get the save paths
     save_path = snakemake.output[0]
@@ -35,10 +36,11 @@ try:
 except NameError:
     # USE FOR DEBUGGING ONLY (need to edit the search query and the object selection)
     # define the search string
+
     # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
     # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
     # search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
-    search_string = 'slug:11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d'
+    # search_string = 'slug:11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d'
     # 11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d
     # 09_01_2020_11_07_48_VPrey_DG_200526_b_succ_real_blackCr
     # 07_03_2020_15_36_49_VPrey_DG_200526_d_test_rewarded
@@ -50,16 +52,22 @@ except NameError:
     # 06_30_2020_16_48_19_VPrey_DG_200526_d_test_lowFR
     # search_string = 'result:succ, lighting:normal, rig:miniscope'
 
+    # search_string = 'slug:08_24_2020_11_24_27_VPrey_DG_200526_b_test_whiteCr_blackBG_rewarded'
+    # search_string = 'slug:08_06_2020_18_07_32_miniscope_DG_200701_a_succ'
+    search_string = 'slug:09_08_2020_15_00_07_miniscope_DG_200701_a_succ'
+    # search_string = 'result:fail, lighting:normal, rig:miniscope'
+
     # search_string = 'slug:11_25_2019_15_28_57_miniscope_MM_191106_a_fail_nomini'
     # search_string = 'slug:03_05_2020_15_56_12_miniscope_MM_200129_b_succ'
     # search_string = 'slug:03_13_2020_13_20_21_miniscope_MM_200129_a_succ'
     # search_string = 'slug:12_04_2019_15_56_34_miniscope_MM_191107_a_succ_nomini'
 
     # define the target model
-    target_model = 'vr_experiment'
+    target_model = 'video_experiment'
     # get the queryset
     files = bd.query_database(target_model, search_string)[0]
     raw_path = files['bonsai_path']
+    calcium_path = files['bonsai_path'][:-4] + '_calcium.hdf5'
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
                              os.path.basename(files['bonsai_path'][:-4]))+'_preproc.hdf5'
@@ -77,8 +85,8 @@ if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates[files['rig']]
     # scale the traces accordingly
-    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates)
-    # corners = miniscope_arena
+    # filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates)
+    corners = []
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
@@ -93,13 +101,13 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates[files['rig']]
     # scale the traces accordingly
-    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates)
-    # corners = miniscope_arena
+    # filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates)
+    corners = []
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
 
-    # get the calcium file path
-    calcium_path = files['fluo_path']
+    # # get the calcium file path
+    # calcium_path = files['fluo_path']
 
     # find the sync file
     sync_path = files['sync_path']

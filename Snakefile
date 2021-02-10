@@ -33,9 +33,27 @@ def dlc_input_selector(wildcards):
     else:
         return os.path.join(config["target_path"], config["files"][wildcards.file] + '.csv')
 
+rule calcium_extraction:
+    input:
+          lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.tif'),
+    output:
+          os.path.join(config["target_path"], "{file}_calcium.hdf5"),
+    params:
+          info=yaml_to_json,
+          cnmfe_path=config["cnmfe_path"],
+    shell:
+          r'conda activate caiman & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
+
+def calcium_input_selector(wildcards):
+    if config["calcium_flag"][wildcards.file]:
+        return rules.calcium_extraction.output
+    else:
+        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
+
 rule preprocess:
     input:
-          dlc_input_selector
+          dlc_input_selector,
+          calcium_input_selector,
     output:
           os.path.join(paths.analysis_path, "{file}_preproc.hdf5"),
           os.path.join(paths.analysis_path, "{file}.png")
@@ -84,6 +102,19 @@ rule triggered_averages:
           interval=config['interval'],
     script:
           "snakemake_scripts/trigAve.py"
+
+
+rule match_cells:
+    input:
+        expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files']),
+    output:
+        os.path.join(paths.analysis_path, 'cellMatch_{query}.hdf5'),
+    params:
+        cnmfe_path=config['cnmfe_path'],
+        info=yaml_to_json,
+    shell:
+          r'conda activate caiman & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
+
 
 
 rule visualize_aggregates:
