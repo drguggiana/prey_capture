@@ -297,7 +297,7 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format, crop_size, use_
     pose_ref_index = [0, 2]
 
     # list of 2 reference coordinate indices for avoiding flipping
-    pose_flip_ref = [0, 1]
+    pose_flip_ref = [0, 2]
 
     if use_video:
         # compute background
@@ -336,7 +336,7 @@ def run_alignment(path_dlc, path_file, file_format, crop_size, use_video=False, 
 
     # define the output path
     output_path = os.path.join(path_file, 'data', file_name, file_name + '-PE-seq.npy')
-    # np.save(output_path, egocentric_time_series)
+    np.save(output_path, egocentric_time_series)
 
     return egocentric_time_series
 
@@ -351,11 +351,12 @@ if __name__ == '__main__':
     # path_dlc = \
     #     r"J:\Drago Guggiana Nilo\Prey_capture\VideoExperiment\11_11_2019_00_41_27_miniscope_DG_190806_a_fail_nomini_dlc.h5"
 
-    path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\09_08_2020_15_00_07_miniscope_DG_200701_a_succ_preproc.hdf5"
+    # path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\09_08_2020_15_00_07_miniscope_DG_200701_a_succ_preproc.hdf5"
+    path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\11_11_2019_00_41_27_miniscope_DG_190806_a_fail_nomini_preproc.hdf5"
     path_vame = r"F:\VAME_projects\VAME_prey-Dec1-2020"
     # fname = r"03_13_2020_13_20_21_miniscope_MM_200129_a_succ"
     file_format = '.avi'
-    crop_size = (500, 200)
+    crop_size = (1, 1)
     use_video = False
     check_video = False
 

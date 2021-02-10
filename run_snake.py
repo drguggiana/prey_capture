@@ -12,18 +12,18 @@ input_dictionary = {
     # 'analysis_type': ['aggFull', ],
     # 'analysis_type': ['trigAveCA'],
     # 'analysis_type': ['trigAveCA'],
-    'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
-    # 'analysis_type': ['just_preprocess'],
+    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
+    'analysis_type': ['just_preprocess'],
     # 'result': ['test', ],
-    'result': ['fail', ],
+    'result': ['habi', ],
 
     # 'rig': ['VPrey', 'VR', ],
-    # 'rig': ['miniscope', ],
-    'rig': ['VPrey'],
+    'rig': ['miniscope', ],
+    # 'rig': ['VPrey'],
     'lighting': ['normal', ],
 
     # 'gtdate': ['2020-08-24T00-00-00'],
-    'gtdate': ['2020-07-07T00-00-00'],
+    # 'gtdate': ['2020-07-07T00-00-00'],
     # 'ltdate': ['2020-07-06T00-00-00'],
     # 'notes': ['real_crickets_1_vrcrickets_1', 'real_crickets_1_vrcrickets_3',
     #           'rewarded_crickets_0_vrcrickets_1', 'rewarded_crickets_0_vrcrickets_3'
@@ -127,7 +127,7 @@ for search_query in search_queries:
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
                               # '-F',         # (hard) force rerun everything
-                              '-f',         # (soft) force rerun last step
+                              # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               # '--rerun-incomplete',
                               '-s', paths.snakemake_scripts,
