@@ -4,6 +4,7 @@ import yaml
 import paths
 import numpy as np
 import functions_plotting as fp
+import umap
 # # check if launched from snakemake, otherwise, prompt user
 # try:
 #     # get the path to the file, parse and turn into a dictionary
@@ -31,16 +32,35 @@ import functions_plotting as fp
 #     pic_path = os.path.join(save_path[:-13] + '.png')
 
 
-folder_path = r'F:\VAME_projects\VAME_prey-Dec1-2020\results\11_12_2019_16_50_34_miniscope_DG_190806_a_succ_nofluo\VAME_prey_model\kmeans-30\behavior_quantification'
+folder_path = r'J:\Drago Guggiana Nilo\Prey_capture\temp_VAME\results\03_02_2020_15_35_18_miniscope_MM_200129_a_succ_nomini\VAME_prey_model\kmeans-30'
+
+# get the slug
+slug = folder_path.split('\\')[5]
 
 # load the 3 matrices
-adjacency = np.load(os.path.join(folder_path, 'adjacency_matrix.npy'))
-motif_usage = np.load(os.path.join(folder_path, 'motif_usage.npy'))
-transition = np.load(os.path.join(folder_path, 'transition_matrix.npy'))
+adjacency = np.load(os.path.join(folder_path, r'behavior_quantification\adjacency_matrix.npy'))
+motif_usage = np.load(os.path.join(folder_path, r'behavior_quantification\motif_usage.npy'))
+transition = np.load(os.path.join(folder_path, r'behavior_quantification\transition_matrix.npy'))
+
+
+
+# load the labels and latent vector
+labels = np.load(os.path.join(folder_path, '30_km_label_'+slug+'.npy'))
+latent = np.load(os.path.join(folder_path, 'latent_vector_'+slug+'.npy'))
+
+# run UMAP on the data
+reducer = umap.UMAP(min_dist=0.5, n_neighbors=10)
+embedded_data = reducer.fit_transform(latent)
+
+fp.plot_scatter([[embedded_data]])
 
 fp.plot_image([np.array(adjacency)])
 fp.plot_2d([[motif_usage]])
 fp.plot_image([transition])
+fp.plot_2d([[labels]])
+
+fp.plot_image([latent.T])
+
 
 fp.show()
 
