@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from quicksect import IntervalNode, Interval
 from functools import reduce
 import pandas as pd
+import csv
+from json import loads
 from sklearn.metrics.pairwise import euclidean_distances
 
 
@@ -357,7 +359,10 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
 
     # get the corners
     if manual_coordinates is None:
-        corner_coordinates = find_corners(db_data['avi_path'], num_frames=50, crop_flag=crop_flag)
+        try:
+            corner_coordinates = find_corners(db_data['avi_path'], num_frames=50, crop_flag=crop_flag)
+        except IndexError:
+            corner_coordinates = find_corners(db_data['avi_path'], num_frames=150, crop_flag=crop_flag)
     else:
         corner_coordinates = np.array(manual_coordinates)
 
@@ -584,6 +589,54 @@ def timed_event_finder(dframe_in, parameter, threshold, function, window=5):
         event.loc[:, 'event_id'] = idx
     # concatenate and output
     return pd.concat(output_events)
+
+
+def read_motive_header(file_path):
+    """ Make variables to hold arena corner coordinates, obstacle coordinates, and
+    the dataframe itself. The header first contains information about the arena
+    corner coordinates and the position of objects in the arena, followed by a
+    blank line and then the main dataframe. """
+    arena_corners = []
+    obstacle_positions = []
+
+    with open(file_path) as f:
+        # Read the file line by  line
+        reader = csv.reader(f, delimiter=" ")
+
+        for line_num, line in enumerate(reader):
+            if line:
+                # Read the lines related to arena and obstacle positions
+                if "arena_corners" in line[0]:
+                    arena_corners = loads(line[-1])
+                else:
+                    obs_name = line[0]
+                    obs_centroid = loads(line[-1])
+                    obstacle_positions.append([obs_name, obs_centroid])
+            else:
+                # We have reached the blank line delimiting the positions
+                break
+
+    return arena_corners, obstacle_positions, line_num
+
+
+def flip_DLC_y(traces):
+    # copy the traces
+    new_traces = traces.copy()
+    # Get unique column names
+    column_names = np.unique([el[:-1] for el in traces.columns])
+    # for all the unique names
+    for column in column_names:
+        # if the name + x exists, transform
+        if column + 'y' in traces.columns:
+            # get the y data
+            original_data = traces[[column + 'y']].to_numpy()
+            # transform
+            new_data = original_data * -1
+            # replace the original data
+            new_traces[[column + 'y']] = new_data
+
+    return new_traces
+
 
 # class and functions taken from https://stackoverflow.com/questions/16312871/python-removing-overlapping-lists
 

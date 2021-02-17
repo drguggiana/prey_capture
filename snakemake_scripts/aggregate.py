@@ -10,6 +10,7 @@ import numpy as np
 import os
 import yaml
 import datetime
+import matplotlib as mpl; import matplotlib.pyplot as plt; mpl.use('Qt5Agg')
 
 
 def aggregate_full_traces(partial_data):
@@ -80,19 +81,34 @@ def aggregate_encounters(data_all):
         def thres_function(param, thres):
             return param < thres
 
+        def thres_function_unity(param, thres):
+            return param == thres
+
         # set a list for concatenation
         encounter_list = []
         # if there are virtual crickets, iterate through them
         if 'vrcricket_0_x' in data_in.columns:
             # get the number of crickets
             vr_cricket_list = np.unique([el[:11] for el in data_in.columns if 'vrcricket' in el])
+            # set the distance threshold
+            vr_thresh = 0.07
 
             # for all the vr crickets
             for vrcricket in vr_cricket_list:
 
-                # get the encounters
-                encounters_temp = fp.timed_event_finder(data_in, vrcricket+'_mouse_distance', 0.03, thres_function,
+                # get encounters according to Unity
+                encounters_unity = fp.timed_event_finder(data_in, vrcricket+'_encounter', 1, thres_function_unity,
                                                         window=encounter_window)
+
+                # get the encounters
+                encounters_temp = fp.timed_event_finder(data_in, vrcricket+'_mouse_distance', vr_thresh, thres_function,
+                                                        window=encounter_window)
+
+                # # For debugging
+                # plt.plot(data_in['time_vector'], data_in[vrcricket+'_mouse_distance'])
+                # plt.plot(data_in['time_vector'], vr_thresh * data_in[vrcricket + '_encounter'], "*")
+                # plt.hlines(vr_thresh, 0, data_in['time_vector'].max())
+                # plt.show()
 
                 # if no encounters were found, skip
                 if len(encounters_temp) == 0:
@@ -111,8 +127,12 @@ def aggregate_encounters(data_all):
         if 'cricket_0_x' in data_in.columns:
             # get the encounters
             # 100 was used for the poster
-            encounters_temp = fp.timed_event_finder(data_in, 'cricket_0_mouse_distance', 19.5, thres_function,
+            # encounters_temp = fp.timed_event_finder(data_in, 'cricket_0_mouse_distance', 19.5, thres_function,
+            #                                         window=encounter_window)
+            # This was changed to real units with the DLC to Motive transformation
+            encounters_temp = fp.timed_event_finder(data_in, 'cricket_0_mouse_distance', 0.03, thres_function,
                                                     window=encounter_window)
+
             # if no encounters were found, skip
             if len(encounters_temp) == 0:
                 continue
@@ -166,9 +186,12 @@ try:
     date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in path_info]
 except NameError:
     # define the analysis type
-    analysis_type = 'aggEnc'
+    analysis_type = 'aggFullCA'
     # define the search query
-    search_query = 'result:succ,lighting:normal,rig:vr'
+    # search_query = 'result:succ,lighting:normal,rig:vr'
+    search_query = 'slug:09_15_2020_14_23_02_VPrey_DG_200526_d_test_whiteCr_grayBG_rewarded'
+    # search_query = 'result:succ,lighting:normal,rig:miniscope,imaging:doric,slug:08_06_2020'
+
     # define the origin model
     ori_type = 'preprocessing'
     # get a dictionary with the search terms
@@ -176,7 +199,7 @@ except NameError:
 
     # get the info and paths
     path_info, paths_all, parsed_query, date_list, animal_list = \
-        fd.fetch_preprocessing(search_query + ', =analysis_type:' + ori_type)
+        fd.fetch_preprocessing(search_query + ', analysis_type:' + ori_type)
     # get the raw output_path
     dict_path['analysis_type'] = analysis_type
     basic_name = '_'.join(dict_path.values())

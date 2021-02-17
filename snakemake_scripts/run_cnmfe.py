@@ -7,6 +7,7 @@ import json
 import functions_bondjango as bd
 import functions_io as fi
 from copy import deepcopy
+from cnmfe_params import online_dict
 
 
 if __name__ == "__main__":
@@ -35,7 +36,7 @@ if __name__ == "__main__":
     shutil.copyfile(video_path, temp_video_path)
 
     # run cnmfe
-    cnmfe_function([temp_video_path], out_path)
+    cnmfe_out = cnmfe_function([temp_video_path], out_path, online_dict)
 
     # get the target model
     if video_data['rig'] == 'miniscope':

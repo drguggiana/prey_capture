@@ -145,20 +145,34 @@ def kinematic_calculations(name, data):
         real_crickets = 1
     else:
         real_crickets = 0
+
     # check for vr crickets
-    if 'vrcricket_0_x' in data.columns:
+    if ('vrcricket_0_x' in data.columns) or ('target_x_m' in data.columns):
         # get the number of vr crickets
         vr_cricket_list = np.unique([el[:11] for el in data.columns if 'vrcricket' in el])
+        # If there is no vr_cricket, but this is instead a vr_target
+        if vr_cricket_list.size == 0:
+            vr_cricket_list = ['target']
 
         # for all the vr crickets
         for vr_cricket in vr_cricket_list:
             # get the coordinates
-            cricket_coord = data[[vr_cricket+'_x', vr_cricket+'_y']].to_numpy()
+            try:
+                cricket_coord = data[[vr_cricket+'_x', vr_cricket+'_y']].to_numpy()
+            except KeyError:
+                cricket_coord = data[[vr_cricket+'_x_m', vr_cricket+'_y_m']].to_numpy()
             # process the cricket related data
             cricket_data = cricket_processing(cricket_coord, data, mouse_coord_hd, mouse_heading,
                                               kine_data, vr=True, cricket_name=vr_cricket)
+            # also grab the vr cricket states
+            try:
+                cricket_states = data[[vr_cricket+'_state', vr_cricket+'_motion', vr_cricket+'_encounter']]
+            except KeyError:
+                # There are no cricket animation in the VScreens trial, but we do
+                # need the trial number data for later
+                cricket_states = data[['trial_num']]
             # concatenate the cricket data
-            kine_data = pd.concat([kine_data, cricket_data], axis=1)
+            kine_data = pd.concat([kine_data, cricket_data, cricket_states], axis=1)
         # set the cricket number
         vr_crickets = len(vr_cricket_list)
     else:

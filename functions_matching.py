@@ -1,5 +1,6 @@
 from sklearn.preprocessing import scale
 from scipy.interpolate import interp1d
+from scipy import signal
 import cv2
 from functions_plotting import *
 from functions_misc import add_edges, interp_trace, normalize_matrix
@@ -86,7 +87,7 @@ def interp_motive(position, frame_times, target_times):
 def homography(from_data, to_data, target_data):
     """Compute the homography transformation between the data sets via opencv"""
     # find the homography transformation
-    h, mask = cv2.findHomography(from_data, to_data, method=cv2.LMEDS)
+    h, mask = cv2.findHomography(from_data, to_data, method=cv2.RANSAC)
     # make the transformed data homogeneous for multiplication with the affine
     transformed_data = np.squeeze(cv2.convertPointsToHomogeneous(target_data))
     # apply the homography matrix
@@ -97,7 +98,8 @@ def partialaffine(from_data, to_data, target_data):
     """Compute the partial 2D affine transformation between the data sets via opencv"""
     # calculate an approximate affine
     affine_matrix, inliers = cv2.estimateAffinePartial2D(from_data, to_data, ransacReprojThreshold=1,
-                                                         maxIters=20000, refineIters=100, method=cv2.LMEDS)
+                                                         maxIters=20000, confidence=0.95,
+                                                         refineIters=100, method=cv2.LMEDS)
     assert affine_matrix is not None, "Affine transform was not possible"
     # print('Percentage inliers used:' + str(np.sum(inliers)*100/from_data.shape[0]))
     # make the transformed data homogeneous for multiplication with the affine
@@ -110,7 +112,7 @@ def affine(from_data, to_data, target_data):
     """Compute the 2D affine transformation between the data sets via opencv"""
     # calculate an approximate affine
     affine_matrix, inliers = cv2.estimateAffine2D(from_data, to_data, ransacReprojThreshold=3,
-                                                  maxIters=20000, refineIters=100, method=cv2.LMEDS)
+                                                  maxIters=20000, refineIters=0, method=cv2.LMEDS)
     print('Percentage inliers used:' + str(np.sum(inliers)*100/from_data.shape[0]))
     # make the transformed data homogeneous for multiplication with the affine
     transformed_data = np.squeeze(cv2.convertPointsToHomogeneous(target_data))
@@ -125,8 +127,10 @@ def undistort(data_2d, data_3d, target_data):
                      cv2.CALIB_FIX_K1 | cv2.CALIB_FIX_K2 | cv2.CALIB_FIX_K3 |
                      cv2.CALIB_FIX_K4 | cv2.CALIB_FIX_K5 | cv2.CALIB_FIX_K6)
     # test_constant = 0
-    # test_constant = cv2.CALIB_USE_INTRINSIC_GUESS
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera([data_3d], [data_2d], (1280, 1024), None, None,
+    # test_constant = cv2.CALIB_FIX_PRINCIPAL_POINT
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera([data_3d.astype('float32')],
+                                                       [data_2d.astype('float32')],
+                                                       (1280, 1024), None, None,
                                                        flags=test_constant)
     # undistort the camera points
     return np.squeeze(cv2.undistortPoints(np.expand_dims(target_data, 1), mtx, dist))
@@ -283,7 +287,7 @@ def match_motive(motive_traces, sync_path, kinematics_data):
     # also trim the frame times (assuming frame 1 in both is the same)
     frame_times_motive_sync = frame_times_motive_sync[first_frame:n_frames_motive_sync+first_frame]
     # plot_2d([[sync_data['projector_frames']]], dpi=100)
-    plot_2d([[sync_data['projector_frames'], sync_data['bonsai_frames']]], dpi=100)
+    # plot_2d([[sync_data['projector_frames'], sync_data['bonsai_frames']]], dpi=100)
     # get the frame times for bonsai
     frame_times_bonsai_sync = sync_data.loc[
                                   np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0,
@@ -323,24 +327,192 @@ def match_motive(motive_traces, sync_path, kinematics_data):
     old_time = full_dataframe['time_vector']
     full_dataframe['time_vector'] = np.array([el - old_time[0] for el in old_time])
 
-    # TODO spatial matching
-
     return full_dataframe
+
+
+def consecutive(data, stepsize=1):
+    return np.split(data, np.where(np.diff(data) != stepsize)[0]+1)
+
+
+def align_nonaffine(input_traces):
+    """For testing nonaffines transforms for automatic data alignment"""
+
+    # copy the traces
+    output_traces = input_traces.copy()
+
+    # Grab the mouse data
+    bonsai_position = input_traces[['mouse_x', 'mouse_y']].to_numpy()
+    motive_position = input_traces[['mouse_z_m', 'mouse_x_m']].to_numpy()
+
+    # Low-pass filter the data
+    b, a = signal.butter(5, 0.01)
+    filt_bp = signal.filtfilt(b, a, bonsai_position[120:-120], axis=0)
+    filt_mp = signal.filtfilt(b, a, motive_position[120:-120], axis=0)
+
+    # Apply manual shift seen from other traces
+    shift = [0.085, -0.02]
+    filt_bp_shift = filt_bp + shift
+    # fig = plot_2d([[filt_mp, filt_bp_shift]], rows=1, columns=1, dpi=100)
+    # fig.suptitle('Manual shift')
+    # plt.show()
+
+    # Use the camera matrix and distortion coefficients from find_lens_distortion.py
+    # to correct the trace
+    camMtx = np.array([[1.0078195e+00, 0.0000000e+00, 9.8388788e-05],
+                       [0.0000000e+00, 1.0078195e+00, 7.5000345e-05],
+                       [0.0000000e+00, 0.0000000e+00, 1.0000000e+00]])
+    distCoeffs = np.array([0.00000000e+00,  0.00000000e+00, -6.54237602e-06, -9.86002297e-06, 0.00000000e+00])
+    # filt_bp_udist = np.squeeze(cv2.undistortPoints(np.expand_dims(filt_bp, 1), camMtx, distCoeffs))
+    # fig = plot_2d([[filt_mp, filt_bp_udist+shift]], rows=1, columns=1, dpi=100)
+    # fig.suptitle('Undistort + manual shift')
+    # plt.show()
+
+    # # Get spatial correlation between undistorted DLC tracking and motive tracking to automatically align.
+    # # Constrain this to only the center parts of the image for best alignment
+    # # TODO - make this better, is hacky
+    # motive_sections = np.argwhere((((filt_mp[:, 0] >= -0.1) & (filt_mp[:, 0] <= 0.2)) &
+    #                               ((filt_mp[:, 1] >= -0.2) & (filt_mp[:, 1] <= 0))))
+    # # motive_subset_idxs = consecutive(np.squeeze(motive_sections))
+    # filt_mp_sub = filt_mp[np.squeeze(motive_sections)]
+    # filt_bp_udist_sub = filt_bp_udist[np.squeeze(motive_sections)]
+    #
+    # fig = plot_2d([[filt_mp_sub, filt_bp_udist_sub]], rows=1, columns=1, dpi=100)
+    # fig.suptitle('Undistorted subsets in central FOV')
+    # plt.show()
+
+    # corr = correlate2d(filt_mp_sub, filt_bp_udist_sub, mode='same')
+    # # try way from scipy docs
+    # row, col = np.unravel_index(np.argmax(corr), corr.shape)  # find the match
+    # shift = filt_mp_sub[row, :] - filt_bp_udist_sub[row, :]
+    # # Find max in each column
+    # shift_idx = np.argmax(corr, axis=0)
+    # x_shift = filt_mp_sub[shift_idx[0], :] - filt_bp_udist_sub[shift_idx[0], :]
+    # y_shift = filt_mp_sub[shift_idx[1], :] - filt_bp_udist_sub[shift_idx[1], :]
+    # # shift = [x_shift, y_shift]
+    #
+    # # Align bonsai/DLC to motive coordinates based on spatial correlation
+    # bonsai_position_new = filt_bp_udist.copy()
+    # bonsai_position_new[:, 0] = bonsai_position_new[:, 0] + y_shift
+    # bonsai_position_new[:, 1] = bonsai_position_new[:, 1] + x_shift
+    #
+    # fig = plot_2d([[filt_mp, filt_bp_udist+shift]], rows=1, columns=1, dpi=100)
+    # fig.suptitle('Undistort + spatial correlation shift')
+    # plt.show()
+
+    # # Apply partial affine transform to the lens corrected trace
+    # filt_bp_udist_affine = partialaffine(filt_bp_udist, filt_mp, filt_bp_udist)
+    # fig = plot_2d([[filt_mp, filt_bp_udist_affine]], rows=1, columns=1, dpi=100)
+    # plt.show()
+
+    # # Do partial affine transformation on the data
+    # filt_bp_affine = partialaffine(filt_bp, filt_mp, filt_bp)
+    #
+    # fig = plot_2d([[filt_mp, filt_bp_affine]], rows=1, columns=1, dpi=100)
+    # plt.show()
+
+    # # Do affine transformation on the data
+    # filt_bp_affine = affine(filt_bp, filt_mp, filt_bp)
+    #
+    # fig = plot_2d([[filt_mp, filt_bp_affine]], rows=1, columns=1, dpi=100)
+    # plt.show()
+
+
+
+    # # Try undistort
+    # filt_mp3 = np.zeros((filt_mp.shape[0], filt_mp.shape[1]+1))
+    # filt_mp3[:, :-1] = filt_mp
+    # filt_bp_udist = undistort(filt_bp_affine, filt_mp3, filt_bp_affine)
+    #
+    # fig = plot_2d([[filt_mp, filt_bp_udist]], rows=1, columns=1, dpi=100)
+    # plt.show()
+
+    # # Do rotation to the data
+    # theta = 7. * np.pi/180.
+    # Rmat = np.array([[np.cos(theta), -np.sin(theta)],
+    #                  [np.sin(theta), np.cos(theta)]])
+    # filt_bp_rot = np.matmul(filt_bp_homog, Rmat)
+    #
+    # fig = plot_2d([[filt_mp, filt_bp_rot]], rows=1, columns=1, dpi=100)
+    # plt.show()
+
+    # Adjust all DLC traces to match motive
+    # Note that unity traces (VR crickets) are already in scaled to motive space
+    # get the unique column names, excluding the letter at the end
+    column_names = np.unique([el[:-1] for el in input_traces.columns])
+    # for all the unique names
+    for column in column_names:
+        # if the name + x exists, transform
+        if column + 'x' in input_traces.columns:
+            # get the x and y data
+            new_data = input_traces[[column + 'x', column + 'y']].to_numpy()
+
+            # Apply the undistortion
+            new_data_udist = np.squeeze(cv2.undistortPoints(np.expand_dims(new_data, 1), camMtx, distCoeffs))
+
+            # add the translation
+            new_data_udist += shift
+
+            # replace the original data
+            output_traces[[column + 'x', column + 'y']] = new_data[:, :2]
+
+    return output_traces
 
 
 def align_spatial(input_traces):
     """Align the temporally aligned bonsai and motive traces in space"""
 
+    # copy the traces
+    output_traces = input_traces.copy()
+
+    # Grab the mouse data
     bonsai_position = input_traces[['mouse_x', 'mouse_y']].to_numpy()
-    motive_position = input_traces[['mouse_x_m', 'mouse_y_m']].to_numpy()
+    motive_position = input_traces[['mouse_z_m', 'mouse_x_m']].to_numpy()
 
-    plot_2d([[motive_position]], dpi=100)
-    bonsai_position = normalize_matrix(bonsai_position, motive_position)
+    # Low-pass filter the data
+    b, a = signal.butter(5, 0.01)
+    filt_bp = signal.filtfilt(b, a, bonsai_position[120:-120], axis=0)
+    filt_mp = signal.filtfilt(b, a, motive_position[120:-120], axis=0)
 
-    bonsai_position[:, 0] = -bonsai_position[:, 0]
-    bonsai_position[:, 1] = -bonsai_position[:, 1]
-    # plot the x and y of the 2 sources
-    plot_2d([[bonsai_position, motive_position]], dpi=100)
+    # # Plot filtered but not shifted data
+    # fig = plot_2d([[filt_mp, filt_bp]], rows=1, columns=1, dpi=100)
+    # fig.suptitle('Manual shift')
+    # plt.show()
 
-    output_traces = []
+    # Apply manual shift seen from other traces (calculated manually)
+    shift = [0.085, -0.02]
+    # fig = plot_2d([[filt_mp, filt_bp+shift]], rows=1, columns=1, dpi=100)
+    # fig.suptitle('Manual shift')
+    # plt.show()
+
+    # Use the camera matrix and distortion coefficients from find_lens_distortion.py
+    # to correct the trace
+    camMtx = np.array([[1.0078195e+00, 0.0000000e+00, 9.8388788e-05],
+                       [0.0000000e+00, 1.0078195e+00, 7.5000345e-05],
+                       [0.0000000e+00, 0.0000000e+00, 1.0000000e+00]])
+    distCoeffs = np.array([0.00000000e+00,  0.00000000e+00, -6.54237602e-06, -9.86002297e-06, 0.00000000e+00])
+    # filt_bp_udist = np.squeeze(cv2.undistortPoints(np.expand_dims(filt_bp, 1), camMtx, distCoeffs))
+    # fig = plot_2d([[filt_mp, filt_bp_udist+shift]], rows=1, columns=1, dpi=100)
+    # fig.suptitle('Undistort + manual shift')
+    # plt.show()
+
+    # Adjust all DLC traces to match motive
+    # Note that unity traces (VR crickets) are already in scaled to motive space
+    # get the unique column names, excluding the letter at the end
+    column_names = np.unique([el[:-1] for el in input_traces.columns])
+    # for all the unique names
+    for column in column_names:
+        # if the name + x exists, transform
+        if column + 'x' in input_traces.columns:
+            # get the x and y data
+            new_data = input_traces[[column + 'x', column + 'y']].to_numpy()
+
+            # Apply the undistortion
+            new_data_udist = np.squeeze(cv2.undistortPoints(np.expand_dims(new_data, 1), camMtx, distCoeffs))
+
+            # add the translation
+            new_data_udist += shift
+
+            # replace the original data
+            output_traces[[column + 'x', column + 'y']] = new_data[:, :2]
+
     return output_traces
