@@ -8,6 +8,10 @@ import functions_bondjango as bd
 import functions_io as fi
 from copy import deepcopy
 from cnmfe_params import online_dict
+import subprocess as sp
+import numpy as np
+import h5py
+import pandas as pd
 
 
 if __name__ == "__main__":
@@ -16,6 +20,7 @@ if __name__ == "__main__":
         video_path = sys.argv[1]
         out_path = sys.argv[2]
         video_data = json.loads(sys.argv[3])
+        print(sys.argv)
     except IndexError:
         # define the search string
         # search_string = 'result:succ, lighting:normal, rig:miniscope, imaging:doric'
@@ -30,13 +35,61 @@ if __name__ == "__main__":
     # delete the folder contents
     fi.delete_contents(paths.temp_path)
 
-    # define the temp path
-    temp_video_path = os.path.join(paths.temp_path, os.path.basename(video_path))
-    # copy the file to the processing folder
-    shutil.copyfile(video_path, temp_video_path)
+    # combine the selected files into a single tif
+    out_path_tif, out_path_log = fi.combine_tif(video_path, paths.temp_path)
+    # out_path_log = filedialog.askopenfilename(initialdir=base_path, filetypes=(("log files", "*_CAT.csv"), ))
+
+    # min1pipe_process = sp.Popen([r'D:\Code Repos\environments\matlab_env\Scripts\python.exe',
+    #                              r'D:\Code Repos\prey_capture\minpipe_runner.py',
+    #                              out_path_tif], stdout=sp.PIPE)
 
     # run cnmfe
-    cnmfe_out = cnmfe_function([temp_video_path], out_path, online_dict)
+    cnmfe_out = cnmfe_function([out_path_tif], out_path, online_dict)
+
+    # stdout = min1pipe_process.communicate()[0]
+    # print(stdout.decode())
+
+    # get the path for the ca file
+    calcium_path = out_path_log.replace('.csv', '_data_processed.mat')
+    # if there are no ROIs detected, skip the file and print the name
+    try:
+        # load the contents of the ca file
+        with h5py.File(calcium_path) as f:
+            calcium_data = np.array((f['sigfn'])).T
+
+        # grab the processed files and split them based on the log file
+
+        # read the log file
+        files_list = pd.read_csv(out_path_log)
+        # initialize a counter for the frames
+        frame_counter = 0
+
+        # for all the rows in the dataframe
+        for index, row in files_list.iterrows():
+            # get the frames from this file
+            current_calcium = calcium_data[:, frame_counter:row['frame_number'] + frame_counter]
+
+            # assemble the save path for the file
+            new_calcium_path = os.path.join(out_path[index],
+                                            os.path.basename(
+                                                row['filename'].replace('.tif', '_calcium_data.h5')))
+
+            # save the data as an h5py
+            with h5py.File(new_calcium_path) as file:
+                file.create_dataset('calcium_data', data=current_calcium)
+
+            # update the frame counter
+            frame_counter += row['frame_number']
+    except KeyError:
+        print('This file did not contain any ROIs: ' + calcium_path)
+
+    # # define the temp path
+    # temp_video_path = os.path.join(paths.temp_path, os.path.basename(video_path))
+    # # copy the file to the processing folder
+    # shutil.copyfile(video_path, temp_video_path)
+
+    # # run cnmfe
+    # cnmfe_out = cnmfe_function([temp_video_path], out_path, online_dict)
 
     # get the target model
     if video_data['rig'] == 'miniscope':

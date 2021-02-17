@@ -35,9 +35,11 @@ def dlc_input_selector(wildcards):
 
 rule calcium_extraction:
     input:
-          lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.tif'),
+          # lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.tif'),
+          expand(os.path.join(config["target_path"], "{file}.tif"), file=config['files'])
     output:
-          os.path.join(config["target_path"], "{file}_calcium.hdf5"),
+          # os.path.join(config["target_path"], "{file}_calcium.hdf5"),
+          expand(os.path.join(config["target_path"], "{file}_calcium.hdf5"), file=config['files'])
     params:
           info=yaml_to_json,
           cnmfe_path=config["cnmfe_path"],
