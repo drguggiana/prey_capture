@@ -19,7 +19,7 @@ if __name__ == "__main__":
     except IndexError:
         # define the search string
         # search_string = 'result:succ, lighting:normal, rig:miniscope, imaging:doric'
-        search_string = 'slug:08_06_2020_18_07_32_miniscope_DG_200701_a_succ'
+        search_string = 'slug:09_02_2020_17_27_37_miniscope_DG_200617_b_succ'
         # query the database for data to plot
         data_all = bd.query_database('video_experiment', search_string)
         video_data = data_all[0]

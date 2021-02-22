@@ -11,6 +11,12 @@ import pandas as pd
 import datetime
 
 
+def process_corners(corner_frame):
+    """Extract the corner coordinates from the trace"""
+    corner_processed = np.reshape(np.median(corner_frame, axis=0), (4, 2))
+    return corner_processed
+
+
 def run_preprocess(file_path_bonsai, save_file, file_info,
                    kernel_size=21, max_step=300, max_length=50):
     """Preprocess the bonsai file"""
@@ -93,16 +99,35 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
         filtered_traces = pd.DataFrame(raw_h5[[
             [el for el in column_names if ('mouseHead' in el) and ('x' in el)][0],
             [el for el in column_names if ('mouseHead' in el) and ('y' in el)][0],
-            [el for el in column_names if ('mouseBody' in el) and ('x' in el)][0],
-            [el for el in column_names if ('mouseBody' in el) and ('y' in el)][0],
+            [el for el in column_names if ('mouseBody1' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseBody1' in el) and ('y' in el)][0],
+            [el for el in column_names if ('mouseBody2' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseBody2' in el) and ('y' in el)][0],
+            [el for el in column_names if ('mouseBody3' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseBody3' in el) and ('y' in el)][0],
             [el for el in column_names if ('mouseBase' in el) and ('x' in el)][0],
             [el for el in column_names if ('mouseBase' in el) and ('y' in el)][0],
             [el for el in column_names if ('cricketHead' in el) and ('x' in el)][0],
             [el for el in column_names if ('cricketHead' in el) and ('y' in el)][0],
             [el for el in column_names if ('cricketBody' in el) and ('x' in el)][0],
             [el for el in column_names if ('cricketBody' in el) and ('y' in el)][0],
-        ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
+        ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_body2_x', 'mouse_body2_y',
+                                'mouse_body3_x', 'mouse_body3_y', 'mouse_base_x', 'mouse_base_y',
                                 'cricket_0_head_x', 'cricket_0_head_y', 'cricket_0_x', 'cricket_0_y'])
+
+        corner_info = pd.DataFrame(raw_h5[[
+            [el for el in column_names if ('corner_UL' in el) and ('x' in el)][0],
+            [el for el in column_names if ('corner_UL' in el) and ('y' in el)][0],
+            [el for el in column_names if ('corner_BL' in el) and ('x' in el)][0],
+            [el for el in column_names if ('corner_BL' in el) and ('y' in el)][0],
+            [el for el in column_names if ('corner_BR' in el) and ('x' in el)][0],
+            [el for el in column_names if ('corner_BR' in el) and ('y' in el)][0],
+            [el for el in column_names if ('corner_UR' in el) and ('x' in el)][0],
+            [el for el in column_names if ('corner_UR' in el) and ('y' in el)][0],
+        ]].to_numpy(), columns=['corner_UL_x', 'corner_UL_y', 'corner_BL_x', 'corner_BL_y',
+                                'corner_BR_x', 'corner_BR_y', 'corner_UR_x', 'corner_UR_y'])
+        # get the corners
+        corner_points = process_corners(corner_info)
     except IndexError:
         # DLC in VR arena
         filtered_traces = pd.DataFrame(raw_h5[[
@@ -120,6 +145,8 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
         # The camera that records video in the VR arena flips the video about the
         # horizontal axis when saving. To correct, flip the y coordinates from DLC
         filtered_traces = flip_DLC_y(filtered_traces)
+        # output an empty for the corners
+        corner_points = []
 
     # eliminate the cricket if there is no real cricket or this is a VScreen experiment
     if ('nocricket' in file_info['notes'] and 'VR' in file_info['rig']) or \
@@ -201,7 +228,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     filtered_traces['mouse'] = parsed_path['animal']
     filtered_traces['datetime'] = parsed_path['datetime']
 
-    return out_path, filtered_traces
+    return out_path, filtered_traces, corner_points
 
 
 def extract_motive(file_path_motive, rig):

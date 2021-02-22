@@ -10,15 +10,16 @@ import numpy as np
 # define the type of analysis
 input_dictionary = {
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
-    # 'analysis_type': ['trigAveCA'],
+    # 'analysis_type': ['aggFullCA'],
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
     'analysis_type': ['just_preprocess'],
-    'result': ['test', ],
+    'result': ['succ', 'fail'],
     # 'result': ['test', 'succ'],
     # 'rig': ['VPrey', 'VR', ],
-    # 'rig': ['miniscope', ],
-    'rig': ['VScreen'],
-    # 'lighting': ['normal', ],
+    'rig': ['miniscope', ],
+    # 'rig': ['VScreen'],
+    # 'slug': ['08_19_2020_16_16_55_miniscope_DG_200701_a_succ_noncon'],
+    'lighting': ['normal', ],
     # 'gtdate': ['2020-08-24T00-00-00'],
     # 'gtdate': ['2020-06-23T00-00-00'],
     # 'ltdate': ['2020-07-06T00-00-00'],
@@ -156,12 +157,12 @@ for idx, target_entries in enumerate(new_queries):
                              for el in target_entries},
                    'file_info': {os.path.basename(el['bonsai_path'])[:-4]: yaml.dump(el)
                                  for el in target_entries},
-                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
-                   #              else False for el in target_entries},
-                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
-                   # 'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
-                   #                  else False for el in target_entries},
-                   'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
+                                else False for el in target_entries},
+                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
+                                    else False for el in target_entries},
+                   # 'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
@@ -185,7 +186,7 @@ for idx, target_entries in enumerate(new_queries):
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
                               # '-F',         # (hard) force rerun everything
-                              '-f',         # (soft) force rerun last step
+                              # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               # '--rerun-incomplete',
                               '-s', paths.snakemake_scripts,
