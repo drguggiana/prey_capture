@@ -15,9 +15,12 @@ from pandas import read_hdf
 def preprocess_selector(csv_path, saving_path, file_info):
     """functions that selects the preprocessing function for the first step, either dlc or not"""
     # check if the input has a dlc path or not
-    if len(file_info['dlc_path']) > 0 and file_info['dlc_path'] != 'N/A':
+    if (len(file_info['dlc_path']) > 0 and file_info['dlc_path'] != 'N/A') or \
+            os.path.isfile(file_info['bonsai_path'].replace('.csv', '_dlc.h5')):
+        # assemble the path here, in case the file wasn't in the database
+        dlc_path = file_info['bonsai_path'].replace('.csv', '_dlc.h5')
         # if there's a dlc file, use this preprocessing
-        output_path, traces, corner_out = s1.run_dlc_preprocess(csv_path, file_info['dlc_path'], saving_path, file_info)
+        output_path, traces, corner_out = s1.run_dlc_preprocess(csv_path, dlc_path, saving_path, file_info)
     else:
         # if not, use the legacy non-dlc preprocessing
         output_path, traces = s1.run_preprocess(csv_path, saving_path, file_info)
@@ -56,7 +59,7 @@ except NameError:
 
     # search_string = 'slug:08_24_2020_11_24_27_VPrey_DG_200526_b_test_whiteCr_blackBG_rewarded'
     # search_string = 'slug:08_06_2020_18_07_32_miniscope_DG_200701_a_succ'
-    search_string = 'slug:09_08_2020_15_00_07_miniscope_DG_200701_a_succ'
+    search_string = 'slug:08_04_2020_15_08_43_miniscope_DG_200701_a_habi_nocricket'
     # search_string = 'result:fail, lighting:normal, rig:miniscope'
 
     # search_string = 'slug:11_25_2019_15_28_57_miniscope_MM_191106_a_fail_nomini'

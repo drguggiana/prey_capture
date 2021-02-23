@@ -150,6 +150,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
 
     # eliminate the cricket if there is no real cricket or this is a VScreen experiment
     if ('nocricket' in file_info['notes'] and 'VR' in file_info['rig']) or \
+            ('nocricket' in file_info['notes'] and 'miniscope' in file_info['rig']) or \
             ('test' in file_info['result'] and 'VPrey' in file_info['rig']) or \
             ('VScreen' in file_info['rig']):
         # for all the columns
