@@ -294,10 +294,10 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format, crop_size, use_
     # 0: snout, 1: forehand_left, 2: forehand_right,
     # 3: hindleft, 4: hindright, 5: tail
 
-    pose_ref_index = [0, 2]
+    pose_ref_index = [0, 4]
 
     # list of 2 reference coordinate indices for avoiding flipping
-    pose_flip_ref = [0, 2]
+    pose_flip_ref = [0, 4]
 
     if use_video:
         # compute background
@@ -351,8 +351,8 @@ if __name__ == '__main__':
     # path_dlc = \
     #     r"J:\Drago Guggiana Nilo\Prey_capture\VideoExperiment\11_11_2019_00_41_27_miniscope_DG_190806_a_fail_nomini_dlc.h5"
 
-    # path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\09_08_2020_15_00_07_miniscope_DG_200701_a_succ_preproc.hdf5"
-    path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\11_11_2019_00_41_27_miniscope_DG_190806_a_fail_nomini_preproc.hdf5"
+    path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\09_08_2020_15_00_07_miniscope_DG_200701_a_succ_preproc.hdf5"
+    # path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\11_11_2019_00_41_27_miniscope_DG_190806_a_fail_nomini_preproc.hdf5"
     path_vame = r"F:\VAME_projects\VAME_prey-Dec1-2020"
     # fname = r"03_13_2020_13_20_21_miniscope_MM_200129_a_succ"
     file_format = '.avi'
