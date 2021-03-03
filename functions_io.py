@@ -101,7 +101,7 @@ def combine_tif(filenames, processing_path=None):
     frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
     frames_list.to_csv(out_path_log)
 
-    return out_path_tif, out_path_log
+    return out_path_tif, out_path_log, frames_list
 
 
 def delete_contents(folder_path):
