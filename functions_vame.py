@@ -274,8 +274,8 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format, crop_size, use_
         interp_flag = False
 
     data = data.iloc[:, column_list]
-
-    data_mat = pd.DataFrame.to_numpy(data)
+    # convert to numpy and multiply by 1000 to avoid rounding artifacts
+    data_mat = pd.DataFrame.to_numpy(data)*1000
     # # get the filename from the dlc path
     # filename = os.path.splitext(os.path.basename(path_to_dlc))[0]
     # get the coordinates for alignment from data table
@@ -294,7 +294,7 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format, crop_size, use_
     # 0: snout, 1: forehand_left, 2: forehand_right,
     # 3: hindleft, 4: hindright, 5: tail
 
-    pose_ref_index = [0, 4]
+    pose_ref_index = [2, 3]
 
     # list of 2 reference coordinate indices for avoiding flipping
     pose_flip_ref = [0, 4]
@@ -317,8 +317,8 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format, crop_size, use_
 
     if check_video:
         play_aligned_video(a, n, frame_count)
-
-    return time_series
+    # return dividing by 1000 to output in the same scale as input
+    return time_series/1000
 
 
 def run_alignment(path_dlc, path_file, file_format, crop_size, use_video=False, check_video=False):
@@ -351,8 +351,9 @@ if __name__ == '__main__':
     # path_dlc = \
     #     r"J:\Drago Guggiana Nilo\Prey_capture\VideoExperiment\11_11_2019_00_41_27_miniscope_DG_190806_a_fail_nomini_dlc.h5"
 
-    path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\09_08_2020_15_00_07_miniscope_DG_200701_a_succ_preproc.hdf5"
+    # path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\09_08_2020_15_00_07_miniscope_DG_200701_a_succ_preproc.hdf5"
     # path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\11_11_2019_00_41_27_miniscope_DG_190806_a_fail_nomini_preproc.hdf5"
+    path_dlc = r"J:\Drago Guggiana Nilo\Prey_capture\AnalyzedData\12_16_2019_16_21_34_miniscope_MM_191108_a_fail_preproc.hdf5"
     path_vame = r"F:\VAME_projects\VAME_prey-Dec1-2020"
     # fname = r"03_13_2020_13_20_21_miniscope_MM_200129_a_succ"
     file_format = '.avi'
@@ -363,10 +364,13 @@ if __name__ == '__main__':
     egocentric_time_series = run_alignment(path_dlc, path_vame, file_format, crop_size,
                                            use_video=use_video, check_video=check_video)
 
-    # test plot
-    import matplotlib.pyplot as plt
+    # # test plot
+    # import matplotlib.pyplot as plt
+    # import functions_plotting as fp
+    # plt.plot(egocentric_time_series.T)
+    # plt.show()
 
-    plt.plot(egocentric_time_series.T)
-    plt.show()
+    # fp.simple_animation(egocentric_time_series, interval=100)
+    # fp.show()
 
 
