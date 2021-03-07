@@ -14,7 +14,7 @@ input_dictionary = {
     # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
     'analysis_type': ['just_preprocess'],
     # 'result': ['succ', 'fail'],
-    'result': ['habi'],
+    'result': ['succ', 'fail', 'habi'],
     # 'result': ['test', 'succ'],
     # 'rig': ['VPrey', 'VR', ],
     'rig': ['miniscope', ],

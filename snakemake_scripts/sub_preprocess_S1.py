@@ -87,6 +87,8 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     # TODO: convert everything to real distance
     # define the threshold for trimming the trace (in pixels for now)
     trim_cutoff = 200
+    # define the likelihood threshold for the DLC points
+    likelihood_threshold = 0.8
     # just return the output path
     out_path = save_file
     # load the bonsai info
@@ -114,6 +116,28 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
         ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_body2_x', 'mouse_body2_y',
                                 'mouse_body3_x', 'mouse_body3_y', 'mouse_base_x', 'mouse_base_y',
                                 'cricket_0_head_x', 'cricket_0_head_y', 'cricket_0_x', 'cricket_0_y'])
+
+        # get the likelihoods
+        likelihood_frame = pd.DataFrame(raw_h5[[
+            [el for el in column_names if ('mouseHead' in el) and ('likelihood' in el)][0],
+            [el for el in column_names if ('mouseBody1' in el) and ('likelihood' in el)][0],
+            [el for el in column_names if ('mouseBody2' in el) and ('likelihood' in el)][0],
+            [el for el in column_names if ('mouseBody3' in el) and ('likelihood' in el)][0],
+            [el for el in column_names if ('mouseBase' in el) and ('likelihood' in el)][0],
+            [el for el in column_names if ('cricketHead' in el) and ('likelihood' in el)][0],
+            [el for el in column_names if ('cricketBody' in el) and ('likelihood' in el)][0],
+        ]].to_numpy(), columns=['mouse_head', 'mouse', 'mouse_body2',
+                                'mouse_body3', 'mouse_base',
+                                'cricket_0_head', 'cricket_0'])
+
+        # nan the trace where the likelihood is too low
+        # for all the columns
+        for col in likelihood_frame.columns:
+            # get the vector for nans
+            nan_vector = likelihood_frame[col] < likelihood_threshold
+            # nan the points
+            filtered_traces.loc[nan_vector, col+'_x'] = np.nan
+            filtered_traces.loc[nan_vector, col+'_y'] = np.nan
 
         corner_info = pd.DataFrame(raw_h5[[
             [el for el in column_names if ('corner_UL' in el) and ('x' in el)][0],
@@ -158,22 +182,33 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
             if 'cricket' in column:
                 filtered_traces.drop([column], inplace=True, axis=1)
 
-    # TODO: need to take advantage of the constraints between points to filter the data
-    # median filter the traces
-    filtered_traces = median_discontinuities(filtered_traces, filtered_traces.columns, kernel_size)
-    # trim the trace at the last large jump of the mouse trajectory (i.e when the mouse enters the arena)
-    # do it after median filtering to prevent the single point errors to trim the video too much
-    # calculate the displacement of the mouse center
-    mouse_displacement = np.sqrt((np.diff(filtered_traces['mouse_x']))**2 + (np.diff(filtered_traces['mouse_y']))**2)
-    cutoff_frame = np.argwhere(mouse_displacement > trim_cutoff)
-    # check if it's empty. if so, don't cutoff anything
+    # # trim the trace at the last large jump of the mouse trajectory (i.e when the mouse enters the arena)
+    # # do it after median filtering to prevent the single point errors to trim the video too much
+    # # calculate the displacement of the mouse center
+    # mouse_displacement = np.sqrt((np.diff(filtered_traces['mouse_x']))**2 + (np.diff(filtered_traces['mouse_y']))**2)
+    # cutoff_frame = np.argwhere(mouse_displacement > trim_cutoff)
+    # # check if it's empty. if so, don't cutoff anything
+    # if cutoff_frame.shape[0] > 0:
+    #     cutoff_frame = cutoff_frame[-1][0]
+    # else:
+    #     cutoff_frame = 0
+
+    # trim the trace at the first mouse main body not nan
+    cutoff_frame = np.argwhere(~np.isnan(filtered_traces['mouse_x']))
+    # if no cutoff is found, don't cutoff anything
     if cutoff_frame.shape[0] > 0:
-        cutoff_frame = cutoff_frame[-1][0]
+        cutoff_frame = cutoff_frame[0][0]
     else:
         cutoff_frame = 0
 
     # perform the trimming and reset index
     filtered_traces = filtered_traces.iloc[cutoff_frame:, :].reset_index(drop=True)
+    # interpolate the NaN stretches
+    filtered_traces = interpolate_segments(filtered_traces, np.nan)
+
+    # median filter the traces
+    filtered_traces = median_discontinuities(filtered_traces, filtered_traces.columns, kernel_size)
+
     # find the places where there is no pixel movement in any axis and NaN those
 
     # cricket_nonans_x = filtered_traces['cricket_x']
