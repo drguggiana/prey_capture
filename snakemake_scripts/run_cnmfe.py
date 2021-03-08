@@ -50,10 +50,9 @@ if __name__ == "__main__":
     cnmfe_out, _ = cnmfe_function([out_path_tif], out_path, online_dict, save_output=False)
 
     # custom save the output to include the frames list
-    for idx, el in enumerate(frames_list[:, 0]):
+    for idx, el in enumerate(frames_list.iloc[:, 0]):
         # parse the line
-        parsed_time = os.path.basename(el).split('_')[3:6]
-
+        frames_list.iloc[idx, 0] = '_'.join(os.path.basename(el).split('_')[:6])
 
     cnmfe_out.frame_list = frames_list.values.tolist()
     # save the output
