@@ -267,8 +267,11 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format, crop_size, use_
         data = pd.read_hdf(path_to_dlc, 'full_traces')
         # get the column names
         column_list = list(data.columns)
-        # get only the columns with mouse information
-        column_list = [True if ('mouse' in el) and (('x' in el) or ('y' in el)) else False
+        # # get only the columns with mouse information
+        # column_list = [True if ('mouse' in el) and (('x' in el) or ('y' in el)) else False
+        #                for el in column_list]
+        # column_list = [True for el in column_list]
+        column_list = [True if (('x' in el) or ('y' in el)) else False
                        for el in column_list]
         # set interpolation flag
         interp_flag = False
