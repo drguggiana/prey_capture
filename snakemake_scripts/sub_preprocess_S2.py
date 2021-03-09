@@ -137,10 +137,11 @@ def kinematic_calculations(name, data):
     # check for a real cricket
     if 'cricket_0_x' in data.columns:
         cricket_coord = data[['cricket_0_x', 'cricket_0_y']].to_numpy()
+        cricket_head = data[['cricket_0_head_x', 'cricket_0_head_y']]
         # process the cricket related data
         cricket_data = cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_data)
         # concatenate the cricket data
-        kine_data = pd.concat([kine_data, cricket_data], axis=1)
+        kine_data = pd.concat([kine_data, cricket_data, cricket_head], axis=1)
         # set the cricket number
         real_crickets = 1
     else:

@@ -58,8 +58,8 @@ except NameError:
     # search_string = 'result:succ, lighting:normal, rig:miniscope'
 
     # search_string = 'slug:08_24_2020_11_24_27_VPrey_DG_200526_b_test_whiteCr_blackBG_rewarded'
-    # search_string = 'slug:08_06_2020_18_07_32_miniscope_DG_200701_a_succ'
-    search_string = 'slug:08_04_2020_15_08_43_miniscope_DG_200701_a_habi_nocricket'
+    search_string = 'slug:08_06_2020_18_07_32_miniscope_DG_200701_a_succ'
+    # search_string = 'slug:08_04_2020_15_08_43_miniscope_DG_200701_a_habi_nocricket'
     # search_string = 'result:fail, lighting:normal, rig:miniscope'
 
     # search_string = 'slug:11_25_2019_15_28_57_miniscope_MM_191106_a_fail_nomini'
