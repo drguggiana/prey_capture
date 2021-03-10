@@ -24,6 +24,10 @@ if __name__ == "__main__":
         # day = '_'.join((day[:2], day[2:4], day[4:]))
         animal = name_parts[1]
         rig = name_parts[2]
+        print('cnmfe video;'+video_path)
+        print('cnmfe out:'+out_path)
+
+        print(sys.argv)
     except IndexError:
         # define the target animal and date
         animal = 'DG_200701_a'

@@ -86,6 +86,8 @@ rule calcium_scatter:
         day_animal_calcium_file,
     output:
         os.path.join(config["target_path"], "{file}_calcium.hdf5"),
+    params:
+        info=lambda wildcards: config["file_info"][wildcards.file]
     script:
         "snakemake_scripts/scatter_calcium.py"
 

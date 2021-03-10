@@ -1,90 +1,96 @@
-import sys
-import json
+import yaml
 import os
 import h5py
 import functions_bondjango as bd
 import paths
-import pandas as pd
 import numpy as np
+import datetime
+import processing_parameters
 
 try:
-    # get the target video path
-    video_path = sys.argv[1]
-    calcium_path = video_path['analysis_path']
-    out_path = sys.argv[2]
-    data_all = json.loads(sys.argv[3])
 
-    name_parts = out_path.split('_')
-    day = name_parts[0]
-    # day = '_'.join((day[:2], day[2:4], day[4:]))
-    animal = name_parts[1]
-    rig = name_parts[2]
-except IndexError:
-    # define the target animal and date
-    animal = 'DG_200701_a'
-    day = '09_08_2020'
-    rig = 'miniscope'
-    # define the search string
-    search_string = 'slug:%s' % '_'.join((day, animal, rig, 'calciumday'))
-    # search_string = 'slug:08_06_2020_18_07_32_miniscope_DG_200701_a_succ'
+    # get the path to the file, parse and turn into a dictionary
+    calcium_path = snakemake.input[0]
+    video_data = yaml.load(snakemake.params.info, Loader=yaml.FullLoader)
+    # get the save paths
+    out_path = snakemake.output[0]
+
+    # get the parts to assemble the input file path
+    animal = video_data['mouse']
+    rig = video_data['rig']
+    trial_date = datetime.datetime.strptime(video_data['date'], '%Y-%m-%dT%H:%M:%SZ')
+    day = trial_date.strftime('%m_%d_%Y')
+    time = trial_date.strftime('%H_%M_%S')
+
+    print('scatter calcium:'+calcium_path)
+    print('scatter out:'+out_path)
+except NameError:
+
+    # define the target file
+    search_string = processing_parameters.search_string
+
     # query the database for data to plot
-    data_all = bd.query_database('analyzed_data', search_string)
+    data_all = bd.query_database('video_experiment', search_string)
     video_data = data_all[0]
-    calcium_path = video_data['analysis_path']
-    # video_path = video_data['tif_path']
-    # video_path = [el['tif_path'] for el in data_all]
+
+    # get the parts to assemble the input file path
+    animal = video_data['mouse']
+    rig = video_data['rig']
+    trial_date = datetime.datetime.strptime(video_data['date'], '%Y-%m-%dT%H:%M:%SZ')
+    day = trial_date.strftime('%m_%d_%Y')
+    time = trial_date.strftime('%H_%M_%S')
+
     # assemble the output path
-    # out_path = video_path[0].replace('.tif', '_calcium.hdf5')
-    # out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumday.hdf5')))
+    out_path = video_data['tif_path'].replace('.tif', '_calcium.hdf5')
+
+    # get the input file path
+    calcium_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumday.hdf5')))
+
+# get the model of origin
+if rig == 'miniscope':
+    target_model = 'video_experiment'
+else:
+    target_model = 'vr_experiment'
 
 # if there are no ROIs detected, skip the file and print the name
 try:
     # load the contents of the ca file
-    with h5py.File(calcium_path) as f:
+    with h5py.File(calcium_path, 'r') as f:
         # calcium_data = np.array((f['sigfn'])).T
         calcium_data = np.array(f['estimates/C'])
         frame_list = np.array(f['frame_list'])
 
-    # grab the processed files and split them based on the log file
+    # get the trials in the file
+    trials_list = [str(el)[2:-1] for el in frame_list[:, 0]]
+    # get the frame numbers
+    frame_numbers = [int(el) for el in frame_list[:, 1]]
+    # based on the time, find the corresponding calcium data
+    trial_idx = np.argwhere(np.array(trials_list) == '_'.join((day, time)))[0][0]
+    # get the frame start and end
+    frame_start = np.sum(frame_numbers[:trial_idx])
+    frame_end = frame_start + frame_numbers[trial_idx]
+    # extract the frames
+    current_calcium = calcium_data[:, frame_start:frame_end]
+    # save the data as an h5py
+    with h5py.File(out_path, 'w') as file:
+        file.create_dataset('calcium_data', data=current_calcium)
 
-    # # read the log file
-    # files_list = pd.read_csv(out_path_log)
-
-    files_list = [str(el) for el in frame_list[:, 0]]
-    # initialize a counter for the frames
-    frame_counter = 0
-
-    # for all the rows in the dataframe
-    for index, row in files_list.iterrows():
-        # get the frames from this file
-        current_calcium = calcium_data[:, frame_counter:row['frame_number'] + frame_counter]
-
-        # assemble the save path for the file
-        new_calcium_path = os.path.join(out_path[index],
-                                        os.path.basename(
-                                            row['filename'].replace('.tif', '_calcium_data.h5')))
-
-        # save the data as an h5py
-        with h5py.File(new_calcium_path) as file:
-            file.create_dataset('calcium_data', data=current_calcium)
-
-        # update the frame counter
-        frame_counter += row['frame_number']
 except KeyError:
     print('This file did not contain any ROIs: ' + calcium_path)
 
 # update the bondjango entry (need to sort out some fields)
-# ori_data = deepcopy(video_data)
+ori_data = video_data.copy()
 ori_data['fluo_path'] = out_path
 mouse = ori_data['mouse']
 ori_data['mouse'] = '/'.join((paths.bondjango_url, 'mouse', mouse, ''))
 ori_data['experiment_type'] = '/'.join((paths.bondjango_url, 'experiment_type', 'Free_behavior', ''))
-# fill in the preprocess_file field if present
-if len(ori_data['preproc_files']) > 0:
-    # for all the elements there
-    for idx, el in enumerate(ori_data['preproc_files']):
-        ori_data['preproc_files'][idx] = \
-            '/'.join((paths.bondjango_url, 'analyzed_data', el, ''))
+
+# fix the preprocessing file field too
+for idx, el in enumerate(ori_data['preproc_files']):
+    ori_data['preproc_files'][idx] = \
+        '/'.join((paths.bondjango_url, 'analyzed_data', ori_data['preproc_files'][idx], ''))
 
 update_url = '/'.join((paths.bondjango_url, target_model, ori_data['slug'], ''))
 output_entry = bd.update_entry(update_url, ori_data)
+
+print(output_entry.status_code)

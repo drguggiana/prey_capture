@@ -195,9 +195,7 @@ def match_calcium(calcium_path, sync_path, kinematics_data):
             # load the calcium data
     # try:
     with h5py.File(calcium_path) as f:
-        # calcium_data = np.array(f['calcium_data'])
         calcium_data = np.array(f['estimates/C'])
-                # break
     # except:
     #     raise NameError(calcium_path)
         # else:

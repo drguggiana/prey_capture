@@ -11,6 +11,7 @@ import os
 import yaml
 import datetime
 import matplotlib as mpl; import matplotlib.pyplot as plt; mpl.use('Qt5Agg')
+import processing_parameters
 
 
 def aggregate_full_traces(partial_data):
@@ -186,11 +187,9 @@ try:
     date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in path_info]
 except NameError:
     # define the analysis type
-    analysis_type = 'aggFullCA'
+    analysis_type = processing_parameters.analysis_type
     # define the search query
-    # search_query = 'result:succ,lighting:normal,rig:vr'
-    search_query = 'slug:09_15_2020_14_23_02_VPrey_DG_200526_d_test_whiteCr_grayBG_rewarded'
-    # search_query = 'result:succ,lighting:normal,rig:miniscope,imaging:doric,slug:08_06_2020'
+    search_query = processing_parameters.search_string
 
     # define the origin model
     ori_type = 'preprocessing'

@@ -100,9 +100,9 @@ for idx, target_entries in enumerate(new_queries):
                              for el in target_entries},
                    'file_info': {os.path.basename(el['bonsai_path'])[:-4]: yaml.dump(el)
                                  for el in target_entries},
-                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
-                   #              else False for el in target_entries},
-                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
+                                else False for el in target_entries},
+                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
                    'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
                                     else False for el in target_entries},
                    # 'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
