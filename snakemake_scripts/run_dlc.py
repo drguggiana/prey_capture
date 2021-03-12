@@ -43,7 +43,7 @@ shutil.copyfile(video_path, temp_video_path)
 
 # select which network to use
 if video_data['rig'] == 'miniscope':
-    dlc.analyze_videos(paths.config_path, [temp_video_path], destfolder=paths.temp_path)
+    dlc.analyze_videos(paths.config_vame_path, [temp_video_path], destfolder=paths.temp_path)
     target_model = 'video_experiment'
 else:
     # dlc.analyze_videos(paths.config_path, [temp_video_path], destfolder=paths.temp_path)

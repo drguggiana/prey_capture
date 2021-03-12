@@ -14,6 +14,7 @@ import re
 
 
 if __name__ == "__main__":
+
     # try:
     # get the target video path
     video_path = sys.argv[1]

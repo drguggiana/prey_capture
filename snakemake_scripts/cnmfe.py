@@ -22,7 +22,9 @@ def cnmfe_function(fnames, save_path, online_dict, save_output=True):
         cm.stop_server(dview=dview)
     c, dview, n_processes = cm.cluster.setup_cluster(
         backend='local', n_processes=None, single_thread=False)
-
+    
+    # set the save pic flag
+    save_pic = True
     # # Set parameters for source extraction
     #
     # min_pnr = 6
@@ -100,6 +102,8 @@ def cnmfe_function(fnames, save_path, online_dict, save_output=True):
         cnmf_online.fit_online()
     except ValueError:
         print(f'no ROIs found in file {fnames}')
+        # set the save pic flag
+        save_pic = False
     # kill the server
     if 'dview' in locals():
         cm.stop_server(dview=dview)
@@ -122,5 +126,12 @@ def cnmfe_function(fnames, save_path, online_dict, save_output=True):
         pic_path = save_path.replace('_calciumday.hdf5', '_calciumpic.tif')
         # also save a figure with the contours
         plt.savefig(pic_path, dpi=200)
+        # img = cnmf_online.estimates.corr_img
+        # img = resize(img, (img.shape[0] * online_dict['ds_factor'], img.shape[1] * online_dict['ds_factor']))
+        # if the no pic flag hasn't been set
+        # if save_pic:
+        #     cnmf_online.estimates.plot_contours()
+        #     # also save a figure with the contours
+        #     plt.savefig(save_path.replace('_calcium.hdf5', '_calciumpic.tif'), dpi=200)
 
     return save_cnmf, pic_path
