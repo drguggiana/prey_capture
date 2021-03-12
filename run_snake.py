@@ -132,6 +132,7 @@ for idx, target_entries in enumerate(new_queries):
                               # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               # '--rerun-incomplete',
+                              '--verbose',  # activates verbosity
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)

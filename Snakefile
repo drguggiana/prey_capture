@@ -12,6 +12,19 @@ def yaml_to_json(wildcards):
     json_dict = json.dumps(python_dict).replace('"', '\\"')
     return json_dict
 
+def yaml_list_to_json(wildcards):
+    day_paths = day_selector(wildcards)
+    # for el in day_paths:
+        # print([config["file_info"][os.path.basename(el)[:-4]] for el in day_paths])
+
+    python_list = [yaml.load(config["file_info"][os.path.basename(el)[:-4]], Loader=yaml.FullLoader)
+                   for el in day_paths]
+    url_dict = {}
+    for idx, el in enumerate(day_paths):
+        url_dict[os.path.basename(el)[:-4]] = python_list[idx]['url']
+    json_dict = json.dumps(url_dict).replace('"', '\\"')
+    return json_dict
+
 rule dlc_extraction:
     input:
           lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi'),
@@ -49,22 +62,21 @@ def dlc_input_selector(wildcards):
 
 def day_selector(wildcards):
     name_parts = wildcards.file.split('_')
-    day = name_parts[0]
-    # day = '_'.join((day[:2], day[2:4], day[4:]))
-    animal = name_parts[1]
-
+    day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
+    animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
 
-    day_paths = [el['tif_path'] for el in info_list if (config['calcium_flag'][el['slug']] and el['mouse']==animal and el['date'][:10]==day)]
+    day_paths = [el['tif_path'] for el in info_list if
+                 (config['calcium_flag'][os.path.basename(el['bonsai_path'])[:-4]]
+                  and el['mouse']==animal and el['date'][:10]==day)]
+    wildcards.day_paths = day_paths
     return day_paths
 
 
 def day_animal_calcium_file(wildcards):
     python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
-
     animal = python_dict['mouse']
-    # day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m%d%Y')
-    day = python_dict['date'][:10]
+    day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
     rig = python_dict['rig']
     return os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumday.hdf5')))
 
@@ -75,14 +87,13 @@ rule calcium_extract:
     output:
         os.path.join(paths.analysis_path, '{file}_calciumday.hdf5'),
     params:
-        info=yaml_to_json,
+        info=yaml_list_to_json,
         cnmfe_path=config["cnmfe_path"],
     shell:
         r'conda activate caiman & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
 
 rule calcium_scatter:
     input:
-        # os.path.join(paths.analysis_path, '_calciumday.hdf5'),
         day_animal_calcium_file,
     output:
         os.path.join(config["target_path"], "{file}_calcium.hdf5"),

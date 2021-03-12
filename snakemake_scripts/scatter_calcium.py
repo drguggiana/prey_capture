@@ -22,8 +22,8 @@ try:
     day = trial_date.strftime('%m_%d_%Y')
     time = trial_date.strftime('%H_%M_%S')
 
-    print('scatter calcium:'+calcium_path)
-    print('scatter out:'+out_path)
+    # print('scatter calcium:'+calcium_path)
+    # print('scatter out:'+out_path)
 except NameError:
 
     # define the target file
@@ -67,8 +67,8 @@ try:
     # based on the time, find the corresponding calcium data
     trial_idx = np.argwhere(np.array(trials_list) == '_'.join((day, time)))[0][0]
     # get the frame start and end
-    frame_start = np.sum(frame_numbers[:trial_idx])
-    frame_end = frame_start + frame_numbers[trial_idx]
+    frame_start = int(np.sum(frame_numbers[:trial_idx]))
+    frame_end = int(frame_start + frame_numbers[trial_idx])
     # extract the frames
     current_calcium = calcium_data[:, frame_start:frame_end]
     # save the data as an h5py
