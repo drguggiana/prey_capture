@@ -54,6 +54,7 @@ def parse_search_string(string_in):
         'gtdate': '',
         'ltdate': '',
         'analysis_type': '',
+        'mouse': '',
     }
     # for all the keys, find the matching terms and fill in the required entries
     for key in string_dict.keys():

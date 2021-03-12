@@ -1,6 +1,7 @@
 .idea/
 __pycache__/
 paths.py
+processing_parameters.py
 .ipynb_checkpoints/
 .snakemake/
 snakemake_scripts/config_snake.yaml

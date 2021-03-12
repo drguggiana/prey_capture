@@ -5,13 +5,16 @@ warnings.filterwarnings(action='ignore',
 import caiman as cm
 from caiman.source_extraction import cnmf as cnmf
 from matplotlib import pyplot as plt
-# from skimage.transform import resize
+from skimage.transform import resize
 
 
 def cnmfe_function(fnames, save_path, online_dict, save_output=True):
 
     # We start with motion correction and then proceed with the source extraction using the CNMF-E algorithm.
     # For a detailed 1p demo check `demo_pipeline_cnmfE.ipynb`.
+
+    # initialize the path for saving the pics
+    pic_path = []
 
     # start a cluster for parallel processing
     # (if a cluster already exists it will be closed and a new session will be opened)
@@ -101,19 +104,23 @@ def cnmfe_function(fnames, save_path, online_dict, save_output=True):
     if 'dview' in locals():
         cm.stop_server(dview=dview)
 
+    # transfer only estimates and params to a dummy variable
+    save_cnmf = cnmf.online_cnmf.OnACID(params=online_opts)
+    save_cnmf.estimates = cnmf_online.estimates
+
     # Save by default
     if save_output:
-        # transfer only estimates and params to a dummy variable
-        dummy = cnmf.online_cnmf.OnACID(params=online_opts)
-        dummy.estimates = cnmf_online.estimates
+
         # save the output
-        dummy.save(save_path)
+        save_cnmf.save(save_path)
 
         # produce the contour figure
-        # img = cnmf_online.estimates.corr_img
-        # img = resize(img, (img.shape[0] * online_dict['ds_factor'], img.shape[1] * online_dict['ds_factor']))
-        cnmf_online.estimates.plot_contours()
+        img = cnmf_online.estimates.corr_img
+        img = resize(img, (cnmf_online.estimates.dims[0], cnmf_online.estimates.dims[1]))
+        cnmf_online.estimates.plot_contours(img=img)
+        # assemble the pic path
+        pic_path = save_path.replace('_calciumday.hdf5', '_calciumpic.tif')
         # also save a figure with the contours
-        plt.savefig(save_path.replace('_calcium.hdf5', '_calciumpic.tif'), dpi=200)
+        plt.savefig(pic_path, dpi=200)
 
-    return cnmf_online
+    return save_cnmf, pic_path
