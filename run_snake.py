@@ -2,13 +2,74 @@ import subprocess as sp
 import yaml
 import functions_bondjango as bd
 import paths
-import processing_parameters
 import functions_data_handling as fd
 import os
 import numpy as np
 
-# load the search settings
-input_dictionary = processing_parameters.input_dictionary
+
+# define the type of analysis
+input_dictionary = {
+    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
+    # 'analysis_type': ['trigAveCA'],
+    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
+    'analysis_type': ['just_preprocess'],
+    # 'result': ['test', ],
+    'result': ['fail', ],
+
+    # 'rig': ['VPrey', 'VR', ],
+    # 'rig': ['miniscope', ],
+    'rig': ['VScreen'],
+    # 'lighting': ['normal', ],
+    # 'gtdate': ['2020-08-24T00-00-00'],
+    # 'gtdate': ['2020-06-23T00-00-00'],
+    # 'ltdate': ['2020-07-06T00-00-00'],
+    # 'notes': ['crickets_1_vrcrickets_1', 'crickets_1_vrcrickets_3',
+    #           'crickets_0_vrcrickets_1', 'crickets_0_vrcrickets_3'
+    #           ]
+    # 'notes': ['blackCr_crickets_1_vrcrickets_1', 'blackCr_rewarded_crickets_0_vrcrickets_1',
+    #           'blackCr_nonrewarded_crickets_0_vrcrickets_1',
+    #           'blackCr_crickets_1_vrcrickets_3', 'blackCr_rewarded_crickets_0_vrcrickets_3',
+    #           'blackCr_nonrewarded_crickets_0_vrcrickets_3',
+    #           'blackCr_crickets_1_vrcrickets_0',
+    #           'blackCr_grayBG_crickets_1_vrcrickets_1', 'blackCr_grayBG_rewarded_crickets_0_vrcrickets_1',
+    #           'blackCr_grayBG_crickets_1_vrcrickets_3', 'blackCr_grayBG_rewarded_crickets_0_vrcrickets_3',
+    #           'whiteCr_blackBG_crickets_1_vrcrickets_1', 'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_1',
+    #           'whiteCr_blackBG_crickets_1_vrcrickets_3', 'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_3',
+    #           'whiteCr_grayBG_crickets_1_vrcrickets_1', 'whiteCr_grayBG_rewarded_crickets_0_vrcrickets_1',
+    #           'whiteCr_grayBG_crickets_1_vrcrickets_3', 'whiteCr_grayBG_rewarded_crickets_0_vrcrickets_3',
+    #           'obstacle_crickets_1_vrcrickets_1', 'obstacle_rewarded_crickets_0_vrcrickets_1',
+    #           'obstacle_crickets_1_vrcrickets_3', 'obstacle_rewarded_crickets_0_vrcrickets_3',
+    #           'blackCr_crickets_1',
+    #           'blackCr_rewarded',
+    #           'blackCr_grayBG_crickets_1',
+    #           'blackCr_grayBG_rewarded',
+    #           'whiteCr_blackBG_crickets_1',
+    #           'whiteCr_blackBG_rewarded',
+    #           'whiteCr_grayBG_crickets_1',
+    #           'whiteCr_grayBG_rewarded',
+    #           'crickets_1',
+    #           'crickets_0',
+    #           ],
+    # 'notes': ['obstacle_crickets_1_vrcrickets_1', 'obstacle_rewarded_crickets_0_vrcrickets_1',
+    #           'obstacle_crickets_1_vrcrickets_3', 'obstacle_rewarded_crickets_0_vrcrickets_3',
+    #           ]
+    # 'notes': ['blackCr_crickets_1',
+    #           'blackCr_rewarded',
+    #           'blackCr_grayBG_crickets_1',
+    #           'blackCr_grayBG_rewarded',
+    #           'whiteCr_blackBG_crickets_1',
+    #           'whiteCr_blackBG_rewarded',
+    #           'whiteCr_grayBG_crickets_1',
+    #           'whiteCr_grayBG_rewarded',
+    #           ]
+
+
+    # 'slug': ['08_10_2020_16_41_32_miniscope_DG_200701_a_succ'],
+    # 'slug': ['DG_200701_a'],
+    # 'gtdate': ['2020-03-01T00-00-00'],
+    # 'notes': ['crickets_0_vrcrickets_1'],
+    # 'notes': ['vrcrickets_3']
+}
 
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
@@ -64,10 +125,8 @@ mouse_list = []
 for idx, search_query in enumerate(full_parsed):
     # modify query if cellMatch
     if search_query['analysis_type'] == 'cellMatch':
-
         # extract only the mice from the search query that have calcium
         mouse_list.append(np.unique([el['mouse'] for el in full_queries[idx] if len(el['fluo_path']) > 0]))
-
     else:
         new_queries.append(full_queries[idx])
         new_paths.append(full_paths[idx])
@@ -85,10 +144,8 @@ for idx, mouse in enumerate(mouse_list):
     target_entries = [el for el in target_entries if len(el['fluo_path']) > 0]
     # append to the query list
     new_queries.append(target_entries)
-    # new_parsed.append({'analysis_type': 'cellMatch'})
-    new_parsed.append({'analysis_type': 'just_preprocess'})
-    # TODO: make sure this works for VR also
-    new_paths.append(full_paths[0])
+    new_parsed.append({'analysis_type': 'cellMatch'})
+    new_paths.append([])
 
 # for all the full queries
 for idx, target_entries in enumerate(new_queries):
@@ -100,12 +157,12 @@ for idx, target_entries in enumerate(new_queries):
                              for el in target_entries},
                    'file_info': {os.path.basename(el['bonsai_path'])[:-4]: yaml.dump(el)
                                  for el in target_entries},
-                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
-                                else False for el in target_entries},
-                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
-                   'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
-                                    else False for el in target_entries},
-                   # 'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
+                   #              else False for el in target_entries},
+                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   # 'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
+                   #                  else False for el in target_entries},
+                   'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
@@ -129,10 +186,9 @@ for idx, target_entries in enumerate(new_queries):
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
                               # '-F',         # (hard) force rerun everything
-                              # '-f',         # (soft) force rerun last step
+                              '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               # '--rerun-incomplete',
-                              '--verbose',  # activates verbosity
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)
