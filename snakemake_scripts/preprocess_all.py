@@ -10,24 +10,31 @@ import os
 import yaml
 import matplotlib.pyplot as plt
 from pandas import read_hdf
+import processing_parameters
 
 
 def preprocess_selector(csv_path, saving_path, file_info):
     """functions that selects the preprocessing function for the first step, either dlc or not"""
     # check if the input has a dlc path or not
-    if len(file_info['dlc_path']) > 0 and file_info['dlc_path'] != 'N/A':
+    if (len(file_info['dlc_path']) > 0 and file_info['dlc_path'] != 'N/A') or \
+            os.path.isfile(file_info['bonsai_path'].replace('.csv', '_dlc.h5')):
+        # assemble the path here, in case the file wasn't in the database
+        dlc_path = file_info['bonsai_path'].replace('.csv', '_dlc.h5')
         # if there's a dlc file, use this preprocessing
-        output_path, traces = s1.run_dlc_preprocess(csv_path, file_info['dlc_path'], saving_path, file_info)
+        output_path, traces, corner_out = s1.run_dlc_preprocess(csv_path, dlc_path, saving_path, file_info)
     else:
         # if not, use the legacy non-dlc preprocessing
         output_path, traces = s1.run_preprocess(csv_path, saving_path, file_info)
-    return output_path, traces
+        # set corners to empty
+        corner_out = []
+    return output_path, traces, corner_out
 
 
 # check if launched from snakemake, otherwise, prompt user
 try:
     # get the path to the file, parse and turn into a dictionary
     raw_path = snakemake.input[0]
+    calcium_path = snakemake.input[1]
     files = yaml.load(snakemake.params.info, Loader=yaml.FullLoader)
     # get the save paths
     save_path = snakemake.output[0]
@@ -35,31 +42,18 @@ try:
 except NameError:
     # USE FOR DEBUGGING ONLY (need to edit the search query and the object selection)
     # define the search string
-    # search_string = 'slug:11_11_2019_15_02_31_DG_190417_a_succ'
-    # search_string = 'slug:03_04_2020_15_54_26_miniscope_mm_200129_a_succ'
-    # search_string = 'slug:07_17_2020_16_24_31_dg_200526_d_fail_dark'
-    search_string = 'slug:11_16_2020_10_07_12_VScreen_DG_200526_a_test_3D'
-    # 11_11_2020_14_30_08_vscreen_dg_200526_d_test_2d
-    # 09_01_2020_11_07_48_VPrey_DG_200526_b_succ_real_blackCr
-    # 07_03_2020_15_36_49_VPrey_DG_200526_d_test_rewarded
-    # 07_10_2020_12_22_01_VPrey_DG_200526_a_test_nonrewarded_blackCr
-    # 07_06_2020_14_49_52_VPrey_DG_200526_b_test_rewarded_obstacle
-    # 07_09_2020_12_14_14_VPrey_DG_200526_d_test_nonrewarded_blackCr
-    # 06_24_2020_11_20_55_VPrey_DG_200526_a_test
-    # 07_03_2020_14_58_41_DG_200526_c_succ
-    # 06_30_2020_16_48_19_VPrey_DG_200526_d_test_lowFR
-    # search_string = 'result:succ, lighting:normal, rig:miniscope'
-
-    # search_string = 'slug:11_25_2019_15_28_57_miniscope_MM_191106_a_fail_nomini'
-    # search_string = 'slug:03_05_2020_15_56_12_miniscope_MM_200129_b_succ'
-    # search_string = 'slug:03_13_2020_13_20_21_miniscope_MM_200129_a_succ'
-    # search_string = 'slug:12_04_2019_15_56_34_miniscope_MM_191107_a_succ_nomini'
+    search_string = processing_parameters.search_string
 
     # define the target model
-    target_model = 'vr_experiment'
+    if 'miniscope' in search_string:
+        target_model = 'video_experiment'
+    else:
+        target_model = 'vr_experiment'
+
     # get the queryset
     files = bd.query_database(target_model, search_string)[0]
     raw_path = files['bonsai_path']
+    calcium_path = files['bonsai_path'][:-4] + '_calcium.hdf5'
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
                              os.path.basename(files['bonsai_path'][:-4]))+'_preproc.hdf5'
@@ -72,13 +66,13 @@ file_date = datetime.datetime.strptime(files['date'], '%Y-%m-%dT%H:%M:%SZ')
 # if miniscope but no imaging, run bonsai only
 if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     # run the first stage of preprocessing
-    out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, corners = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates[files['rig']]
     # scale the traces accordingly
-    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates)
-    # corners = miniscope_arena
+    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates, corners)
+    # corners = []
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
@@ -88,18 +82,15 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # run the first stage of preprocessing
     # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
     #                                               save_path)
-    out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, corners = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates[files['rig']]
     # scale the traces accordingly
-    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates)
-    # corners = miniscope_arena
+    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates, corners)
+    # corners = []
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
-
-    # get the calcium file path
-    calcium_path = files['fluo_path']
 
     # find the sync file
     sync_path = files['sync_path']
@@ -115,15 +106,15 @@ elif files['rig'] in ['VR', 'VPrey'] and file_date <= datetime.datetime(year=202
     # run the first stage of preprocessing
     # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
     #                                               save_path)
-    out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, corners = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates['VR']
 
     # TODO: add the old motive-bonsai alignment as a function
 
-    # placeholder corners list
-    corners = []
+    # # placeholder corners list
+    # corners = []
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
@@ -134,7 +125,7 @@ elif files['rig'] in ['VR', 'VPrey'] and \
     # TODO: make sure the constants are set to values that make sense for the vr arena
 
     # get the video tracking data
-    out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, _ = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # get the motive tracking data
     motive_traces, _, _ = s1.extract_motive(files['track_path'], files['rig'])
@@ -163,7 +154,7 @@ elif files['rig'] in ['VScreen']:
     params = read_hdf(files['screen_path'], key='params')
 
     # get the video tracking data
-    out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, _ = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # define the dimensions of the arena
     manual_coordinates = paths.arena_coordinates['VR_manual']
@@ -194,7 +185,7 @@ else:
     #                                               save_path)
 
     # get the video tracking data
-    out_path, filtered_traces = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, _ = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates['VR']
@@ -217,7 +208,7 @@ else:
 # save the filtered trace
 fig_final = plt.figure()
 ax = fig_final.add_subplot(111)
-plt.gca().invert_xaxis()
+# plt.gca().invert_xaxis()
 # plt.gca().invert_yaxis()
 
 # plot the filtered trace

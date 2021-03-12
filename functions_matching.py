@@ -7,6 +7,7 @@ from functions_misc import add_edges, interp_trace, normalize_matrix
 import h5py
 import pandas as pd
 import os
+import time
 
 
 def align_traces_maxrate(frame_rate_1, frame_rate_2, data_1, data_2, sign_vector, frame_times, cricket, z=1):
@@ -184,9 +185,22 @@ def match_traces(data_3d, data_2d, frame_time_list, coordinate_list, cricket):
 
 def match_calcium(calcium_path, sync_path, kinematics_data):
     """Match the kinematic and calcium data provided based on the sync file provided"""
-    # load the calcium data
+
+    # # iteratively check the file is there, wait, and after 5 attempts skip
+    # for i in np.arange(5):
+    #     # check if the file is there
+    #     if os.path.isfile(calcium_path):
+
+    # time.sleep(30)
+            # load the calcium data
+    # try:
     with h5py.File(calcium_path) as f:
-        calcium_data = np.array(f['calcium_data'])
+        calcium_data = np.array(f['estimates/C'])
+    # except:
+    #     raise NameError(calcium_path)
+        # else:
+        #     # wait 5 seconds and go to the next iteration
+        #     time.sleep(5)
 
     # # get the time vector from bonsai
     # bonsai_time = filtered_traces.time
@@ -205,9 +219,17 @@ def match_calcium(calcium_path, sync_path, kinematics_data):
     # bonsai_ifi = np.argwhere(np.diff(sync_data.bonsai_frames) > 0)
     # bonsai_start_frame = bonsai_ifi[np.argwhere(np.diff(bonsai_ifi, axis=0) > 1000)[0][0] + 1][0]
     # n_frames_bonsai_sync = np.sum(np.diff(sync_data.bonsai_frames.to_numpy()[bonsai_start_frame:]) > 0)
+
+    # get the frame times from the sync file
     frame_times_bonsai_sync = sync_data.loc[
-                                  np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0, 'Time'].to_numpy()[
-                              -n_frames_bonsai_file:]
+                                  np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0, 'Time'].to_numpy()
+    # compare to the frames from bonsai and adjust accordingly (if they don't match, show a warning)
+    if frame_times_bonsai_sync.shape[0] < n_frames_bonsai_file:
+        print('File %s has less sync frames than bonsai frames, trimmed bonsai from end' % sync_path)
+        n_frames_bonsai_file = frame_times_bonsai_sync.shape[0]
+        kinematics_data = kinematics_data[:n_frames_bonsai_file]
+    else:
+        frame_times_bonsai_sync = frame_times_bonsai_sync[-n_frames_bonsai_file:]
 
     # interpolate the bonsai traces to match the mini frames
     matched_bonsai = kinematics_data.drop(['time_vector'], axis=1).apply(interp_trace, raw=False,

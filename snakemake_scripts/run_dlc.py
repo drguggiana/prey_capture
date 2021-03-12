@@ -13,6 +13,7 @@ import functions_bondjango as bd
 import functions_io as fi
 import functions_misc as fm
 import json
+import processing_parameters
 
 # # define the config_path
 # config_path = paths.config_path
@@ -22,9 +23,9 @@ try:
     video_path = sys.argv[1]
     out_path = sys.argv[2]
     video_data = json.loads(sys.argv[3])
-except NameError:
+except IndexError:
     # define the search string
-    search_string = 'result:succ, lighting:normal, rig:miniscope, imaging:doric'
+    search_string = processing_parameters.search_string
     # query the database for data to plot
     data_all = bd.query_database('video_experiment', search_string)
     video_data = data_all[0]
@@ -42,7 +43,7 @@ shutil.copyfile(video_path, temp_video_path)
 
 # select which network to use
 if video_data['rig'] == 'miniscope':
-    dlc.analyze_videos(paths.config_path, [temp_video_path], destfolder=paths.temp_path)
+    dlc.analyze_videos(paths.config_vame_path, [temp_video_path], destfolder=paths.temp_path)
     target_model = 'video_experiment'
 else:
     # dlc.analyze_videos(paths.config_path, [temp_video_path], destfolder=paths.temp_path)

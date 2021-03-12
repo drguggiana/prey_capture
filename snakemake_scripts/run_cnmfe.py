@@ -1,183 +1,112 @@
-import numpy as np
-import caiman as cm
-from caiman.source_extraction import cnmf as cnmf
-from caiman.motion_correction import MotionCorrect
-
-
-def main():
-    # fnames = [r"J:\Drago Guggiana Nilo\Prey_capture\VideoExperiment\12_07_2019_15_06_28_miniscope_MM_191108_a_succ.tif"]
-    fnames = [r"C:\Users\drguggiana\caiman_data\example_movies\09_08_2020_15_26_21_miniscope_DG_200701_a_succ.tif"]
-    # Batch (offline) approach
-
-    # We start with motion correction and then proceed with the source extraction using the CNMF-E algorithm.
-    # For a detailed 1p demo check `demo_pipeline_cnmfE.ipynb`.
-
-    # # motion correction parameters
-    # motion_correct = True            # flag for performing motion correction
-    # pw_rigid = False                 # flag for performing piecewise-rigid motion correction (otherwise just rigid)
-    # gSig_filt = (7, 7)               # size of high pass spatial filtering, used in 1p data
-    # max_shifts = (20, 20)            # maximum allowed rigid shift
-    # border_nan = 'copy'              # replicate values along the boundaries
-    #
-    # mc_dict = {
-    #     'pw_rigid': pw_rigid,
-    #     'max_shifts': max_shifts,
-    #     'gSig_filt': gSig_filt,
-    #     'border_nan': border_nan
-    # }
-    #
-    # online_opts = cnmf.params.CNMFParams(params_dict=mc_dict)
-    #
-    # start a cluster for parallel processing
-    # (if a cluster already exists it will be closed and a new session will be opened)
-    if 'dview' in locals():
-        cm.stop_server(dview=dview)
-    c, dview, n_processes = cm.cluster.setup_cluster(
-        backend='local', n_processes=None, single_thread=False)
-    #
-    # mc = MotionCorrect(fnames, dview=dview, **online_opts.get_group('motion'))
-    # mc.motion_correct(save_movie=True)
-    #
-    # # We then proceed with memory mapping
-    #
-    # from time import time
-    # fname_new = cm.save_memmap(mc.mmap_file, base_name='memmap_', order='C',
-    #                            border_to_0=0, dview=dview)
-    # Yr, dims, T = cm.load_memmap(fname_new)
-    # images = Yr.T.reshape((T,) + dims, order='F')
-
-    # Set parameters for source extraction
-
-    # min_pnr = 6
-    min_corr = 0.8
-    # rf = 48                                        # half size of each patch
-    # stride = 8                                     # amount of overlap between patches
-    # ssub = 1                                       # spatial downsampling factor
-    # decay_time = 1                               # length of typical transient (in seconds)
-    # fr = 10                                        # imaging rate (Hz)
-    # gSig = (10, 10)                                  # expected half size of neurons
-    # gSiz = (30, 30)                                # half size for neuron bounding box
-    # p = 0                                          # order of AR indicator dynamics
-    # min_SNR = 1.5                                  # minimum SNR for accepting new components
-    rval_thr = 0.85                                # correlation threshold for new component inclusion
-    # merge_thr = 0.65                               # merging threshold
-    # K = None                                       # initial number of components
-    #
-    # cnmfe_dict = {'fnames': fnames,
-    #               'fr': fr,
-    #               'decay_time': decay_time,
-    #               'method_init': 'corr_pnr',
-    #               'gSig': gSig,
-    #               'gSiz': gSiz,
-    #               'rf': rf,
-    #               'stride': stride,
-    #               'p': p,
-    #               'nb': 0,
-    #               'ssub': ssub,
-    #               'min_SNR': min_SNR,
-    #               'min_pnr': min_pnr,
-    #               'min_corr': min_corr,
-    #               'bas_nonneg': False,
-    #               'center_psf': True,
-    #               'rval_thr': rval_thr,
-    #               'only_init': True,
-    #               'merge_thr': merge_thr,
-    #               'K': K}
-    # # online_opts.change_params(cnmfe_dict)
-    # online_opts = cnmf.params.CNMFParams(params_dict=cnmfe_dict)
-
-    # print(online_opts)
-
-    rf = 48  # half size of patch (used only during initialization)
-    stride = 8  # overlap between patches (used only during initialization)
-    ssub = 1  # spatial downsampling factor (during initialization)
-    ds_factor = 2 * ssub  # spatial downsampling factor (during online processing)
-    ssub_B = 4  # background downsampling factor (use that for faster processing)
-    gSig = (10 // ds_factor, 10 // ds_factor)  # expected half size of neurons
-    gSiz = (30 // ds_factor, 30 // ds_factor)
-    sniper_mode = False  # flag using a CNN to detect new neurons (o/w space correlation is used)
-    init_batch = 200  # number of frames for initialization (presumably from the first file)
-    expected_comps = 500  # maximum number of expected components used for memory pre-allocation (exaggerate here)
-    dist_shape_update = False  # flag for updating shapes in a distributed way
-    min_num_trial = 5  # number of candidate components per frame
-    K = None  # initial number of components
-    epochs = 2  # number of passes over the data
-    show_movie = False  # show the movie with the results as the data gets processed
-    use_corr_img = True  # flag for using the corr*pnr image when searching for new neurons (otherwise residual)
-    decay_time = 1
-
-    online_dict = {'epochs': epochs,
-                   'nb': 0,
-                   'ssub': ssub,
-                   'ssub_B': ssub_B,
-                   'ds_factor': ds_factor,  # ds_factor >= ssub should hold
-                   'gSig': gSig,
-                   'gSiz': gSiz,
-                   'gSig_filt': (3, 3),
-                   'min_corr': min_corr,
-                   'bas_nonneg': False,
-                   'center_psf': True,
-                   'max_shifts_online': 20,
-                   'rval_thr': rval_thr,
-                   'motion_correct': True,
-                   'init_batch': init_batch,
-                   'only_init': True,
-                   # 'init_method': 'cnmf',
-                   'method_init': 'corr_pnr',
-                   'normalize_init': False,
-                   'update_freq': 200,
-                   'expected_comps': expected_comps,
-                   'sniper_mode': sniper_mode,  # set to False for 1p data
-                   'dist_shape_update': dist_shape_update,
-                   'min_num_trial': min_num_trial,
-                   'use_corr_img': use_corr_img,
-                   'fnames': fnames,
-                   'decay_time': decay_time,
-                   'show_movie': show_movie}
-    # online_opts.change_params(online_dict)
-    online_opts = cnmf.params.CNMFParams(params_dict=online_dict)
-
-    print(online_opts)
-
-    cnm_online = cnmf.online_cnmf.OnACID(params=online_opts, dview=dview)
-    cnm_online.fit_online()
-
-    # if online_opts.online['motion_correct']:
-    #     shifts = cnm_online.estimates.shifts[-cnm_online.estimates.C.shape[-1]:]
-    #     if not online_opts.motion['pw_rigid']:
-    #         memmap_file = cm.motion_correction.apply_shift_online(images, shifts,
-    #                                                               save_base_name='MC')
-    #     else:
-    #         mc = MotionCorrect(fnames, dview=dview, **online_opts.get_group('motion'))
-    #
-    #         mc.y_shifts_els = [[sx[0] for sx in sh] for sh in shifts]
-    #         mc.x_shifts_els = [[sx[1] for sx in sh] for sh in shifts]
-    #         memmap_file = mc.apply_shifts_movie(fnames, rigid_shifts=False,
-    #                                             save_memmap=True,
-    #                                             save_base_name='MC')
-    # else:  # To do: apply non-rigid shifts on the fly
-    #     memmap_file = images.save(fnames[0][:-4] + 'mmap')
-    # cnm_online.mmap_file = memmap_file
-    # Yr_online, dims, T = cm.load_memmap(memmap_file)
-    #
-    # # cnm_online.estimates.dview=dview
-    # # cnm_online.estimates.compute_residuals(Yr=Yr_online)
-    # images_online = np.reshape(Yr_online.T, [T] + list(dims), order='F')
-    # min_SNR = 2  # peak SNR for accepted components (if above this, acept)
-    # rval_thr = 0.85  # space correlation threshold (if above this, accept)
-    # use_cnn = False  # use the CNN classifier
-    # cnm_online.params.change_params({'min_SNR': min_SNR,
-    #                                  'rval_thr': rval_thr,
-    #                                  'use_cnn': use_cnn})
-    #
-    # # cnm_online.estimates.evaluate_components(images_online, cnm_online.params, dview=dview)
-    # # cnm_online.estimates.Cn = pnr
-
-    print(cnm_online.estimates)
-    print(cnm_online.estimates.shape)
-
-    # get the spatial and temporal components
+import shutil
+import os
+import paths
+from snakemake_scripts.cnmfe import cnmfe_function
+import sys
+import json
+import functions_bondjango as bd
+import functions_io as fi
+from cnmfe_params import online_dict
+import functions_misc as fm
+from matplotlib import pyplot as plt
+from skimage.transform import resize
+import re
 
 
 if __name__ == "__main__":
-    main()
+
+    # try:
+    # get the target video path
+    video_path = sys.argv[1]
+    # find the occurrences of .tif terminators
+    ends = [el.start() for el in re.finditer('.tif', video_path)]
+
+    video_list = []
+    count = 0
+    for el in ends:
+        video_list.append(video_path[count:el+4])
+        count = el + 5
+
+    # print(video_list)
+    video_path = video_list
+    out_path = sys.argv[2]
+    data_all = json.loads(sys.argv[3])
+
+    name_parts = out_path.split('_')
+    day = name_parts[0]
+    # day = '_'.join((day[:2], day[2:4], day[4:]))
+    animal = name_parts[1]
+    rig = name_parts[2]
+
+    # except IndexError:
+    #     # define the target animal and date
+    #     animal = 'DG_200701_a'
+    #     day = '09_08_2020'
+    #     rig = 'miniscope'
+    #     # define the search string
+    #     search_string = 'result:succ, lighting:normal, rig:%s, imaging:doric, mouse:%s, slug:%s' % (rig, animal, day)
+    #     # search_string = 'slug:08_06_2020_18_07_32_miniscope_DG_200701_a_succ'
+    #     # query the database for data to plot
+    #     data_all = bd.query_database('video_experiment', search_string)
+    #     # video_data = data_all[0]
+    #     # video_path = video_data['tif_path']
+    #     video_path = [el['tif_path'] for el in data_all]
+    #     # assemble the output path
+    #     out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumday.hdf5')))
+
+    # delete the folder contents
+    fi.delete_contents(paths.temp_path)
+    # raise IndexError('stop here')
+    # combine the selected files into a single tif
+    out_path_tif, _, frames_list = fi.combine_tif(video_path, paths.temp_path)
+
+    # run cnmfe
+    cnmfe_out, _ = cnmfe_function([out_path_tif], out_path, online_dict, save_output=False)
+
+    # custom save the output to include the frames list
+    for idx, el in enumerate(frames_list.iloc[:, 0]):
+        # parse the line
+        frames_list.iloc[idx, 0] = '_'.join(os.path.basename(el).split('_')[:6])
+
+    cnmfe_out.frame_list = frames_list.values.tolist()
+    # save the output
+    cnmfe_out.save(out_path)
+
+    # produce the contour figure
+    img = cnmfe_out.estimates.corr_img
+    img = resize(img, (cnmfe_out.estimates.dims[0], cnmfe_out.estimates.dims[1]))
+    cnmfe_out.estimates.plot_contours(img=img)
+    # assemble the pic path
+    pic_path = out_path.replace('_calciumday.hdf5', '_calciumpic.tif')
+    # also save a figure with the contours
+    plt.savefig(pic_path, dpi=200)
+    # assemble the entry data
+    entry_data = {
+        'analysis_type': 'calciumday',
+        'analysis_path': out_path,
+        'date': '',
+        'pic_path': pic_path,
+        'result': 'multi',
+        'rig': rig,
+        'lighting': 'multi',
+        'imaging': 'multi',
+        'slug': fm.slugify(os.path.basename(out_path)[:-5]),
+        # 'input_path': [el['tif_path'] for el in data_all]
+        'video_analysis': [el for el in data_all if 'miniscope' in el], #[files['url']] if files['rig'] == 'miniscope' else [],
+        'vr_analysis': [el for el in data_all if 'miniscope' not in el], #[] if files['rig'] == 'miniscope' else [files['url']],
+    }
+
+    # check if the entry already exists, if so, update it, otherwise, create it
+    update_url = '/'.join((paths.bondjango_url, 'analyzed_data', entry_data['slug'], ''))
+    output_entry = bd.update_entry(update_url, entry_data)
+    if output_entry.status_code == 404:
+        # build the url for creating an entry
+        create_url = '/'.join((paths.bondjango_url, 'analyzed_data', ''))
+        output_entry = bd.create_entry(create_url, entry_data)
+
+    print('The output status was %i, reason %s' %
+          (output_entry.status_code, output_entry.reason))
+    if output_entry.status_code in [500, 400]:
+        print(entry_data)
+
+    print('<3')

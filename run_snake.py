@@ -2,69 +2,20 @@ import subprocess as sp
 import yaml
 import functions_bondjango as bd
 import paths
+import processing_parameters
 import functions_data_handling as fd
 import os
+import numpy as np
 
-
-# define the type of analysis
-input_dictionary = {
-    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
-    # 'analysis_type': ['trigAveCA'],
-    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
-    'analysis_type': ['just_preprocess'],
-    'result': ['test', ],
-    # 'result': ['test', 'succ'],
-    # 'rig': ['VPrey', 'VR', ],
-    # 'rig': ['miniscope', ],
-    'rig': ['VScreen'],
-    # 'lighting': ['normal', ],
-    # 'gtdate': ['2020-08-24T00-00-00'],
-    # 'gtdate': ['2020-06-23T00-00-00'],
-    # 'ltdate': ['2020-07-06T00-00-00'],
-    # 'notes': ['crickets_1_vrcrickets_1', 'crickets_1_vrcrickets_3',
-    #           'crickets_0_vrcrickets_1', 'crickets_0_vrcrickets_3'
-    #           ]
-    # 'notes': ['blackCr_crickets_1_vrcrickets_1', 'blackCr_rewarded_crickets_0_vrcrickets_1',
-    #           'blackCr_nonrewarded_crickets_0_vrcrickets_1',
-    #           'blackCr_crickets_1_vrcrickets_3', 'blackCr_rewarded_crickets_0_vrcrickets_3',
-    #           'blackCr_nonrewarded_crickets_0_vrcrickets_3',
-    #           'blackCr_crickets_1_vrcrickets_0',
-    #           'blackCr_grayBG_crickets_1_vrcrickets_1', 'blackCr_grayBG_rewarded_crickets_0_vrcrickets_1',
-    #           'blackCr_grayBG_crickets_1_vrcrickets_3', 'blackCr_grayBG_rewarded_crickets_0_vrcrickets_3',
-    #           'whiteCr_blackBG_crickets_1_vrcrickets_1', 'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_1',
-    #           'whiteCr_blackBG_crickets_1_vrcrickets_3', 'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_3',
-    #           'whiteCr_grayBG_crickets_1_vrcrickets_1', 'whiteCr_grayBG_rewarded_crickets_0_vrcrickets_1',
-    #           'whiteCr_grayBG_crickets_1_vrcrickets_3', 'whiteCr_grayBG_rewarded_crickets_0_vrcrickets_3',
-    #           'obstacle_crickets_1_vrcrickets_1', 'obstacle_rewarded_crickets_0_vrcrickets_1',
-    #           'obstacle_crickets_1_vrcrickets_3', 'obstacle_rewarded_crickets_0_vrcrickets_3',
-    #           'blackCr_crickets_1',
-    #           'blackCr_rewarded',
-    #           'blackCr_grayBG_crickets_1',
-    #           'blackCr_grayBG_rewarded',
-    #           'whiteCr_blackBG_crickets_1',
-    #           'whiteCr_blackBG_rewarded',
-    #           'whiteCr_grayBG_crickets_1',
-    #           'whiteCr_grayBG_rewarded',
-    #           'crickets_1',
-    #           'crickets_0',
-    #           ],
-    # 'notes': ['obstacle_crickets_1_vrcrickets_1', 'obstacle_rewarded_crickets_0_vrcrickets_1',
-    #           'obstacle_crickets_1_vrcrickets_3', 'obstacle_rewarded_crickets_0_vrcrickets_3',
-    #           ]
-    # 'notes': ['blackCr_crickets_1',
-    #           'blackCr_rewarded',
-    #           'blackCr_grayBG_crickets_1',
-    #           'blackCr_grayBG_rewarded',
-    #           'whiteCr_blackBG_crickets_1',
-    #           'whiteCr_blackBG_rewarded',
-    #           'whiteCr_grayBG_crickets_1',
-    #           'whiteCr_grayBG_rewarded',
-    #           ]
-
-}
+# load the search settings
+input_dictionary = processing_parameters.input_dictionary
 
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
+# allocate a list to store the full queries
+full_queries = []
+full_paths = []
+full_parsed = []
 # for all the search queries
 for search_query in search_queries:
 
@@ -99,7 +50,51 @@ for search_query in search_queries:
         continue
     else:
         print(str(len(target_entries)) + ' entries: ' + search_query)
+    # add the queries to the list
+    full_queries.append(target_entries)
+    full_paths.append(target_path)
+    full_parsed.append(parsed_search)
 
+# allocate a list for the mice
+new_queries = []
+new_paths = []
+new_parsed = []
+mouse_list = []
+# for all the search queries
+for idx, search_query in enumerate(full_parsed):
+    # modify query if cellMatch
+    if search_query['analysis_type'] == 'cellMatch':
+
+        # extract only the mice from the search query that have calcium
+        mouse_list.append(np.unique([el['mouse'] for el in full_queries[idx] if len(el['fluo_path']) > 0]))
+
+    else:
+        new_queries.append(full_queries[idx])
+        new_paths.append(full_paths[idx])
+        new_parsed.append(search_query)
+# consolidate the mice in the list
+mouse_list = np.unique([el for sublist in mouse_list for el in sublist])
+
+# get the entries
+for idx, mouse in enumerate(mouse_list):
+    target_entries = bd.query_database('vr_experiment', 'slug:' + mouse)
+    target_entries.append(bd.query_database('video_experiment', 'slug:' + mouse))
+
+    target_entries = [el for sublist in target_entries for el in sublist]
+    # filter out the no fluo
+    target_entries = [el for el in target_entries if len(el['fluo_path']) > 0]
+    # append to the query list
+    new_queries.append(target_entries)
+    # new_parsed.append({'analysis_type': 'cellMatch'})
+    new_parsed.append({'analysis_type': 'just_preprocess'})
+    # TODO: make sure this works for VR also
+    new_paths.append(full_paths[0])
+
+# for all the full queries
+for idx, target_entries in enumerate(new_queries):
+
+    parsed_search = new_parsed[idx]
+    target_path = new_paths[idx]
     # create the config file
     config_dict = {'files': {os.path.basename(el['bonsai_path'])[:-4]: os.path.basename(el['bonsai_path'])[:-4]
                              for el in target_entries},
@@ -108,9 +103,13 @@ for search_query in search_queries:
                    'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
                                 else False for el in target_entries},
                    # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
+                                    else False for el in target_entries},
+                   # 'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
+                   'cnmfe_path': paths.calcium_script,
                    'interval': [2, 3],
                    }
     # write the file
@@ -130,9 +129,10 @@ for search_query in search_queries:
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
                               # '-F',         # (hard) force rerun everything
-                              '-f',         # (soft) force rerun last step
+                              # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               # '--rerun-incomplete',
+                              '--verbose',  # activates verbosity
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)
@@ -141,7 +141,8 @@ for search_query in search_queries:
     print(stdout.decode())
 
     # assemble the output path
-    if parsed_search['analysis_type'] == 'just_preprocess':
+    if parsed_search['analysis_type'] == 'just_preprocess' and \
+            os.path.isfile(os.path.join(paths.analysis_path, 'just_preprocess.txt')):
         # delete the just_preprocess file (specify de novo to no run risks)
         os.remove(os.path.join(paths.analysis_path, 'just_preprocess.txt'))
 print('yay')
