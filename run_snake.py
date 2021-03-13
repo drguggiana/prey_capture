@@ -5,71 +5,11 @@ import paths
 import functions_data_handling as fd
 import os
 import numpy as np
+import processing_parameters
 
 
 # define the type of analysis
-input_dictionary = {
-    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc', 'aggBinCA', 'aggFullCA', 'aggEncCA', 'trigAveCA'],
-    # 'analysis_type': ['trigAveCA'],
-    # 'analysis_type': ['aggBin', 'aggFull', 'aggEnc'],
-    'analysis_type': ['just_preprocess'],
-    # 'result': ['test', ],
-    'result': ['fail', ],
-
-    # 'rig': ['VPrey', 'VR', ],
-    # 'rig': ['miniscope', ],
-    'rig': ['VScreen'],
-    # 'lighting': ['normal', ],
-    # 'gtdate': ['2020-08-24T00-00-00'],
-    # 'gtdate': ['2020-06-23T00-00-00'],
-    # 'ltdate': ['2020-07-06T00-00-00'],
-    # 'notes': ['crickets_1_vrcrickets_1', 'crickets_1_vrcrickets_3',
-    #           'crickets_0_vrcrickets_1', 'crickets_0_vrcrickets_3'
-    #           ]
-    # 'notes': ['blackCr_crickets_1_vrcrickets_1', 'blackCr_rewarded_crickets_0_vrcrickets_1',
-    #           'blackCr_nonrewarded_crickets_0_vrcrickets_1',
-    #           'blackCr_crickets_1_vrcrickets_3', 'blackCr_rewarded_crickets_0_vrcrickets_3',
-    #           'blackCr_nonrewarded_crickets_0_vrcrickets_3',
-    #           'blackCr_crickets_1_vrcrickets_0',
-    #           'blackCr_grayBG_crickets_1_vrcrickets_1', 'blackCr_grayBG_rewarded_crickets_0_vrcrickets_1',
-    #           'blackCr_grayBG_crickets_1_vrcrickets_3', 'blackCr_grayBG_rewarded_crickets_0_vrcrickets_3',
-    #           'whiteCr_blackBG_crickets_1_vrcrickets_1', 'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_1',
-    #           'whiteCr_blackBG_crickets_1_vrcrickets_3', 'whiteCr_blackBG_rewarded_crickets_0_vrcrickets_3',
-    #           'whiteCr_grayBG_crickets_1_vrcrickets_1', 'whiteCr_grayBG_rewarded_crickets_0_vrcrickets_1',
-    #           'whiteCr_grayBG_crickets_1_vrcrickets_3', 'whiteCr_grayBG_rewarded_crickets_0_vrcrickets_3',
-    #           'obstacle_crickets_1_vrcrickets_1', 'obstacle_rewarded_crickets_0_vrcrickets_1',
-    #           'obstacle_crickets_1_vrcrickets_3', 'obstacle_rewarded_crickets_0_vrcrickets_3',
-    #           'blackCr_crickets_1',
-    #           'blackCr_rewarded',
-    #           'blackCr_grayBG_crickets_1',
-    #           'blackCr_grayBG_rewarded',
-    #           'whiteCr_blackBG_crickets_1',
-    #           'whiteCr_blackBG_rewarded',
-    #           'whiteCr_grayBG_crickets_1',
-    #           'whiteCr_grayBG_rewarded',
-    #           'crickets_1',
-    #           'crickets_0',
-    #           ],
-    # 'notes': ['obstacle_crickets_1_vrcrickets_1', 'obstacle_rewarded_crickets_0_vrcrickets_1',
-    #           'obstacle_crickets_1_vrcrickets_3', 'obstacle_rewarded_crickets_0_vrcrickets_3',
-    #           ]
-    # 'notes': ['blackCr_crickets_1',
-    #           'blackCr_rewarded',
-    #           'blackCr_grayBG_crickets_1',
-    #           'blackCr_grayBG_rewarded',
-    #           'whiteCr_blackBG_crickets_1',
-    #           'whiteCr_blackBG_rewarded',
-    #           'whiteCr_grayBG_crickets_1',
-    #           'whiteCr_grayBG_rewarded',
-    #           ]
-
-
-    # 'slug': ['08_10_2020_16_41_32_miniscope_DG_200701_a_succ'],
-    # 'slug': ['DG_200701_a'],
-    # 'gtdate': ['2020-03-01T00-00-00'],
-    # 'notes': ['crickets_0_vrcrickets_1'],
-    # 'notes': ['vrcrickets_3']
-}
+input_dictionary = processing_parameters.input_dictionary
 
 # assemble the possible search query
 search_queries = fd.combinatorial_query(input_dictionary)
