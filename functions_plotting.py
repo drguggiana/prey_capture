@@ -204,6 +204,49 @@ def animation_plotter(motivedata, bonsaidata, cricket_data, xlim, ylim, interval
     return anim
 
 
+def simple_animation(data_in, interval=10):
+    """Animate the trajectories given"""
+    # First set up the figure, the axis, and the plot element we want to animate
+    fig0 = plt.figure()
+    # ax0 = plt.axes(xlim=xlim, ylim=ylim)
+    xlim = [np.min(data_in[[0, 2, 4, 6, 8], :]), np.max(data_in[[0, 2, 4, 6, 8], :])]
+    ylim = [np.min(data_in[[1, 3, 5, 7, 9], :]), np.max(data_in[[1, 3, 5, 7, 9], :])]
+    ax0 = plt.axes(xlim=xlim, ylim=ylim)
+    # line_list = [ax0.plot([], [], lw=2)[0] for el in np.arange(data_in.shape[0])]
+    line0, = ax0.plot([], [], 'bo', lw=2)
+    line1, = ax0.plot([], [], 'ko', lw=2)
+    line2, = ax0.plot([], [], 'mo', lw=2)
+    line3, = ax0.plot([], [], 'go', lw=2)
+    line4, = ax0.plot([], [], 'ro', lw=2)
+
+    # initialization function: plot the background of each frame
+    def init():
+        line0.set_data([], [])
+        line1.set_data([], [])
+        line2.set_data([], [])
+        # line_list = [el.set_data([], []) for el in line_list]
+        return line0, line1, line2, line3, line4
+        # return line_list
+
+    # animation function.  This is called sequentially
+    def animate(i):
+        # x = np.linspace(0, 2, 1000)
+        # y = np.sin(2 * np.pi * (x - 0.01 * i))
+
+        line0.set_data(data_in[0, i], data_in[1, i])
+        line1.set_data(data_in[2, i], data_in[3, i])
+        line2.set_data(data_in[4, i], data_in[5, i])
+        line3.set_data(data_in[6, i], data_in[7, i])
+        line4.set_data(data_in[8, i], data_in[9, i])
+
+        return line0, line1, line2, line3, line4
+
+    # call the animator.  blit=True means only re-draw the parts that have changed.
+    anim = animation.FuncAnimation(fig0, animate, init_func=init,
+                                   frames=data_in.shape[1], interval=interval, blit=True)
+    return anim
+
+
 def histogram(data_in, rows=1, columns=1, bins=50, fig=None, color=None, fontsize=None, dpi=None):
     """Wrapper for the histogram function in subplots"""
     # create a new figure window
