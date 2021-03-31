@@ -133,6 +133,9 @@ def parse_path(in_path):
     elif path_parts[6] == 'VPrey':
         rig = 'VPrey'
         counter = 7
+    elif path_parts[6] == 'VScreen':
+        rig = 'VScreen'
+        counter = 7
     else:
         rig = 'VR'
         counter = 6
