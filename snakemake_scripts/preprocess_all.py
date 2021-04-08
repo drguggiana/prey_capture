@@ -132,7 +132,7 @@ elif files['rig'] in ['VR', 'VPrey'] and \
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates['VR']
-    manual_coordinates = paths.arena_coordinates['VR_manual']
+    manual_coordinates = paths.arena_coordinates['VR_manual_pre_08_24_2020']
 
     # scale the traces accordingly
     filtered_traces, corners = \
@@ -157,7 +157,10 @@ elif files['rig'] in ['VScreen']:
     out_path, filtered_traces, _ = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # define the dimensions of the arena
-    manual_coordinates = paths.arena_coordinates['VR_manual']
+    if file_date <= datetime.datetime(year=2020, month=1, day=3):
+        manual_coordinates = paths.arena_coordinates['VR_manual_pre_23_03_2021']
+    else:
+        manual_coordinates = paths.arena_coordinates['VR_manual']
 
     # get the motive tracking data
     motive_traces, reference_coordinates, obstacle_coordinates = \
