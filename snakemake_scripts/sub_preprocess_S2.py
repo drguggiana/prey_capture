@@ -63,7 +63,6 @@ def kinematic_calculations(name, data):
     """Calculate basic kinematic parameters of mouse and cricket"""
 
     # define which coordinates to use depending on the available data
-    # TODO: sort this out, should be a direct mapping between them
     if 'mouse_x_m' in data.columns:
         mouse_coord_hd = data.loc[:, ['mouse_x_m', 'mouse_y_m']].to_numpy()
     else:

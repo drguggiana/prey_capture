@@ -5,6 +5,7 @@ from scipy.signal import medfilt
 from functions_misc import interp_trace
 import cv2
 import functions_plotting as fp
+import functions_kinematic as fk
 import matplotlib.pyplot as plt
 from quicksect import IntervalNode, Interval
 from functools import reduce
@@ -174,6 +175,147 @@ def median_discontinuities(files, tar_columns, kernel_size):
     return filtered_traces
 
 
+def median_arima(files, tar_columns):
+    """Use an ARIMA model to get rid of discontinuities"""
+    from statsmodels.tsa.arima_model import ARIMA
+    # # code to find parameters from
+    # # https://medium.com/swlh/a-brief-introduction-to-arima-and-sarima-modeling-in-python-87a58d375def
+    # import itertools
+    # # Grid Search
+    # p = d = q = range(0, 3)  # p, d, and q can be either 0, 1, or 2
+    # pdq = list(itertools.product(p, d, q))  # gets all possible combinations of p, d, and q
+    # combs = {}  # stores aic and order pairs
+    # aics = []  # stores aics
+    #
+    # # Grid Search continued
+    # for combination in pdq:
+    #     try:
+    #         model = ARIMA(files[tar_columns[0]], order=combination)  # create all possible models
+    #         model = model.fit()
+    #         combs.update({model.aic: combination})  # store combinations
+    #         aics.append(model.aic)
+    #     except:
+    #         continue
+    #
+    # best_aic = min(aics)
+    # parameters = combs[best_aic]
+    # TODO: finish? not sure if useful
+    # for all the involved columns
+    for col in tar_columns:
+
+        # get the data
+        data = files[col]
+        data_mean = np.nanmean(data)
+        data_std = np.nanstd(data)
+        # Model Creation and Forecasting
+        model = ARIMA(data, order=(1, 1, 2), missing='drop')
+        model = model.fit()
+        predicted_trace = model.predict()
+        files[col] = predicted_trace
+
+        # fp.plot_2d([[predicted_trace]])
+        # fp.show()
+    return files
+
+
+def maintain_animals(in_traces, threshold, corners, ref_corners):
+    """Prevent dissociation of the points within an animal"""
+    # copy the input
+    out_traces = in_traces.copy()
+    # if there is a cricket
+    if 'cricket_0_x' in in_traces.columns:
+        # get the distance between the cricket points
+        delta = fk.distance_calculation(in_traces.loc[:, ['cricket_0_x', 'cricket_0_y']].to_numpy(),
+                                        in_traces.loc[:, ['cricket_0_head_x', 'cricket_0_head_y']].to_numpy())
+        # convert the distance to cm
+        delta = delta*(np.abs(ref_corners[0][1] - ref_corners[1][1])/np.abs(corners[0][0] - corners[2][0]))
+        # # bring the vector to full length
+        # delta = np.concatenate(([0], delta), axis=0)
+        # turn nan into 0
+        delta[np.isnan(delta)] = 0
+        # get a vector with the threshold crossings
+        threshold_crossings = delta > threshold
+        # nan the points where the condition is not fullfilled
+        for col in ['cricket_0_x', 'cricket_0_y', 'cricket_0_head_x', 'cricket_0_head_y']:
+            out_traces.loc[threshold_crossings, col] = np.nan
+        # out_traces.loc[delta > threshold, 'cricket_0_head_x'] = np.nan
+        # out_traces.loc[delta > threshold, 'cricket_0_head_y'] = np.nan
+    # if there is a mouse
+    if 'mouse_x' in in_traces.columns:
+        # get a list of the columns with mouse in it that are not mouse_x
+        mouse_list = [el for el in in_traces.columns if ('x' in el) and ('mouse' in el)]
+        mouse_full_list = [el for el in in_traces.columns if ('mouse' in el)]
+        # allocate memory for the distances
+        distance_list = []
+        # for all the columns
+        for idx, col in enumerate(mouse_list[1:]):
+
+            # get the columns of interest
+            col_1 = in_traces.loc[:, [mouse_list[idx], mouse_list[idx].replace('_x', '_y')]].to_numpy()
+            col_2 = in_traces.loc[:, [col, col.replace('_x', '_y')]].to_numpy()
+            # get the distance between the consecutive columns
+            distance = fk.distance_calculation(col_1, col_2)
+            # convert to cm and store
+            distance_list.append(distance * (np.abs(ref_corners[0][1] - ref_corners[1][1]) /
+                                             np.abs(corners[0][0] - corners[2][0])))
+
+        # turn the list to array
+        distance_list = np.array(distance_list)
+
+        # turn the values over threshold into NaN
+        out_traces.loc[np.any(distance_list > threshold, axis=0), mouse_full_list] = np.nan
+
+    return out_traces
+
+
+def infer_cricket_position(data_in, threshold, corners, ref_corners):
+    """Place the cricket under the mouse when it's not visible and is near the mouse"""
+    # copy the input data
+    data_out = data_in.copy()
+    # get the cricket columns
+    cricket_columns = [el for el in data_in.columns if 'cricket' in el]
+    # get the cricket coordinates
+    cricket_coordinates = data_in.loc[:, cricket_columns]
+
+    # # get the distance to the mouse
+    # distance_mouse = \
+    #     fk.distance_calculation(cricket_coordinates[['cricket_0_x', 'cricket_0_y']].to_numpy(),
+    #                             data_in[['mouse_x', 'mouse_y']].to_numpy())
+    # # convert the distance to cm
+    # distance_mouse = distance_mouse*(np.abs(ref_corners[0][1] -
+    #                                         ref_corners[1][1])/np.abs(corners[0][0] - corners[2][0]))
+    # # allocate an empty array
+    # distance_new = np.zeros_like(distance_mouse)
+    # # find the first number
+    # first_number = distance_mouse[np.isnan(distance_mouse) == False][0]
+    # first_idx = np.argwhere(distance_mouse == first_number)[0][0]
+    # distance_new[:first_idx] = first_number
+    # # fill in the nan gaps with the latest distance
+    # for idx, el in enumerate(distance_mouse):
+    #     if np.isnan(el):
+    #         distance_new[idx] = first_number
+    #     else:
+    #         distance_new[idx] = el
+    #         first_number = el
+    # # overwrite the distance array
+    # distance_mouse = distance_new
+    # identify the points that are within the threshold and are missing
+    # target_points = np.argwhere((distance_mouse < threshold) & np.isnan(cricket_coordinates['cricket_0_x'])).flatten()
+    target_points = np.argwhere(np.all(
+        np.isnan(cricket_coordinates.loc[:, cricket_columns]), axis=1) &
+                 np.all(~np.isnan(
+                     data_in.loc[:, ['mouse_x', 'mouse_y', 'mouse_head_x', 'mouse_head_y']]), axis=1)).flatten()
+    # if target points is empty, skip
+    if target_points.shape[0] > 0:
+        # assign the position of the mouse to those points
+        data_out.loc[target_points, ['cricket_0_x', 'cricket_0_y']] = \
+            data_in.loc[target_points, ['mouse_x', 'mouse_y']].to_numpy()
+        data_out.loc[target_points, ['cricket_0_head_x', 'cricket_0_head_y']] = \
+            data_in.loc[target_points, ['mouse_head_x', 'mouse_head_y']].to_numpy()
+
+    return data_out
+
+
 def interpolate_segments(files, target_value):
     """Interpolate between the NaNs in a trace"""
     # allocate memory for the output
@@ -204,6 +346,47 @@ def interpolate_segments(files, target_value):
         interpolated_traces.iloc[:, col] = np.squeeze(interp_trace(y_known, x_known, x_target))
 
     return interpolated_traces
+
+
+def interpolate_animals(files, target_values):
+    """Interpolate the mouse NaNs and prolong the cricket ones"""
+    # extract the mouse coordinates
+    mouse_columns = [el for el in files.columns if 'mouse' in el]
+    mouse_coordinates = files[mouse_columns]
+
+    # # interpolate with the usual method
+    # mouse_interpolated = interpolate_segments(mouse_coordinates, target_values)
+    # fill in the missing values in the skeleton
+
+    #
+
+
+    # get the cricket coordinates
+    cricket_columns = [el for el in files.columns if 'cricket' in el]
+    cricket_coordinates = files[cricket_columns]
+    # copy the data
+    cricket_interpolated = cricket_coordinates.copy()
+
+    # for all the columns
+    for col in cricket_coordinates.columns:
+        # get the data
+        data = cricket_coordinates[col].to_numpy()
+        # find the target value
+        if np.isnan(target_values):
+            nan_locations, nan_numbers = label(np.isnan(data))
+        else:
+            nan_locations, nan_numbers = label(data == target_values)
+
+        # for all the segments
+        for segment in np.arange(1, nan_numbers+1):
+            # get the start of the segment
+            segment_start = np.argwhere(nan_locations == segment).flatten()[0]
+            # replace the segment by the values
+            data[nan_locations == segment] = data[segment_start-1]
+        # add to the output frame
+        cricket_interpolated.loc[:, col] = data
+
+    return pd.concat([mouse_interpolated, cricket_interpolated], axis=1)
 
 
 def eliminate_singles(files):
@@ -374,23 +557,6 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
     new_corners = np.matmul(perspective_matrix, new_corners.T).T
     new_corners = np.array([el[:2] / el[2] for el in new_corners])
 
-        # # get a single set of coordinates
-        # test_coordinates = traces[['mouse_x', 'mouse_y']].to_numpy()
-        # # add a vector of ones for the matrix multiplication
-        # test_coordinates = np.concatenate((test_coordinates, np.ones((test_coordinates.shape[0], 1))), axis=1)
-        # # transform
-        # test_data = np.matmul(perspective_matrix, test_coordinates.T).T
-        # test_data = np.array([el[:2] / el[2] for el in test_data])
-        #
-        # # check if the data is within the boundaries
-        # if (np.max(test_data[:, 0]) > np.max(new_corners[:, 0])+5 and
-        #     np.min(test_data[:, 0]) < np.min(new_corners[:, 0])-5) or \
-        #         (np.max(test_data[:, 1]) > np.max(new_corners[:, 1]) + 5 and
-        #          np.min(test_data[:, 1]) < np.min(new_corners[:, 1]) - 5):
-        #     valid_corners = True
-
-        # valid_corners = True
-
     # copy the traces
     new_traces = traces.copy()
     # transform the traces
@@ -403,21 +569,15 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
         if column+'x' in traces.columns:
             # get the x and y data
             original_data = traces[[column + 'x', column + 'y']].to_numpy()
-            # add a vector of ones for the matrix multiplication
-            original_data = np.concatenate((original_data, np.ones((original_data.shape[0], 1))), axis=1)
-            # transform
-            new_data = np.matmul(perspective_matrix, original_data.T).T
-            new_data = np.array([el[:2]/el[2] for el in new_data])
+            # # add a vector of ones for the matrix multiplication
+            # original_data = np.concatenate((original_data, np.ones((original_data.shape[0], 1))), axis=1)
+            # # transform
+            # new_data = np.matmul(perspective_matrix, original_data.T).T
+            # new_data = np.array([el[:2]/el[2] for el in new_data])
+            new_data = original_data*(np.abs(reference[0][1] - reference[1][1])/np.abs(corner_coordinates[0][0] - corner_coordinates[2][0]))
 
             # replace the original data
             new_traces[[column + 'x', column + 'y']] = new_data[:, :2]
-
-            # fp.plot_2d([[original_data[:, :2], corner_coordinates]], dpi=100)
-            # plt.axis('equal')
-            #
-            # fp.plot_2d([[new_data, new_corners]], dpi=100)
-            # plt.axis('equal')
-            # plt.show()
 
     return new_traces, new_corners
 

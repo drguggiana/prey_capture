@@ -1,4 +1,3 @@
-import shutil
 import os
 import paths
 from snakemake_scripts.cnmfe import cnmfe_function
@@ -6,59 +5,67 @@ import sys
 import json
 import functions_bondjango as bd
 import functions_io as fi
-from cnmfe_params import online_dict
+# from cnmfe_params import online_dict
 import functions_misc as fm
 from matplotlib import pyplot as plt
 from skimage.transform import resize
 import re
+import processing_parameters
 
 
 if __name__ == "__main__":
 
-    # try:
-    # get the target video path
-    video_path = sys.argv[1]
-    # find the occurrences of .tif terminators
-    ends = [el.start() for el in re.finditer('.tif', video_path)]
+    try:
+        # get the target video path
+        video_path = sys.argv[1]
+        # find the occurrences of .tif terminators
+        ends = [el.start() for el in re.finditer('.tif', video_path)]
+        # allocate the list of videos
+        video_list = []
+        count = 0
+        # read the paths
+        for el in ends:
+            video_list.append(video_path[count:el+4])
+            count = el + 5
 
-    video_list = []
-    count = 0
-    for el in ends:
-        video_list.append(video_path[count:el+4])
-        count = el + 5
+        video_path = video_list
+        # read the output path and the input file urls
+        out_path = sys.argv[2]
+        data_all = json.loads(sys.argv[3])
+        # get the parts for the file naming
+        name_parts = out_path.split('_')
+        day = name_parts[0]
+        animal = name_parts[1]
+        rig = name_parts[2]
 
-    # print(video_list)
-    video_path = video_list
-    out_path = sys.argv[2]
-    data_all = json.loads(sys.argv[3])
-
-    name_parts = out_path.split('_')
-    day = name_parts[0]
-    # day = '_'.join((day[:2], day[2:4], day[4:]))
-    animal = name_parts[1]
-    rig = name_parts[2]
-
-    # except IndexError:
-    #     # define the target animal and date
-    #     animal = 'DG_200701_a'
-    #     day = '09_08_2020'
-    #     rig = 'miniscope'
-    #     # define the search string
-    #     search_string = 'result:succ, lighting:normal, rig:%s, imaging:doric, mouse:%s, slug:%s' % (rig, animal, day)
-    #     # search_string = 'slug:08_06_2020_18_07_32_miniscope_DG_200701_a_succ'
-    #     # query the database for data to plot
-    #     data_all = bd.query_database('video_experiment', search_string)
-    #     # video_data = data_all[0]
-    #     # video_path = video_data['tif_path']
-    #     video_path = [el['tif_path'] for el in data_all]
-    #     # assemble the output path
-    #     out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumday.hdf5')))
+    except IndexError:
+        # get the search string
+        search_string = processing_parameters.search_string_cnmfe
+        animal = processing_parameters.animal
+        day = processing_parameters.day
+        rig = processing_parameters.rig
+        # query the database for data to plot
+        data_all = bd.query_database('video_experiment', search_string)
+        # video_data = data_all[0]
+        # video_path = video_data['tif_path']
+        video_path = [el['tif_path'] for el in data_all]
+        # overwrite data_all with just the urls
+        data_all = {os.path.basename(el['bonsai_path'])[:-4]: el['url'] for el in data_all}
+        # assemble the output path
+        out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumday.hdf5')))
 
     # delete the folder contents
     fi.delete_contents(paths.temp_path)
     # raise IndexError('stop here')
     # combine the selected files into a single tif
     out_path_tif, _, frames_list = fi.combine_tif(video_path, paths.temp_path)
+
+    # get the extraction parameters
+    try:
+        online_dict = processing_parameters.mouse_parameters[animal]
+    except KeyError:
+        print(f'mouse {animal} not found, using default')
+        online_dict = processing_parameters.mouse_parameters['default']
 
     # run cnmfe
     cnmfe_out, _ = cnmfe_function([out_path_tif], out_path, online_dict, save_output=False)
@@ -91,9 +98,8 @@ if __name__ == "__main__":
         'lighting': 'multi',
         'imaging': 'multi',
         'slug': fm.slugify(os.path.basename(out_path)[:-5]),
-        # 'input_path': [el['tif_path'] for el in data_all]
-        'video_analysis': [el for el in data_all if 'miniscope' in el], #[files['url']] if files['rig'] == 'miniscope' else [],
-        'vr_analysis': [el for el in data_all if 'miniscope' not in el], #[] if files['rig'] == 'miniscope' else [files['url']],
+        'video_analysis': [el for el in data_all.values() if 'miniscope' in el],
+        'vr_analysis': [el for el in data_all.values() if 'miniscope' not in el],
     }
 
     # check if the entry already exists, if so, update it, otherwise, create it
