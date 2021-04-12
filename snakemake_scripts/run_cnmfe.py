@@ -5,7 +5,7 @@ import sys
 import json
 import functions_bondjango as bd
 import functions_io as fi
-from cnmfe_params import online_dict
+# from cnmfe_params import online_dict
 import functions_misc as fm
 from matplotlib import pyplot as plt
 from skimage.transform import resize
@@ -59,6 +59,13 @@ if __name__ == "__main__":
     # raise IndexError('stop here')
     # combine the selected files into a single tif
     out_path_tif, _, frames_list = fi.combine_tif(video_path, paths.temp_path)
+
+    # get the extraction parameters
+    try:
+        online_dict = processing_parameters.mouse_parameters[animal]
+    except KeyError:
+        print(f'mouse {animal} not found, using default')
+        online_dict = processing_parameters.mouse_parameters['default']
 
     # run cnmfe
     cnmfe_out, _ = cnmfe_function([out_path_tif], out_path, online_dict, save_output=False)

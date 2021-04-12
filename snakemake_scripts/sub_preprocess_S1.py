@@ -1,14 +1,14 @@
 # imports
 from tkinter import filedialog
 import functions_plotting as fp
-from paths import *
 from functions_misc import tk_killwindow
-from functions_preprocessing import trim_bounds, median_discontinuities, interpolate_segments, eliminate_singles, \
-    nan_large_jumps, find_frozen_tracking, nan_jumps_dlc, get_time, parse_bonsai, read_motive_header, flip_DLC_y
+import functions_preprocessing as fp
 from functions_io import parse_path
+import functions_kinematic as fk
 import numpy as np
 import pandas as pd
 import datetime
+import paths
 
 
 def process_corners(corner_frame):
@@ -21,7 +21,7 @@ def run_preprocess(file_path_bonsai, save_file, file_info,
                    kernel_size=21, max_step=300, max_length=50):
     """Preprocess the bonsai file"""
     # parse the bonsai file
-    parsed_data = parse_bonsai(file_path_bonsai)
+    parsed_data = fp.parse_bonsai(file_path_bonsai)
     # define the target columns
     tar_columns = ['cricket_0_x', 'cricket_0_y']
 
@@ -31,11 +31,11 @@ def run_preprocess(file_path_bonsai, save_file, file_info,
     files = np.array(parsed_data)
 
     # get the time
-    files, time, dates = get_time(files)
+    files, time, dates = fp.get_time(files)
 
     # trim the trace
     if parsed_path['rig'] == 'miniscope':
-        files, time = trim_bounds(files, time, dates)
+        files, time = fp.trim_bounds(files, time, dates)
     else:
         # TODO: add proper bound trimming based on ML
         print('yay')
@@ -46,16 +46,16 @@ def run_preprocess(file_path_bonsai, save_file, file_info,
     # now remove the discontinuities in the trace
 
     # median filter only the cricket trace
-    filtered_traces = median_discontinuities(data, tar_columns, kernel_size)
+    filtered_traces = fp.median_discontinuities(data, tar_columns, kernel_size)
 
     # eliminate isolated points
-    filtered_traces = eliminate_singles(filtered_traces)
+    filtered_traces = fp.eliminate_singles(filtered_traces)
 
     # eliminate discontinuities before interpolating
-    filtered_traces = nan_large_jumps(filtered_traces, tar_columns, max_step, max_length)
+    filtered_traces = fp.nan_large_jumps(filtered_traces, tar_columns, max_step, max_length)
 
     # interpolate the NaN stretches
-    filtered_traces = interpolate_segments(filtered_traces, np.nan)
+    filtered_traces = fp.interpolate_segments(filtered_traces, np.nan)
 
     # add the time field to the dataframe
     filtered_traces['time_vector'] = time
@@ -88,7 +88,10 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     # define the threshold for trimming the trace (in pixels for now)
     trim_cutoff = 200
     # define the likelihood threshold for the DLC points
-    likelihood_threshold = 0.8
+    likelihood_threshold = 0.1
+    # define the threshold for max amount of cm allowed between points within an animal
+    animal_threshold = 4
+    cricket_threshold = 10
     # just return the output path
     out_path = save_file
     # load the bonsai info
@@ -99,6 +102,12 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     try:
         # DLC in small arena
         filtered_traces = pd.DataFrame(raw_h5[[
+            [el for el in column_names if ('mouseSnout' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseSnout' in el) and ('y' in el)][0],
+            [el for el in column_names if ('mouseBarL' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseBarL' in el) and ('y' in el)][0],
+            [el for el in column_names if ('mouseBarR' in el) and ('x' in el)][0],
+            [el for el in column_names if ('mouseBarR' in el) and ('y' in el)][0],
             [el for el in column_names if ('mouseHead' in el) and ('x' in el)][0],
             [el for el in column_names if ('mouseHead' in el) and ('y' in el)][0],
             [el for el in column_names if ('mouseBody1' in el) and ('x' in el)][0],
@@ -113,7 +122,9 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
             [el for el in column_names if ('cricketHead' in el) and ('y' in el)][0],
             [el for el in column_names if ('cricketBody' in el) and ('x' in el)][0],
             [el for el in column_names if ('cricketBody' in el) and ('y' in el)][0],
-        ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_body2_x', 'mouse_body2_y',
+        ]].to_numpy(), columns=['mouse_snout_x', 'mouse_snout_y', 'mouse_barl_x', 'mouse_barl_y',
+                                'mouse_barr_x', 'mouse_barr_y', 'mouse_head_x', 'mouse_head_y',
+                                'mouse_x', 'mouse_y', 'mouse_body2_x', 'mouse_body2_y',
                                 'mouse_body3_x', 'mouse_body3_y', 'mouse_base_x', 'mouse_base_y',
                                 'cricket_0_head_x', 'cricket_0_head_y', 'cricket_0_x', 'cricket_0_y'])
 
@@ -152,6 +163,24 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
                                 'corner_BR_x', 'corner_BR_y', 'corner_UR_x', 'corner_UR_y'])
         # get the corners
         corner_points = process_corners(corner_info)
+
+        # # eliminate points that separate from either mouse or cricket more than a threshold
+        # filtered_traces = \
+        #     fp.maintain_animals(filtered_traces, animal_threshold,
+        #                         corner_points, paths.arena_coordinates['miniscope'])
+        # # add the cricket position under the mouse when it is not visible and last position was close to the mouse
+        # filtered_traces = \
+        #     fp.infer_cricket_position(filtered_traces, cricket_threshold,
+        #                               corner_points, paths.arena_coordinates['miniscope'])
+        # set final position of cricket, assume that cricket is under mouse whenever it is not observed
+        # # for succ trials, it stops when mouse stops
+        # if 'succ' in file_path_dlc:
+        #     # check if the last point for the cricket is a NaN
+        #     if np.isnan(filtered_traces['cricket_0_x'].iloc[-1]):
+        #         # if so, make it the position of the mouse head
+        #         filtered_traces[['cricket_0_x', 'cricket_0_y']].iloc[-1] = \
+        #             filtered_traces[['mouse_head_x', 'mouse_head_y']].iloc[-1]
+
     except IndexError:
         # DLC in VR arena
         filtered_traces = pd.DataFrame(raw_h5[[
@@ -168,7 +197,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
 
         # The camera that records video in the VR arena flips the video about the
         # horizontal axis when saving. To correct, flip the y coordinates from DLC
-        filtered_traces = flip_DLC_y(filtered_traces)
+        filtered_traces = fp.flip_DLC_y(filtered_traces)
         # output an empty for the corners
         corner_points = []
 
@@ -203,12 +232,15 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
 
     # perform the trimming and reset index
     filtered_traces = filtered_traces.iloc[cutoff_frame:, :].reset_index(drop=True)
+
+    # # use an ARIMA to infer the low likelihood points
+    # filtered_traces = fp.median_arima(filtered_traces, filtered_traces.columns)
     # interpolate the NaN stretches
-    filtered_traces = interpolate_segments(filtered_traces, np.nan)
+    # filtered_traces = fp.interpolate_segments(filtered_traces, np.nan)
+    # filtered_traces = fp.interpolate_animals(filtered_traces, np.nan)
 
     # median filter the traces
-    filtered_traces = median_discontinuities(filtered_traces, filtered_traces.columns, kernel_size)
-
+    # filtered_traces = fp.median_discontinuities(filtered_traces, filtered_traces.columns, kernel_size)
     # find the places where there is no pixel movement in any axis and NaN those
 
     # cricket_nonans_x = filtered_traces['cricket_x']
@@ -232,18 +264,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
             ex_list.remove('\n')
             timestamp.append(ex_list.pop())
             bonsai_data.append([float(el) for el in ex_list])
-    # turn bonsai_data into an array
-    # bonsai_data = np.array(bonsai_data)
-    # # plot trajectories
-    # fp.plot_2d([[filtered_traces['mouse_x'].to_numpy(),
-    #              cricket_nonans_x,
-    #              filtered_traces['cricket_x'].to_numpy()],
-    #
-    #              # bonsai_data[:, 0]],
-    #             [filtered_traces['mouse_y'].to_numpy(),
-    #              cricket_nonans_y,
-    #              filtered_traces['cricket_y'].to_numpy()]
-    #             ], rows=2, dpi=100)
+
     # parse the path
     parsed_path = parse_path(file_path_bonsai)
     # add the time stamps to the main dataframe
@@ -327,7 +348,7 @@ def extract_motive(file_path_motive, rig):
 
     except:
         # This occurs for files that have more complicated headers
-        arena_corners, obstacle_positions, df_line = read_motive_header(file_path_motive)
+        arena_corners, obstacle_positions, df_line = fp.read_motive_header(file_path_motive)
         raw_data = pd.read_csv(file_path_motive, header=0, skiprows=df_line)
 
         # Correct for mistakes in coordinate convention
@@ -348,7 +369,6 @@ def extract_motive(file_path_motive, rig):
                 arena_corners = [[corner[1], corner[0]] for corner in arena_corners_temp]
 
     return raw_data, arena_corners, obstacle_positions
-
 
 
 # if __name__ == '__main__':
