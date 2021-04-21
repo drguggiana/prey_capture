@@ -302,9 +302,9 @@ def infer_cricket_position(data_in, threshold, corners, ref_corners):
     # identify the points that are within the threshold and are missing
     # target_points = np.argwhere((distance_mouse < threshold) & np.isnan(cricket_coordinates['cricket_0_x'])).flatten()
     target_points = np.argwhere(np.all(
-        np.isnan(cricket_coordinates.loc[:, cricket_columns]), axis=1) &
+        np.isnan(cricket_coordinates.loc[:, cricket_columns]).to_numpy(), axis=1) &
                  np.all(~np.isnan(
-                     data_in.loc[:, ['mouse_x', 'mouse_y', 'mouse_head_x', 'mouse_head_y']]), axis=1)).flatten()
+                     data_in.loc[:, ['mouse_x', 'mouse_y', 'mouse_head_x', 'mouse_head_y']]).to_numpy(), axis=1)).flatten()
     # if target points is empty, skip
     if target_points.shape[0] > 0:
         # assign the position of the mouse to those points
@@ -354,13 +354,6 @@ def interpolate_animals(files, target_values):
     mouse_columns = [el for el in files.columns if 'mouse' in el]
     mouse_coordinates = files[mouse_columns]
 
-    # # interpolate with the usual method
-    # mouse_interpolated = interpolate_segments(mouse_coordinates, target_values)
-    # fill in the missing values in the skeleton
-
-    #
-
-
     # get the cricket coordinates
     cricket_columns = [el for el in files.columns if 'cricket' in el]
     cricket_coordinates = files[cricket_columns]
@@ -386,7 +379,7 @@ def interpolate_animals(files, target_values):
         # add to the output frame
         cricket_interpolated.loc[:, col] = data
 
-    return pd.concat([mouse_interpolated, cricket_interpolated], axis=1)
+    return pd.concat([mouse_coordinates, cricket_interpolated], axis=1)
 
 
 def eliminate_singles(files):
@@ -569,12 +562,13 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
         if column+'x' in traces.columns:
             # get the x and y data
             original_data = traces[[column + 'x', column + 'y']].to_numpy()
-            # # add a vector of ones for the matrix multiplication
-            # original_data = np.concatenate((original_data, np.ones((original_data.shape[0], 1))), axis=1)
-            # # transform
-            # new_data = np.matmul(perspective_matrix, original_data.T).T
-            # new_data = np.array([el[:2]/el[2] for el in new_data])
-            new_data = original_data*(np.abs(reference[0][1] - reference[1][1])/np.abs(corner_coordinates[0][0] - corner_coordinates[2][0]))
+            # add a vector of ones for the matrix multiplication
+            original_data = np.concatenate((original_data, np.ones((original_data.shape[0], 1))), axis=1)
+            # transform
+            new_data = np.matmul(perspective_matrix, original_data.T).T
+            # basic scaling for debugging
+            # new_data = original_data*(np.abs(reference[0][1] - reference[1][1])/
+            # np.abs(corner_coordinates[0][0] - corner_coordinates[2][0]))
 
             # replace the original data
             new_traces[[column + 'x', column + 'y']] = new_data[:, :2]
@@ -858,3 +852,14 @@ def parse_bonsai(path_in):
 
             parsed_data.append([ex_list, timestamp])
     return parsed_data
+
+
+def trim_at_last_encounter(result, data_in, threshold=4):
+    """Trim the successfull traces after cricket capture"""
+
+    # if it's not a success, skip
+    if result != 'succ':
+        return data_in
+
+    # calculate the distance to prey
+    # prey_distance

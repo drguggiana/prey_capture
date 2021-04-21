@@ -72,7 +72,6 @@ if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     reference_coordinates = paths.arena_coordinates[files['rig']]
     # scale the traces accordingly
     filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates, corners)
-    # corners = []
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
@@ -88,9 +87,12 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     reference_coordinates = paths.arena_coordinates[files['rig']]
     # scale the traces accordingly
     filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates, corners)
-    # corners = []
+
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+
+    # # trim the succ trials after cricket capture (define threshold in cm)
+    # filtered_traces = fp.trim_at_last_encounter(files['result'], filtered_traces, threshold=4)
 
     # find the sync file
     sync_path = files['sync_path']
@@ -212,8 +214,8 @@ ax = fig_final.add_subplot(111)
 # plt.gca().invert_yaxis()
 
 # plot the filtered trace
-a = ax.scatter(filtered_traces.mouse_x,
-        filtered_traces.mouse_y, c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Blues')
+a = ax.scatter(filtered_traces.mouse_x, filtered_traces.mouse_y,
+               c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Blues')
 cbar = fig_final.colorbar(a, ax=ax)
 cbar.set_label('Time (s)')
 ax.axis('equal')
@@ -221,18 +223,18 @@ ax.axis('equal')
 # for all the real crickets
 for real_cricket in range(real_crickets):
     ax.scatter(filtered_traces['cricket_'+str(real_cricket)+'_x'],
-            filtered_traces['cricket_'+str(real_cricket)+'_y'],
-            c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Oranges')
+               filtered_traces['cricket_'+str(real_cricket)+'_y'],
+               c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Oranges')
 
 # for all the virtual crickets or virtual targets
 for vr_cricket in range(vr_crickets):
     try:
         ax.scatter(filtered_traces['vrcricket_' + str(vr_cricket) + '_x'],
-                filtered_traces['vrcricket_' + str(vr_cricket) + '_y'],
-                c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
+                   filtered_traces['vrcricket_' + str(vr_cricket) + '_y'],
+                   c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
     except:
         ax.scatter(filtered_traces['target_x_m'], filtered_traces['target_y_m'],
-                c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
+                   c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
 
 # plot the found corners if existent
 if len(corners) > 0:

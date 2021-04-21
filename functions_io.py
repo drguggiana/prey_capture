@@ -5,7 +5,7 @@ from os import path
 import shutil
 import datetime
 from skimage import io
-from skimage.external import tifffile as tif
+# from skimage.io import tifffile as tif
 import pandas as pd
 import psutil
 
@@ -96,7 +96,7 @@ def combine_tif(filenames, processing_path=None):
         # save the file name and the number of frames
         frames_list.append([filenames[i], im_n.shape[0]])
     # save the final stack
-    tif.imsave(out_path_tif, im_1.astype('uint16'), bigtiff=True)
+    io.imsave(out_path_tif, im_1.astype('uint16'), bigtiff=True)
     # save the info about the files
     frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
     frames_list.to_csv(out_path_log)
