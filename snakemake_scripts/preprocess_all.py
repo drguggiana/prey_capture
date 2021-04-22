@@ -173,6 +173,9 @@ elif files['rig'] in ['VScreen']:
     # align them temporally based on the sync file
     filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
 
+    # Calculate the time bins for the experiment
+    filtered_traces['bin'] = vs.calculate_bins(filtered_traces['time_vector'], 10)
+
     # run the preprocessing kinematic calculations
     # also saves the data
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
