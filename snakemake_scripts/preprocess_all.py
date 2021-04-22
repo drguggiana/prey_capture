@@ -211,6 +211,8 @@ else:
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
 
 
+
+
 # save the filtered trace
 fig_final = plt.figure()
 ax = fig_final.add_subplot(111)
