@@ -75,7 +75,7 @@ if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     # corners = []
 
     # run the preprocessing kinematic calculations
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
 # if miniscope regular, run with the matching of miniscope frames
 elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
@@ -90,7 +90,7 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates, corners)
     # corners = []
     # run the preprocessing kinematic calculations
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
     # find the sync file
     sync_path = files['sync_path']
@@ -117,7 +117,7 @@ elif files['rig'] in ['VR', 'VPrey'] and file_date <= datetime.datetime(year=202
     # corners = []
 
     # run the preprocessing kinematic calculations
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
 elif files['rig'] in ['VR', 'VPrey'] and \
         datetime.datetime(year=2020, month=6, day=23) <= file_date <= datetime.datetime(year=2020, month=7, day=20):
@@ -145,7 +145,7 @@ elif files['rig'] in ['VR', 'VPrey'] and \
     filtered_traces = functions_matching.align_spatial(filtered_traces)
 
     # run the preprocessing kinematic calculations
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
 elif files['rig'] in ['VScreen']:
 
@@ -171,12 +171,8 @@ elif files['rig'] in ['VScreen']:
     filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
 
     # run the preprocessing kinematic calculations
-    # also saves the data
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
-    # For these trials, save the trial set and the trial parameters to the output file
-    trials.to_hdf(out_path, key='trial_set', mode='a')
-    params.to_hdf(out_path, key='params', mode='a')
 
 else:
     # TODO: make sure the constants are set to values that make sense for the vr arena
@@ -202,8 +198,16 @@ else:
     filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
 
     # run the preprocessing kinematic calculations
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
+
+# Save the computed kinematics data
+kinematics_data.to_hdf(out_path, key='full_traces', mode='w', format='table')
+
+# For these trials, save the trial set and the trial parameters to the output file
+if files['rig'] in ['VScreen']:
+    trials.to_hdf(out_path, key='trial_set', mode='a', format='table')
+    params.to_hdf(out_path, key='params', mode='a', format='table')
 
 # save the filtered trace
 fig_final = plt.figure()
