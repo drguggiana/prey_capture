@@ -14,8 +14,6 @@ def yaml_to_json(wildcards):
 
 def yaml_list_to_json(wildcards):
     day_paths = day_selector(wildcards)
-    # for el in day_paths:
-        # print([config["file_info"][os.path.basename(el)[:-4]] for el in day_paths])
 
     python_list = [yaml.load(config["file_info"][os.path.basename(el)[:-4]], Loader=yaml.FullLoader)
                    for el in day_paths]
@@ -33,13 +31,9 @@ rule dlc_extraction:
     params:
             info=yaml_to_json,
             dlc_path=config["dlc_path"],
-          # info=lambda wildcards: config["file_info"][wildcards.file]
-    # notebook:
-    #     "snakemake_scripts/notebooks/Process_videoexperiment.ipynb"
     shell:
         r'conda activate DLC-GPU & python "{params.dlc_path}" "{input}" "{output}" "{params.info}"'
-        # r'conda activate DLC-GPU & D:/ProgramData/Miniconda3/envs/DLC-GPU/python.exe "D:/Code Repos/prey_capture/snakemake_scripts/run_dlc.py" '
-        # + r'"{input}" "{output}" "{params.info}"'
+
 
 def dlc_input_selector(wildcards):
     if config["dlc_flag"][wildcards.file]:
@@ -47,18 +41,6 @@ def dlc_input_selector(wildcards):
     else:
         return os.path.join(config["target_path"], config["files"][wildcards.file] + '.csv')
 
-# rule calcium_extraction:
-#     input:
-#           lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.tif'),
-#           # expand(os.path.join(config["target_path"], "{file}.tif"), file=config['files'])
-#     output:
-#           os.path.join(config["target_path"], "{file}_calcium.hdf5"),
-#           # expand(os.path.join(config["target_path"], "{file}_calcium.hdf5"), file=config['files']).join(',')
-#     params:
-#           info=yaml_to_json,
-#           cnmfe_path=config["cnmfe_path"],
-#     shell:
-#           r'conda activate caiman & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
 
 def day_selector(wildcards):
     name_parts = wildcards.file.split('_')

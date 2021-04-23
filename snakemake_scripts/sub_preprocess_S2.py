@@ -59,11 +59,10 @@ def cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_dat
     return cricket_data
 
 
-def kinematic_calculations(name, data):
+def kinematic_calculations(data):
     """Calculate basic kinematic parameters of mouse and cricket"""
 
     # define which coordinates to use depending on the available data
-    # TODO: sort this out, should be a direct mapping between them
     if 'mouse_x_m' in data.columns:
         mouse_coord_hd = data.loc[:, ['mouse_x_m', 'mouse_y_m']].to_numpy()
     else:
@@ -178,9 +177,6 @@ def kinematic_calculations(name, data):
         vr_crickets = len(vr_cricket_list)
     else:
         vr_crickets = 0
-
-    # save the data to file
-    kine_data.to_hdf(name, key='full_traces', mode='w', format='table')
 
     # return the dataframe
     return kine_data, real_crickets, vr_crickets
