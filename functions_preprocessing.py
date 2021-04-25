@@ -356,9 +356,12 @@ def interpolate_animals(files, target_values):
 
     # get the cricket coordinates
     cricket_columns = [el for el in files.columns if 'cricket' in el]
-    cricket_coordinates = files[cricket_columns]
+    cricket_coordinates = files[cricket_columns].copy()
     # copy the data
     cricket_interpolated = cricket_coordinates.copy()
+    # make rows that contain a nan entirely nan
+    nan_vector = np.any(np.isnan(cricket_coordinates.to_numpy()), axis=1)
+    cricket_coordinates.iloc[nan_vector, :] = np.nan
 
     # for all the columns
     for col in cricket_coordinates.columns:
@@ -854,12 +857,45 @@ def parse_bonsai(path_in):
     return parsed_data
 
 
-def trim_at_last_encounter(result, data_in, threshold=4):
+def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=10, speed_threshold=1):
     """Trim the successfull traces after cricket capture"""
 
-    # if it's not a success, skip
-    if result != 'succ':
-        return data_in
+    # # allocate the output
+    # data_out = data_in.copy()
+    # allocate the trim frames
+    trim_frames = [0, data_in.shape[0], data_in.shape[0]]
 
-    # calculate the distance to prey
-    # prey_distance
+    # get the mouse coordinates
+    mouse_coord = data_in[['mouse_base_x', 'mouse_base_y']].to_numpy()
+    # roughly scale the mouse coordinates
+    mouse_coord = mouse_coord*(np.abs(ref_corners[0][1] - ref_corners[1][1])/np.abs(corners[0][0] - corners[2][0]))
+
+    # define the frame rate
+    # TODO: get the frame rate from the actual file
+    frame_rate = 0.1
+    # get a rough speed trace
+    temp_speed = np.concatenate(
+        ([0], fk.distance_calculation(mouse_coord[1:, :], mouse_coord[:-1, :]) /
+         frame_rate))
+    # trim the beginning by finding the end of a nan stretch
+    nan_segments, nan_num = label(np.isnan(temp_speed))
+    # get the lengths
+    nan_lengths = np.array([np.sum(nan_segments == el) for el in np.arange(1, nan_num+1)])
+    # get the ends
+    nan_ends = [np.argwhere(np.diff((nan_segments == el).astype(int)) == -1)[0][0] for el in np.arange(1, nan_num+1)]
+    # get the trim frame
+    trim_frames[0] = nan_ends[np.argwhere(nan_lengths > nan_threshold)[-1][0]]
+    # trim the trace
+    data_out = data_in.iloc[trim_frames[0]:, :].reset_index(drop=True)
+
+    # if it's a success, skip
+    if result == 'succ':
+
+        # find the last spot in the speed trace where the speed goes below threshold
+        slow_frames = np.array([el[0] for el in np.argwhere(medfilt(temp_speed, kernel_size=11) < speed_threshold)])
+        # get the first one after the start of the trial
+        trim_frames[1] = slow_frames[slow_frames > trim_frames[0]][0]
+        # trim the trace
+        data_out = data_out.iloc[:trim_frames[1]-trim_frames[0], :].reset_index(drop=True)
+
+    return data_out, trim_frames

@@ -1,6 +1,6 @@
 # imports
 from tkinter import filedialog
-# import functions_plotting as fp
+# import functions_plotting as fplot
 from functions_misc import tk_killwindow
 import functions_preprocessing as fp
 from functions_io import parse_path
@@ -286,30 +286,40 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     #     cutoff_frame = cutoff_frame[-1][0]
     # else:
     #     cutoff_frame = 0
+    # if it's not the miniscope rig, use the simpler trimming
+    if file_info['rig'] != 'miniscope':
+        # define the frame bounds as empty
+        frame_bounds = [0, filtered_traces.shape[0], filtered_traces.shape[0]]
 
-    # trim the trace at the first mouse main body not nan
-    cutoff_frame = np.argwhere(~np.isnan(filtered_traces['mouse_x'].to_numpy()))
-    # if no cutoff is found, don't cutoff anything
-    if cutoff_frame.shape[0] > 0:
-        cutoff_frame = cutoff_frame[0][0]
-    else:
-        cutoff_frame = 0
+        # trim the trace at the first mouse main body not nan
+        cutoff_frame = np.argwhere(~np.isnan(filtered_traces['mouse_x'].to_numpy()))
+        # if no cutoff is found, don't cutoff anything
+        if cutoff_frame.shape[0] > 0:
+            cutoff_frame = cutoff_frame[0][0]
+        else:
+            cutoff_frame = 0
+        # save the cutoff frame
+        frame_bounds[0] = cutoff_frame
+        # perform the trimming and reset index
+        filtered_traces = filtered_traces.iloc[cutoff_frame:, :].reset_index(drop=True)
+    else:  # use the neural net and alternative trimming
+        # trim the trace based on the onset and offset of movement
+        filtered_traces, frame_bounds = fp.trim_to_movement(file_info['result'],
+                                                            filtered_traces, paths.arena_coordinates['miniscope'],
+                                                            corner_points)
 
-    # perform the trimming and reset index
-    filtered_traces = filtered_traces.iloc[cutoff_frame:, :].reset_index(drop=True)
+        # repair the mouse trajectory using a neural net
 
-    # repair the mouse trajectory using a neural net
+        # get only the mouse data
+        column_list = [el for el in filtered_traces.columns if ('mouse' in el) and ('_x' in el)]
+        column_list += [el for el in filtered_traces.columns if ('mouse' in el) and ('_y' in el)]
+        mouse_data = filtered_traces.loc[:, column_list].to_numpy()
 
-    # get only the mouse data
-    column_list = [el for el in filtered_traces.columns if ('mouse' in el) and ('_x' in el)]
-    column_list += [el for el in filtered_traces.columns if ('mouse' in el) and ('_y' in el)]
-    mouse_data = filtered_traces.loc[:, column_list].to_numpy()
+        # repair the trajectory
+        mouse_data = pose_repair(mouse_data, os.path.join(paths.pose_repair_path, 'mouse'), delay=2)
 
-    # repair the trajectory
-    mouse_data = pose_repair(mouse_data, os.path.join(paths.pose_repair_path, 'mouse'), delay=2)
-
-    # put the values back in the main df
-    filtered_traces.loc[:, column_list] = mouse_data
+        # put the values back in the main df
+        filtered_traces.loc[:, column_list] = mouse_data
 
     # filtered_traces = \
     #     fp.infer_cricket_position(filtered_traces, cricket_threshold,
@@ -323,9 +333,9 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     # cricket_data = filtered_traces.loc[:, column_list].to_numpy()
     #
     # # repair the trajectory
-    # cricket_data = pose_repair(cricket_data, os.path.join(paths.pose_repair_path, 'cricket'), delay=8)
-
-    # put the values back in the main df
+    # cricket_data = pose_repair(cricket_data, os.path.join(paths.pose_repair_path, 'cricket'), delay=2)
+    #
+    # # put the values back in the main df
     # filtered_traces.loc[:, column_list] = cricket_data
 
     # # use an ARIMA to infer the low likelihood points
@@ -336,6 +346,12 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
 
     # median filter the traces
     filtered_traces = fp.median_discontinuities(filtered_traces, filtered_traces.columns, kernel_size)
+
+    # trim the trace before and after the places with speed above threshold
+    # calculate speed trace for the mouse
+
+    # filtered_traces
+
     # find the places where there is no pixel movement in any axis and NaN those
 
     # cricket_nonans_x = filtered_traces['cricket_x']
@@ -364,7 +380,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     parsed_path = parse_path(file_path_bonsai)
     # add the time stamps to the main dataframe
     time = [datetime.datetime.strptime(el[:-7], '%Y-%m-%dT%H:%M:%S.%f')
-            for el in timestamp[cutoff_frame:filtered_traces.shape[0]+cutoff_frame]]
+            for el in timestamp[frame_bounds[0]:frame_bounds[1]]]
     # if time is missing frames, skip them from the end and show a warning (checked comparing the traces)
     if len(time) < filtered_traces.shape[0]:
         # calculate the delta
@@ -380,7 +396,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     filtered_traces['mouse'] = parsed_path['animal']
     filtered_traces['datetime'] = parsed_path['datetime']
 
-    return out_path, filtered_traces, corner_points
+    return out_path, filtered_traces, corner_points, frame_bounds
 
 
 def extract_motive(file_path_motive, rig):
