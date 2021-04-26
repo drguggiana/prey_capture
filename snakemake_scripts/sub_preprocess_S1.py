@@ -227,8 +227,9 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
                                 'corner_BR_x', 'corner_BR_y', 'corner_UR_x', 'corner_UR_y'])
         # get the corners
         corner_points = process_corners(corner_info)
-        # interpolate the position of the cricket assuming stationarity
-        filtered_traces = fp.interpolate_animals(filtered_traces, np.nan)
+        if file_info['result'] != 'habi':
+            # interpolate the position of the cricket assuming stationarity
+            filtered_traces = fp.interpolate_animals(filtered_traces, np.nan)
         # # eliminate points that separate from either mouse or cricket more than a threshold
         # filtered_traces = \
         #     fp.maintain_animals(filtered_traces, animal_threshold,
@@ -270,7 +271,8 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     if ('nocricket' in file_info['notes'] and 'VR' in file_info['rig']) or \
             ('nocricket' in file_info['notes'] and 'miniscope' in file_info['rig']) or \
             ('test' in file_info['result'] and 'VPrey' in file_info['rig']) or \
-            ('VScreen' in file_info['rig']):
+            ('VScreen' in file_info['rig']) or \
+            (file_info['result'] == 'habi'):
         # for all the columns
         for column in filtered_traces.columns:
             if 'cricket' in column:

@@ -857,7 +857,7 @@ def parse_bonsai(path_in):
     return parsed_data
 
 
-def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=10, speed_threshold=1):
+def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, speed_threshold=1):
     """Trim the successfull traces after cricket capture"""
 
     # # allocate the output
@@ -882,9 +882,17 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=10, sp
     # get the lengths
     nan_lengths = np.array([np.sum(nan_segments == el) for el in np.arange(1, nan_num+1)])
     # get the ends
-    nan_ends = [np.argwhere(np.diff((nan_segments == el).astype(int)) == -1)[0][0] for el in np.arange(1, nan_num+1)]
+    nan_ends = [np.argwhere(np.diff((nan_segments == el).astype(int)) == -1) for el in np.arange(1, nan_num+1)]
+    nan_ends = np.array([el[0][0] if el.shape[0] > 0 else np.nan for el in nan_ends])
+    # remove the lengths with nan as the end
+    nan_vector = ~np.isnan(nan_ends)
+    nan_lengths = nan_lengths[nan_vector]
+    nan_ends = nan_ends[nan_vector].astype(int)
     # get the trim frame
-    trim_frames[0] = nan_ends[np.argwhere(nan_lengths > nan_threshold)[-1][0]]
+    try:
+        trim_frames[0] = nan_ends[np.argwhere(nan_lengths > nan_threshold)[-1][0]]
+    except IndexError:
+        trim_frames[0] = 0
     # trim the trace
     data_out = data_in.iloc[trim_frames[0]:, :].reset_index(drop=True)
 
@@ -894,7 +902,10 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=10, sp
         # find the last spot in the speed trace where the speed goes below threshold
         slow_frames = np.array([el[0] for el in np.argwhere(medfilt(temp_speed, kernel_size=11) < speed_threshold)])
         # get the first one after the start of the trial
-        trim_frames[1] = slow_frames[slow_frames > trim_frames[0]][0]
+        try:
+            trim_frames[1] = slow_frames[slow_frames > trim_frames[0]][0]
+        except IndexError:
+            trim_frames[1] = data_out.shape[0]
         # trim the trace
         data_out = data_out.iloc[:trim_frames[1]-trim_frames[0], :].reset_index(drop=True)
 
