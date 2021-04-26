@@ -569,12 +569,15 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
         if column+'x' in traces.columns:
             # get the x and y data
             original_data = traces[[column + 'x', column + 'y']].to_numpy()
-            # # add a vector of ones for the matrix multiplication
-            # original_data = np.concatenate((original_data, np.ones((original_data.shape[0], 1))), axis=1)
-            # # transform
-            # new_data = np.matmul(perspective_matrix, original_data.T).T
-            # new_data = np.array([el[:2]/el[2] for el in new_data])
-            new_data = original_data*(np.abs(reference[0][1] - reference[1][1])/np.abs(corner_coordinates[0][0] - corner_coordinates[2][0]))
+            # add a vector of ones for the matrix multiplication
+            original_data = np.concatenate((original_data, np.ones((original_data.shape[0], 1))), axis=1)
+            # transform
+            new_data = np.matmul(perspective_matrix, original_data.T).T
+            new_data = np.array([el[:2]/el[2] for el in new_data])
+
+            # simple scaling for debugging
+            # new_data = original_data*(np.abs(reference[0][1] - reference[1][1])/
+            # np.abs(corner_coordinates[0][0] - corner_coordinates[2][0]))
 
             # replace the original data
             new_traces[[column + 'x', column + 'y']] = new_data[:, :2]
