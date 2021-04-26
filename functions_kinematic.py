@@ -116,7 +116,7 @@ def rotate_points(data_in, angles):
 
 def accumulated_distance(data_in):
     """
-    Calculated the distance travelled between two consecutive samples
+    Calculated the Euclidean distance between two consecutive locations
     :param data_in: Array in the form [samples, points]
     :return:
     """

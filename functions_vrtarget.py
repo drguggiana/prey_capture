@@ -1,9 +1,10 @@
 import pandas as pd
 from datetime import datetime
-from numpy import abs, mean, ones
+import numpy as np
 
 from functions_bondjango import query_database
 from functions_preprocessing import timed_event_finder
+from functions_kinematic import accumulated_distance, distance_calculation
 
 
 def load_h5_df(path):
@@ -75,6 +76,63 @@ def get_trial_traces(df, trials):
     return grouped
 
 
+def recalculate_2D_target_mouse_distance(data, arena_corners):
+
+    # define which coordinates to use depending on the available data
+    if 'mouse_x_m' in data.columns:
+        mouse_coord_hd = data.loc[:, ['mouse_x_m', 'mouse_y_m']].to_numpy()
+    else:
+        mouse_coord_hd = data.loc[:, ['mouse_x', 'mouse_y']].to_numpy()
+    print('mouse y min:', min(mouse_coord_hd[:, 1]), 'mouse y max:', max(mouse_coord_hd[:, 1]), )
+
+    target_coord = data.loc[:, ['target_x', 'target_y']].to_numpy()
+    # Remove instances where target is at the null position
+    target_coord_temp = target_coord[np.all(target_coord != -1, axis=1)]
+    target_ylims = np.array([target_coord_temp[:, 1].min(), target_coord_temp[:, 1].max()])
+    print('target y min:', target_ylims[0], 'target y max:', target_ylims[1])
+
+    # Calculate difference between target y and arena y so we can compensate for
+    # the offset with the "walls" being outside the arena physical boundary
+    arena_xlims = np.array([arena_corners[:, 0].min(), arena_corners[:, 0].max()])
+    arena_ylims = np.array([arena_corners[:, 1].min(), arena_corners[:, 1].max()])
+    y_offset = target_ylims - arena_ylims
+
+    # Adjust the positon of the target so that is it as if it is moving along
+    # the arena edge
+    target_coord_y = target_coord[:, 1].copy()
+    target_coord_y[(target_coord_y < 0) & (target_coord_y > -1)] -= y_offset[0]
+    target_coord_y[(target_coord_y > 0)] -= y_offset[1]
+
+    target_coord_temp = target_coord_y[target_coord_y != -1]
+    target_ylims = np.array([target_coord_temp.min(), target_coord_temp.max()])
+    print('recalc target y min:', target_ylims[0], 'recalc target y max:', target_ylims[1], '\n')
+
+    # replace the target y coordinates with the newly calculated ones
+    data['target_y_adj'] = target_coord_y
+    target_coord_adj = data.loc[:, ['target_x', 'target_y_adj']].to_numpy()
+
+    # Recalculate mouse-target distance with the adjusted coordinates
+    target_mouse_distance = distance_calculation(target_coord_adj, mouse_coord_hd)
+    data['target_mouse_distance_adj'] = target_mouse_distance
+
+    return data
+
+
+def recalculate_3D_target_mouse_distance(data):
+    # define which coordinates to use depending on the available data
+    if 'mouse_x_m' in data.columns:
+        mouse_coord_hd = data.loc[:, ['mouse_x_m', 'mouse_y_m']].to_numpy()
+    else:
+        mouse_coord_hd = data.loc[:, ['mouse_x', 'mouse_y']].to_numpy()
+
+    target_coord = data.loc[:, ['target_x', 'target_y']].to_numpy()
+    target_mouse_distance = distance_calculation(target_coord, mouse_coord_hd)
+
+    data['target_mouse_distance_adj'] = target_mouse_distance
+
+    return data
+
+
 def approach_finder(data_in, key, threshold_function,
                     distance_threshold=0.05, window=1.5, start_distance=0.05, speed_minimum=0.15):
     all_approaches = []
@@ -114,7 +172,7 @@ def approach_finder(data_in, key, threshold_function,
                 angle_start = group['target_delta_heading'][quarter_idx]
                 angle_enc = group['target_delta_heading'][mid_idx]
                 angle_change = angle_enc - angle_start
-                avg_speed = mean(group['mouse_speed'][:mid_idx])
+                avg_speed = np.mean(group['mouse_speed'][:mid_idx])
                 start_dist = abs(group[key][mid_idx] - group[key][0])
 
                 if (start_dist >= start_distance) and (avg_speed >= speed_minimum):  # and (angle_change <= 0):
@@ -133,7 +191,8 @@ def approach_finder(data_in, key, threshold_function,
     return all_approaches, all_trials, valid_approaches, valid_trials
 
 
-def extract_experiment_approaches(data, grouping_params, approach_criteria, threshold_function, output_df):
+def extract_experiment_approaches(data, grouping_params, approach_key, threshold_function, approach_criteria,
+                                  output_df):
     experiment_valid_approaches = []
     experiment_approaches = []
 
@@ -147,7 +206,7 @@ def extract_experiment_approaches(data, grouping_params, approach_criteria, thre
 
         # Use an updated encounter finder that encorporates Hoy et al. criteria to find interactions with target during each trial
         all_trial_approaches, approach_trials, valid_approaches, valid_app_trials = approach_finder(parameter_traces,
-                                                                                                    'target_mouse_distance_recalc',
+                                                                                                    approach_key,
                                                                                                     threshold_function,
                                                                                                     **approach_criteria)
 
@@ -166,8 +225,8 @@ def extract_experiment_approaches(data, grouping_params, approach_criteria, thre
         temp_storage_dict['bin'] = [pt['bin'][0] for i, pt in parameter_traces.iterrows()]
         temp_storage_dict['trial_num'] = trial_nums[:len(parameter_traces)]
         temp_storage_dict['target_color'] = [key[0] for i in range(len(parameter_traces))]
-        temp_storage_dict['scale'] = ones(len(parameter_traces)) * key[1][0] * 100  # Get into cm
-        temp_storage_dict['speed'] = ones(len(parameter_traces)) * key[2] * 100  # Get into cm/s
+        temp_storage_dict['scale'] = np.ones(len(parameter_traces)) * key[1][0] * 100  # Get into cm
+        temp_storage_dict['speed'] = np.ones(len(parameter_traces)) * key[2] * 100  # Get into cm/s
         temp_storage_dict['approaches'] = [len(e) for e in valid_approaches]
         temp_storage_dict['has_approach'] = [1 if t > 0 else 0 for t in temp_storage_dict['approaches']]
 
@@ -175,3 +234,29 @@ def extract_experiment_approaches(data, grouping_params, approach_criteria, thre
         output_df = output_df.append(group_approaches, ignore_index=True)
 
     return output_df, experiment_valid_approaches, experiment_approaches
+
+
+def target_calculations(data, arena_corners, target_dimensionality):
+
+    # Calculate time bins
+    bins = calculate_bins(data['time_vector'].to_numpy(), 10)
+    data['bins'] = bins
+
+    # define which coordinates to use depending on the available data
+    if 'mouse_x_m' in data.columns:
+        mouse_coord_hd = data.loc[:, ['mouse_x_m', 'mouse_y_m']].to_numpy()
+    else:
+        mouse_coord_hd = data.loc[:, ['mouse_x', 'mouse_y']].to_numpy()
+
+    mouse_distance_travelled = accumulated_distance(mouse_coord_hd)
+    data['mouse_distance_travelled'] = mouse_distance_travelled
+
+    # Recalculate target-mouse distance if this is an older experiment
+    if target_dimensionality == '2D':
+        data = recalculate_2D_target_mouse_distance(data, arena_corners)
+    elif target_dimensionality == '3D':
+        data = recalculate_3D_target_mouse_distance(data)
+    else:
+        pass
+
+    return data
