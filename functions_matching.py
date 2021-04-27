@@ -213,14 +213,22 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds):
     frame_times_bonsai_sync = sync_data.loc[
                                   np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0, 'Time'].to_numpy()
     # compare to the frames from bonsai and adjust accordingly (if they don't match, show a warning)
+    # plot_2d([[np.diff(frame_times_bonsai_sync[frame_bounds[0]:]),np.diff(kinematics_data['time_vector'].to_numpy())]])
     # if frame_times_bonsai_sync.shape[0] < n_frames_bonsai_file:
     if frame_times_bonsai_sync.shape[0] < frame_bounds[2]:
         print('File %s has less sync frames than bonsai frames, trimmed bonsai from end' % sync_path)
-        n_frames_bonsai_file = frame_times_bonsai_sync.shape[0]
-        kinematics_data = kinematics_data[:n_frames_bonsai_file]
+        # n_frames_bonsai_file = frame_times_bonsai_sync.shape[0]
+        # kinematics_data = kinematics_data[:n_frames_bonsai_file]
+        delta_sync = frame_bounds[2] - frame_times_bonsai_sync.shape[0]
+        kinematics_data = kinematics_data[:-delta_sync]
+        frame_times_bonsai_sync = \
+            frame_times_bonsai_sync[-(frame_bounds[2]-frame_bounds[0]):
+                                    -(frame_bounds[2]-frame_bounds[1]+1)-delta_sync]
     else:
         # frame_times_bonsai_sync = frame_times_bonsai_sync[-n_frames_bonsai_file:]
-        frame_times_bonsai_sync = frame_times_bonsai_sync[frame_bounds[0]:frame_bounds[1]]
+        frame_times_bonsai_sync = \
+            frame_times_bonsai_sync[-(frame_bounds[2]-frame_bounds[0]):
+                                    -(frame_bounds[2]-frame_bounds[1]+1)]
 
     # interpolate the bonsai traces to match the mini frames
     matched_bonsai = kinematics_data.drop(['time_vector'], axis=1).apply(interp_trace, raw=False,

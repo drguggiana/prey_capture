@@ -145,7 +145,6 @@ def run_preprocess(file_path_bonsai, save_file, file_info,
 
 def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, kernel_size=5):
     """Extract the relevant columns from the dlc file and rename"""
-    # TODO: convert everything to real distance
     # define the threshold for trimming the trace (in pixels for now)
     trim_cutoff = 200
     # define the likelihood threshold for the DLC points
@@ -382,7 +381,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     parsed_path = parse_path(file_path_bonsai)
     # add the time stamps to the main dataframe
     time = [datetime.datetime.strptime(el[:-7], '%Y-%m-%dT%H:%M:%S.%f')
-            for el in timestamp[frame_bounds[0]:frame_bounds[1]]]
+            for el in timestamp[frame_bounds[0]:frame_bounds[1]-1]]
     # if time is missing frames, skip them from the end and show a warning (checked comparing the traces)
     if len(time) < filtered_traces.shape[0]:
         # calculate the delta
@@ -397,6 +396,12 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     # also the mouse and the date
     filtered_traces['mouse'] = parsed_path['animal']
     filtered_traces['datetime'] = parsed_path['datetime']
+
+    coordinate_columns = [el for el in filtered_traces.columns if 'mouse_' in el]
+    coordinate_columns += [el for el in filtered_traces.columns if 'cricket_' in el]
+    # check for nans
+    if np.any(np.isnan(filtered_traces[coordinate_columns].to_numpy())):
+        raise ValueError(f'NaN value found in file {file_info["slug"]}')
 
     return out_path, filtered_traces, corner_points, frame_bounds
 

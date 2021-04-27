@@ -363,6 +363,13 @@ def interpolate_animals(files, target_values):
     nan_vector = np.any(np.isnan(cricket_coordinates.to_numpy()), axis=1)
     cricket_coordinates.iloc[nan_vector, :] = np.nan
 
+    # if the first position is nan, copy the first not-nan position here
+    if np.isnan(cricket_coordinates.iloc[0, 0]):
+        # find the first not-nan
+        first_notnan = \
+            cricket_coordinates.iloc[~np.isnan(cricket_coordinates.iloc[:, 1].to_numpy()), :].to_numpy()[0, :]
+        cricket_coordinates.iloc[0, :] = first_notnan
+
     # for all the columns
     for col in cricket_coordinates.columns:
         # get the data
@@ -900,13 +907,24 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, s
     if result == 'succ':
 
         # find the last spot in the speed trace where the speed goes below threshold
-        slow_frames = np.array([el[0] for el in np.argwhere(medfilt(temp_speed, kernel_size=11) < speed_threshold)])
-        # get the first one after the start of the trial
+        # slow_frames = np.array([el[0] for el in np.argwhere(medfilt(temp_speed, kernel_size=11) < speed_threshold)])
+        slow_segments, slow_num = label(medfilt(temp_speed, kernel_size=11) < speed_threshold)
+        # get the beginning of the last one
+
+        # get the lengths
+        slow_lengths = np.array([np.sum(slow_segments == el) for el in np.arange(1, slow_num + 1)])
+        # get the ends
+        slow_starts = [np.argwhere(np.diff((slow_segments == el).astype(int)) == 1) for el in np.arange(1, slow_num + 1)]
+        slow_starts = np.array([el[0][0] if el.shape[0] > 0 else np.nan for el in slow_starts])
+        # remove the lengths with nan as the end
+        nan_vector = ~np.isnan(slow_starts)
+        slow_lengths = slow_lengths[nan_vector]
+        slow_starts = slow_starts[nan_vector].astype(int)
         try:
-            trim_frames[1] = slow_frames[slow_frames > trim_frames[0]][0]
+            trim_frames[1] = slow_starts[np.argwhere((slow_lengths > 1) & (slow_starts > trim_frames[0]))[-1][0]]
+            # trim the trace
+            data_out = data_out.iloc[:trim_frames[1] - trim_frames[0] - 1, :].reset_index(drop=True)
         except IndexError:
-            trim_frames[1] = data_out.shape[0]
-        # trim the trace
-        data_out = data_out.iloc[:trim_frames[1]-trim_frames[0], :].reset_index(drop=True)
+            print('End not trimmed for file')
 
     return data_out, trim_frames
