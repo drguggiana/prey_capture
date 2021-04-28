@@ -290,7 +290,9 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     # if it's not the miniscope rig, use the simpler trimming
     if file_info['rig'] != 'miniscope':
         # define the frame bounds as empty
-        frame_bounds = [0, filtered_traces.shape[0], filtered_traces.shape[0]]
+        frame_bounds = pd.DataFrame(np.array([0, filtered_traces.shape[0],
+                                    filtered_traces.shape[0]]).reshape([1, 3]),
+                                    columns=['start', 'end', 'original_length'])
 
         # trim the trace at the first mouse main body not nan
         cutoff_frame = np.argwhere(~np.isnan(filtered_traces['mouse_x'].to_numpy()))
@@ -300,7 +302,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
         else:
             cutoff_frame = 0
         # save the cutoff frame
-        frame_bounds[0] = cutoff_frame
+        frame_bounds.loc[0, 'start'] = cutoff_frame
         # perform the trimming and reset index
         filtered_traces = filtered_traces.iloc[cutoff_frame:, :].reset_index(drop=True)
     else:  # use the neural net and alternative trimming
@@ -381,7 +383,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     parsed_path = parse_path(file_path_bonsai)
     # add the time stamps to the main dataframe
     time = [datetime.datetime.strptime(el[:-7], '%Y-%m-%dT%H:%M:%S.%f')
-            for el in timestamp[frame_bounds[0]:frame_bounds[1]-1]]
+            for el in timestamp[frame_bounds.loc[0, 'start']:frame_bounds.loc[0, 'end']-1]]
     # if time is missing frames, skip them from the end and show a warning (checked comparing the traces)
     if len(time) < filtered_traces.shape[0]:
         # calculate the delta

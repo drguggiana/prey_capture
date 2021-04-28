@@ -70,7 +70,8 @@ file_date = datetime.datetime.strptime(files['date'], '%Y-%m-%dT%H:%M:%SZ')
 if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     # run the first stage of preprocessing
     out_path, filtered_traces, corners, frame_bounds = preprocess_selector(files['bonsai_path'], save_path, files)
-
+    # save the bounds
+    frame_bounds.to_hdf(out_path, key='frame_bounds', mode='a', format='table')
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates[files['rig']]
     # scale the traces accordingly
@@ -85,6 +86,9 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
     #                                               save_path)
     out_path, filtered_traces, corners, frame_bounds = preprocess_selector(files['bonsai_path'], save_path, files)
+
+    # save the bounds
+    frame_bounds.to_hdf(out_path, key='frame_bounds', mode='a', format='table')
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates[files['rig']]

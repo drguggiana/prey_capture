@@ -215,20 +215,20 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds):
     # compare to the frames from bonsai and adjust accordingly (if they don't match, show a warning)
     # plot_2d([[np.diff(frame_times_bonsai_sync[frame_bounds[0]:]),np.diff(kinematics_data['time_vector'].to_numpy())]])
     # if frame_times_bonsai_sync.shape[0] < n_frames_bonsai_file:
-    if frame_times_bonsai_sync.shape[0] < frame_bounds[2]:
+    if frame_times_bonsai_sync.shape[0] < frame_bounds.loc[0, 'original_length']:
         print('File %s has less sync frames than bonsai frames, trimmed bonsai from end' % sync_path)
         # n_frames_bonsai_file = frame_times_bonsai_sync.shape[0]
         # kinematics_data = kinematics_data[:n_frames_bonsai_file]
-        delta_sync = frame_bounds[2] - frame_times_bonsai_sync.shape[0]
+        delta_sync = frame_bounds.loc[0, 'original_length'] - frame_times_bonsai_sync.shape[0]
         kinematics_data = kinematics_data[:-delta_sync]
         frame_times_bonsai_sync = \
-            frame_times_bonsai_sync[-(frame_bounds[2]-frame_bounds[0]):
-                                    -(frame_bounds[2]-frame_bounds[1]+1)-delta_sync]
+            frame_times_bonsai_sync[-(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'start']):
+                                    -(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'end']+1)-delta_sync]
     else:
         # frame_times_bonsai_sync = frame_times_bonsai_sync[-n_frames_bonsai_file:]
         frame_times_bonsai_sync = \
-            frame_times_bonsai_sync[-(frame_bounds[2]-frame_bounds[0]):
-                                    -(frame_bounds[2]-frame_bounds[1]+1)]
+            frame_times_bonsai_sync[-(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'start']):
+                                    -(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'end']+1)]
 
     # interpolate the bonsai traces to match the mini frames
     matched_bonsai = kinematics_data.drop(['time_vector'], axis=1).apply(interp_trace, raw=False,

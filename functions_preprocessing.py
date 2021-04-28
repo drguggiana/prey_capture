@@ -926,5 +926,6 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, s
             data_out = data_out.iloc[:trim_frames[1] - trim_frames[0] - 1, :].reset_index(drop=True)
         except IndexError:
             print('End not trimmed for file')
-
+    # format the frame bounds as a dataframe
+    trim_frames = pd.DataFrame(np.array(trim_frames).reshape([1, 3]), columns=['start', 'end', 'original_length'])
     return data_out, trim_frames

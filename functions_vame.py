@@ -294,13 +294,13 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format, crop_size, use_
         pose_list.append(data_mat[:, i * factor:(i + 1) * factor])
 
         # list of reference coordinate indices for alignment
-    # 0: snout, 1: forehand_left, 2: forehand_right,
-    # 3: hindleft, 4: hindright, 5: tail
+    # 0:snout, 1:barL, 2:barR, 3:head, 4:body, 5:body2. 6:body3, 7:base
+    # 8:cricket_head, 9:cricket_body
 
-    pose_ref_index = [2, 3]
+    pose_ref_index = [0, 7]
 
     # list of 2 reference coordinate indices for avoiding flipping
-    pose_flip_ref = [0, 4]
+    pose_flip_ref = [1, 2]
 
     if use_video:
         # compute background
@@ -339,7 +339,7 @@ def run_alignment(path_dlc, path_file, file_format, crop_size, use_video=False, 
 
     # define the output path
     output_path = os.path.join(path_file, 'data', file_name, file_name + '-PE-seq.npy')
-    np.save(output_path, egocentric_time_series)
+    # np.save(output_path, egocentric_time_series)
 
     return egocentric_time_series
 
@@ -367,11 +367,11 @@ if __name__ == '__main__':
     egocentric_time_series = run_alignment(path_dlc, path_vame, file_format, crop_size,
                                            use_video=use_video, check_video=check_video)
 
-    # # test plot
-    # import matplotlib.pyplot as plt
-    # import functions_plotting as fp
-    # plt.plot(egocentric_time_series.T)
-    # plt.show()
+    # test plot
+    import matplotlib.pyplot as plt
+    import functions_plotting as fp
+    plt.plot(egocentric_time_series.T)
+    plt.show()
 
     # fp.simple_animation(egocentric_time_series, interval=100)
     # fp.show()
