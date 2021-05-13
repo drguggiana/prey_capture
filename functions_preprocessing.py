@@ -348,8 +348,9 @@ def interpolate_segments(files, target_value):
     return interpolated_traces
 
 
-def interpolate_animals(files, target_values):
-    """Interpolate the mouse NaNs and prolong the cricket ones"""
+def interpolate_animals(files, target_values, ref_corners, corners, distance_threshold=2):
+    """Correct the cricket position"""
+    # TODO: account for when the cricket is under the mouse
     # extract the mouse coordinates
     mouse_columns = [el for el in files.columns if 'mouse' in el]
     mouse_coordinates = files[mouse_columns]
@@ -363,6 +364,13 @@ def interpolate_animals(files, target_values):
     nan_vector = np.any(np.isnan(cricket_coordinates.to_numpy()), axis=1)
     cricket_coordinates.iloc[nan_vector, :] = np.nan
 
+    distance_mouse = \
+        fk.distance_calculation(cricket_coordinates[['cricket_0_x', 'cricket_0_y']].to_numpy(),
+                                mouse_coordinates[['mouse_x', 'mouse_y']].to_numpy())
+    # convert the distance to cm
+    distance_mouse = distance_mouse*(np.abs(ref_corners[0][1] -
+                                            ref_corners[1][1])/np.abs(corners[0][0] - corners[2][0]))
+
     # if the first position is nan, copy the first not-nan position here
     if np.isnan(cricket_coordinates.iloc[0, 0]):
         # find the first not-nan
@@ -374,6 +382,12 @@ def interpolate_animals(files, target_values):
     for col in cricket_coordinates.columns:
         # get the data
         data = cricket_coordinates[col].to_numpy()
+        # get the target column
+        if 'head' in col:
+            target_column = 'mouse_snout_' + col[-1]
+        else:
+            target_column = 'mouse_head_' + col[-1]
+
         # find the target value
         if np.isnan(target_values):
             nan_locations, nan_numbers = label(np.isnan(data))
@@ -384,8 +398,13 @@ def interpolate_animals(files, target_values):
         for segment in np.arange(1, nan_numbers+1):
             # get the start of the segment
             segment_start = np.argwhere(nan_locations == segment).flatten()[0]
-            # replace the segment by the values
-            data[nan_locations == segment] = data[segment_start-1]
+            # select the action depending on distance
+            if distance_mouse[segment_start] < distance_threshold:
+                # replace the segment by the position of the mouse
+                data[nan_locations == segment] = mouse_coordinates.loc[nan_locations == segment, target_column]
+            else:
+                # replace the segment by the last valid value
+                data[nan_locations == segment] = data[segment_start-1]
         # add to the output frame
         cricket_interpolated.loc[:, col] = data
 
@@ -557,7 +576,7 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
                                                      np.array(reference).astype('float32'))
     # get the new corners
     new_corners = np.concatenate((corner_coordinates, np.ones((corner_coordinates.shape[0], 1))), axis=1)
-    new_corners = np.matmul(perspective_matrix, new_corners.T).T
+    new_corners = np.matmul(new_corners, perspective_matrix.T)
     new_corners = np.array([el[:2] / el[2] for el in new_corners])
 
     # copy the traces
@@ -575,15 +594,20 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
             # add a vector of ones for the matrix multiplication
             original_data = np.concatenate((original_data, np.ones((original_data.shape[0], 1))), axis=1)
             # transform
-            new_data = np.matmul(perspective_matrix, original_data.T).T
-            # basic scaling for debugging
-            # new_data = original_data*(np.abs(reference[0][1] - reference[1][1])/
-            # np.abs(corner_coordinates[0][0] - corner_coordinates[2][0]))
+            new_data = np.matmul(original_data, perspective_matrix.T)
+            new_data = np.array([el[:2] / el[2] for el in new_data])
+
+            # # basic scaling for debugging
+            # new_data = original_data*(np.abs(reference[0][1] - reference[1][1]) /
+            #                           np.abs(corner_coordinates[0][0] - corner_coordinates[2][0]))
 
             # replace the original data
             new_traces[[column + 'x', column + 'y']] = new_data[:, :2]
 
-    return new_traces, new_corners
+    # turn the perspective matrix into a dataframe
+    output_matrix = pd.DataFrame(perspective_matrix)
+
+    return new_traces, new_corners, output_matrix
 
 
 def find_corners(video_path, num_frames=10, crop_flag=False):

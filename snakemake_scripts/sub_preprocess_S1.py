@@ -226,9 +226,9 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
                                 'corner_BR_x', 'corner_BR_y', 'corner_UR_x', 'corner_UR_y'])
         # get the corners
         corner_points = process_corners(corner_info)
-        if file_info['result'] != 'habi':
-            # interpolate the position of the cricket assuming stationarity
-            filtered_traces = fp.interpolate_animals(filtered_traces, np.nan)
+        # if file_info['result'] != 'habi':
+        #     # interpolate the position of the cricket assuming stationarity
+        #     filtered_traces = fp.interpolate_animals(filtered_traces, np.nan)
         # # eliminate points that separate from either mouse or cricket more than a threshold
         # filtered_traces = \
         #     fp.maintain_animals(filtered_traces, animal_threshold,
@@ -324,6 +324,10 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
         # put the values back in the main df
         filtered_traces.loc[:, column_list] = mouse_data
 
+    if file_info['result'] != 'habi':
+        # interpolate the position of the cricket assuming stationarity
+        filtered_traces = fp.interpolate_animals(filtered_traces, np.nan,
+                                                 paths.arena_coordinates[file_info['rig']], corner_points)
     # filtered_traces = \
     #     fp.infer_cricket_position(filtered_traces, cricket_threshold,
     #                               corner_points, paths.arena_coordinates['miniscope'])

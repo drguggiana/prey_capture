@@ -71,11 +71,11 @@ if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     # run the first stage of preprocessing
     out_path, filtered_traces, corners, frame_bounds = preprocess_selector(files['bonsai_path'], save_path, files)
     # save the bounds
-    frame_bounds.to_hdf(out_path, key='frame_bounds', mode='a', format='table')
-    # define the dimensions of the arena
-    reference_coordinates = paths.arena_coordinates[files['rig']]
+    frame_bounds.to_hdf(out_path, key='frame_bounds', mode='w', format='fixed')
+
     # scale the traces accordingly
-    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates, corners)
+    filtered_traces, corners, rot_matrix = fp.rescale_pixels(filtered_traces, files,
+                                                             paths.arena_coordinates[files['rig']], corners)
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
@@ -87,13 +87,12 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     #                                               save_path)
     out_path, filtered_traces, corners, frame_bounds = preprocess_selector(files['bonsai_path'], save_path, files)
 
-    # save the bounds
-    frame_bounds.to_hdf(out_path, key='frame_bounds', mode='a', format='table')
-
-    # define the dimensions of the arena
-    reference_coordinates = paths.arena_coordinates[files['rig']]
     # scale the traces accordingly
-    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files, reference_coordinates, corners)
+    filtered_traces, corners, rot_matrix = fp.rescale_pixels(filtered_traces, files,
+                                                             paths.arena_coordinates[files['rig']], corners)
+    # save the bounds and the matrix
+    frame_bounds.to_hdf(out_path, key='frame_bounds', mode='w', format='fixed')
+    rot_matrix.to_hdf(out_path, key='rot_matrix', mode='a', format='fixed')
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
@@ -107,7 +106,7 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # get a dataframe with the calcium data matched to the bonsai data
     matched_calcium = functions_matching.match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds)
 
-    matched_calcium.to_hdf(out_path, key='matched_calcium', mode='a', format='table')
+    matched_calcium.to_hdf(out_path, key='matched_calcium', mode='a', format='fixed')
 
 # elif files['rig'] == 'VR' and file_date <= datetime.datetime(year=2019, month=11, day=10):
 elif files['rig'] in ['VR', 'VPrey'] and file_date <= datetime.datetime(year=2020, month=6, day=22):

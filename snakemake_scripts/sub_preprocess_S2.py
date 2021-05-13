@@ -179,7 +179,7 @@ def kinematic_calculations(name, data):
         vr_crickets = 0
 
     # save the data to file
-    kine_data.to_hdf(name, key='full_traces', mode='w', format='table')
+    kine_data.to_hdf(name, key='full_traces', mode='a', format='fixed')
 
     # return the dataframe
     return kine_data, real_crickets, vr_crickets
