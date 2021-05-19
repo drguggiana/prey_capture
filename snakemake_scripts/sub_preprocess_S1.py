@@ -72,12 +72,6 @@ def pose_repair(data_in, model_path, delay=4):
     return data_out
 
 
-def process_corners(corner_frame):
-    """Extract the corner coordinates from the trace"""
-    corner_processed = np.reshape(np.median(corner_frame, axis=0), (4, 2))
-    return corner_processed
-
-
 def run_preprocess(file_path_bonsai, save_file, file_info,
                    kernel_size=21, max_step=300, max_length=50):
     """Preprocess the bonsai file"""
@@ -225,7 +219,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
         ]].to_numpy(), columns=['corner_UL_x', 'corner_UL_y', 'corner_BL_x', 'corner_BL_y',
                                 'corner_BR_x', 'corner_BR_y', 'corner_UR_x', 'corner_UR_y'])
         # get the corners
-        corner_points = process_corners(corner_info)
+        corner_points = fp.process_corners(corner_info)
         # if file_info['result'] != 'habi':
         #     # interpolate the position of the cricket assuming stationarity
         #     filtered_traces = fp.interpolate_animals(filtered_traces, np.nan)
@@ -287,6 +281,9 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     #     cutoff_frame = cutoff_frame[-1][0]
     # else:
     #     cutoff_frame = 0
+
+    # save a copy of the untrimmed traces for later
+    untrimmed = filtered_traces.copy()
     # if it's not the miniscope rig, use the simpler trimming
     if file_info['rig'] != 'miniscope':
         # define the frame bounds as empty
@@ -306,6 +303,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
         # perform the trimming and reset index
         filtered_traces = filtered_traces.iloc[cutoff_frame:, :].reset_index(drop=True)
     else:  # use the neural net and alternative trimming
+
         # trim the trace based on the onset and offset of movement
         filtered_traces, frame_bounds = fp.trim_to_movement(file_info['result'],
                                                             filtered_traces, paths.arena_coordinates['miniscope'],
@@ -327,7 +325,7 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     if file_info['result'] != 'habi':
         # interpolate the position of the cricket assuming stationarity
         filtered_traces = fp.interpolate_animals(filtered_traces, np.nan,
-                                                 paths.arena_coordinates[file_info['rig']], corner_points)
+                                                 paths.arena_coordinates[file_info['rig']], corner_points, untrimmed)
     # filtered_traces = \
     #     fp.infer_cricket_position(filtered_traces, cricket_threshold,
     #                               corner_points, paths.arena_coordinates['miniscope'])
@@ -408,8 +406,10 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     # check for nans
     if np.any(np.isnan(filtered_traces[coordinate_columns].to_numpy())):
         raise ValueError(f'NaN value found in file {file_info["slug"]}')
+    # turn corner points into a dataframe
+    corner_frame = pd.DataFrame(corner_points.T, columns=['UL', 'BL', 'BR', 'UR'])
 
-    return out_path, filtered_traces, corner_points, frame_bounds
+    return out_path, filtered_traces, corner_frame, frame_bounds
 
 
 def extract_motive(file_path_motive, rig):

@@ -24,8 +24,8 @@ def crop_and_flip(rect, src, points, ref_index):
     center, size = tuple(map(int, center)), tuple(map(int, size))
     # Get rotation matrix
     M = cv.getRotationMatrix2D(center, theta, 1)
-    center_movie = tuple([1024-center[0]*1024/1000/40, center[1]*1280/1000/40])
-    M_movie = cv.getRotationMatrix2D(center_movie, theta, 1)
+    # center_movie = tuple([1024-center[0]*1024/1000/40, center[1]*1280/1000/40])
+    # M_movie = cv.getRotationMatrix2D(center_movie, theta, 1)
 
     # shift DLC points
     x_diff = center[0] - size[0] // 2
@@ -43,8 +43,10 @@ def crop_and_flip(rect, src, points, ref_index):
 
     # Perform rotation on src image
     # out = src
-    dst = cv.warpAffine(src.astype('float32'), M_movie, src.shape[:2])
-    out = cv.getRectSubPix(dst, size, center_movie)
+    dst = cv.warpAffine(src.astype('float32'), M, src.shape[:2])
+
+    # plt.imshow(out)
+    out = cv.getRectSubPix(dst, size, center)
     # print(np.max(out))
     # check if flipped correctly, otherwise flip again
     if dlc_points_shifted[ref_index[1]][0] >= dlc_points_shifted[ref_index[0]][0]:
@@ -70,10 +72,10 @@ def crop_and_flip(rect, src, points, ref_index):
             dlc_points_shifted.append(point)
 
         # Perform rotation on src image
-        center_movie = tuple([center[0] * 1024 / 1000 / 40, center[1] * 1280 / 1000 / 40])
-        M_movie = cv.getRotationMatrix2D(center_movie, theta, 1)
-        dst = cv.warpAffine(out.astype('float32'), M_movie, out.shape[:2])
-        out = cv.getRectSubPix(dst, size, center_movie)
+        # center_movie = tuple([center[0] * 1024 / 1000 / 40, center[1] * 1280 / 1000 / 40])
+        # M_movie = cv.getRotationMatrix2D(center_movie, theta, 1)
+        dst = cv.warpAffine(out.astype('float32'), M, out.shape[:2])
+        out = cv.getRectSubPix(dst, size, center)
 
     return out, dlc_points_shifted
 
@@ -271,7 +273,22 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format,
     # data = pd.read_csv(path_to_file+'videos/pose_estimation/'+filename+'-DC.csv', skiprows = 2)
 
     # process files differentially depending on the extension
-    if '_dlc.h5' in path_to_dlc:
+    if isinstance(path_to_dlc, pd.DataFrame):
+        # the path input is actually the data
+        data = path_to_dlc
+        # get the column names
+        column_list = list(data.columns)
+        # # get only the columns with mouse information
+        # column_list = [True if ('mouse' in el) and (('x' in el) or ('y' in el)) else False
+        #                for el in column_list]
+        # column_list = [True for el in column_list]
+        column_list = [True if (('x' in el) or ('y' in el)) else False
+                       for el in column_list]
+        # set interpolation flag
+        interp_flag = False
+        # define the multiplier for the coordinates
+        coord_multiplier = 1
+    elif '_dlc.h5' in path_to_dlc:
         # data = pd.read_hdf(os.path.join(path_to_dlc, filename + '_dlc.h5'))
         data = pd.read_hdf(path_to_dlc)
         # get the column names
@@ -282,6 +299,8 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format,
         # data_mat = data_mat[:, 1:]
         # set interpolation flag
         interp_flag = True
+        # define the multiplier for the coordinates
+        coord_multiplier = 1
     else:
         # data = pd.read_hdf(path_to_dlc, 'full_traces')
         with h5py.File(path_to_dlc, 'r') as f:
@@ -299,10 +318,12 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format,
                        for el in column_list]
         # set interpolation flag
         interp_flag = False
+        # define the multiplier for the coordinates
+        coord_multiplier = 1000
 
     data = data.iloc[:, column_list]
     # convert to numpy and multiply by 1000 to avoid rounding artifacts
-    data_mat = pd.DataFrame.to_numpy(data)*1000
+    data_mat = pd.DataFrame.to_numpy(data)*coord_multiplier
     # # get the filename from the dlc path
     # filename = os.path.splitext(os.path.basename(path_to_dlc))[0]
     # get the coordinates for alignment from data table
@@ -405,10 +426,17 @@ if __name__ == '__main__':
                                            use_video=use_video, check_video=check_video,
                                            save_align=save_align, video_path=video_path)
 
+    # beh_data = pd.read_hdf(path_dlc, 'full_traces')
+    # beh_data = beh_data.iloc[15:-15, :].reset_index(drop=True)
+    #
+    # egocentric_time_series, video_frames = align_demo((beh_data+5)*20, path_vame, '', file_format, crop_size,
+    #                                     use_video=use_video, check_video=check_video,
+    #                                     vid_path=video_path)
+
     # test plot
     import matplotlib.pyplot as plt
     import functions_plotting as fp
-    plt.plot(egocentric_time_series[0].T)
+    plt.plot(egocentric_time_series.T)
     plt.show()
 
     # fp.simple_animation(egocentric_time_series, interval=100)

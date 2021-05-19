@@ -69,13 +69,14 @@ file_date = datetime.datetime.strptime(files['date'], '%Y-%m-%dT%H:%M:%SZ')
 # if miniscope but no imaging, run bonsai only
 if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     # run the first stage of preprocessing
-    out_path, filtered_traces, corners, frame_bounds = preprocess_selector(files['bonsai_path'], save_path, files)
-    # save the bounds
-    frame_bounds.to_hdf(out_path, key='frame_bounds', mode='w', format='fixed')
+    out_path, filtered_traces, px_corners, frame_bounds = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # scale the traces accordingly
-    filtered_traces, corners, rot_matrix = fp.rescale_pixels(filtered_traces, files,
-                                                             paths.arena_coordinates[files['rig']], corners)
+    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files,
+                                                 paths.arena_coordinates[files['rig']], px_corners.to_numpy().T)
+    # save the bounds and the matrix
+    frame_bounds.to_hdf(out_path, key='frame_bounds', mode='w', format='fixed')
+    px_corners.to_hdf(out_path, key='corners', mode='a', format='fixed')
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
@@ -85,14 +86,14 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # run the first stage of preprocessing
     # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
     #                                               save_path)
-    out_path, filtered_traces, corners, frame_bounds = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, px_corners, frame_bounds = preprocess_selector(files['bonsai_path'], save_path, files)
 
     # scale the traces accordingly
-    filtered_traces, corners, rot_matrix = fp.rescale_pixels(filtered_traces, files,
-                                                             paths.arena_coordinates[files['rig']], corners)
+    filtered_traces, corners = fp.rescale_pixels(filtered_traces, files,
+                                                 paths.arena_coordinates[files['rig']], px_corners.to_numpy().T)
     # save the bounds and the matrix
     frame_bounds.to_hdf(out_path, key='frame_bounds', mode='w', format='fixed')
-    rot_matrix.to_hdf(out_path, key='rot_matrix', mode='a', format='fixed')
+    px_corners.to_hdf(out_path, key='corners', mode='a', format='fixed')
 
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)

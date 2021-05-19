@@ -348,9 +348,8 @@ def interpolate_segments(files, target_value):
     return interpolated_traces
 
 
-def interpolate_animals(files, target_values, ref_corners, corners, distance_threshold=2):
+def interpolate_animals(files, target_values, ref_corners, corners, untrimmed, distance_threshold=6):
     """Correct the cricket position"""
-    # TODO: account for when the cricket is under the mouse
     # extract the mouse coordinates
     mouse_columns = [el for el in files.columns if 'mouse' in el]
     mouse_coordinates = files[mouse_columns]
@@ -358,6 +357,7 @@ def interpolate_animals(files, target_values, ref_corners, corners, distance_thr
     # get the cricket coordinates
     cricket_columns = [el for el in files.columns if 'cricket' in el]
     cricket_coordinates = files[cricket_columns].copy()
+    cricket_untrimmed = untrimmed[cricket_columns].copy()
     # copy the data
     cricket_interpolated = cricket_coordinates.copy()
     # make rows that contain a nan entirely nan
@@ -370,12 +370,14 @@ def interpolate_animals(files, target_values, ref_corners, corners, distance_thr
     # convert the distance to cm
     distance_mouse = distance_mouse*(np.abs(ref_corners[0][1] -
                                             ref_corners[1][1])/np.abs(corners[0][0] - corners[2][0]))
+    # add an offset at the beginning cause the starts of nan segments will always have nan distance
+    distance_mouse = np.hstack(([100], distance_mouse))
 
     # if the first position is nan, copy the first not-nan position here
     if np.isnan(cricket_coordinates.iloc[0, 0]):
         # find the first not-nan
         first_notnan = \
-            cricket_coordinates.iloc[~np.isnan(cricket_coordinates.iloc[:, 1].to_numpy()), :].to_numpy()[0, :]
+            cricket_untrimmed.iloc[np.all(~np.isnan(cricket_untrimmed.to_numpy()), axis=1), :].to_numpy()[0, :]
         cricket_coordinates.iloc[0, :] = first_notnan
 
     # for all the columns
@@ -604,10 +606,10 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
             # replace the original data
             new_traces[[column + 'x', column + 'y']] = new_data[:, :2]
 
-    # turn the perspective matrix into a dataframe
-    output_matrix = pd.DataFrame(perspective_matrix)
+    # # turn the perspective matrix into a dataframe
+    # output_matrix = pd.DataFrame(perspective_matrix)
 
-    return new_traces, new_corners, output_matrix
+    return new_traces, new_corners
 
 
 def find_corners(video_path, num_frames=10, crop_flag=False):
@@ -897,7 +899,7 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, s
     trim_frames = [0, data_in.shape[0], data_in.shape[0]]
 
     # get the mouse coordinates
-    mouse_coord = data_in[['mouse_base_x', 'mouse_base_y']].to_numpy()
+    mouse_coord = data_in[['mouse_body3_x', 'mouse_body3_y']].to_numpy()
     # roughly scale the mouse coordinates
     mouse_coord = mouse_coord*(np.abs(ref_corners[0][1] - ref_corners[1][1])/np.abs(corners[0][0] - corners[2][0]))
 
@@ -953,3 +955,9 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, s
     # format the frame bounds as a dataframe
     trim_frames = pd.DataFrame(np.array(trim_frames).reshape([1, 3]), columns=['start', 'end', 'original_length'])
     return data_out, trim_frames
+
+
+def process_corners(corner_frame):
+    """Extract the corner coordinates from the trace"""
+    corner_processed = np.reshape(np.median(corner_frame, axis=0), (4, 2))
+    return corner_processed
