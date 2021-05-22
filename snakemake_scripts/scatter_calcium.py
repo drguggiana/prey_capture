@@ -57,7 +57,8 @@ try:
     # load the contents of the ca file
     with h5py.File(calcium_path, 'r') as f:
         # calcium_data = np.array((f['sigfn'])).T
-        calcium_data = np.array(f['estimates/C'])
+        # calcium_data = np.array(f['estimates/C'])
+        calcium_data = np.array(f['C']).T
         frame_list = np.array(f['frame_list'])
 
     # get the trials in the file

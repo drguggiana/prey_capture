@@ -6,3 +6,6 @@ processing_parameters.py
 .snakemake/
 snakemake_scripts/config_snake.yaml
 .vscode/
+
+dask-worker-space/
+snakemake_scripts/dask-worker-space/

@@ -72,7 +72,8 @@ rule calcium_extract:
         info=yaml_list_to_json,
         cnmfe_path=config["cnmfe_path"],
     shell:
-        r'conda activate caiman & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
+        # r'conda activate caiman & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
+        r'conda activate minian & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
 
 rule calcium_scatter:
     input:
