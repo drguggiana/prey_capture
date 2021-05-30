@@ -96,8 +96,10 @@ def combine_tif(filenames, processing_path=None):
         im_1 = np.concatenate((im_1, im_n))
         # save the file name and the number of frames
         frames_list.append([filenames[i], im_n.shape[0]])
-    # scale the output to max
-    im_1 = ((im_1/np.max(im_1))*255).astype('uint8')
+    # scale the output to max and turn into uint8 (for MiniAn)
+    max_value = np.max(im_1)
+    for idx, frames in enumerate(im_1):
+        im_1[idx, :, :] = ((frames/max_value)*255).astype('uint8')
     # save the final stack
     io.imsave(out_path_tif, im_1, bigtiff=True)
     # save the info about the files

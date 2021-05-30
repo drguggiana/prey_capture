@@ -139,13 +139,9 @@ def run_preprocess(file_path_bonsai, save_file, file_info,
 
 def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, kernel_size=5):
     """Extract the relevant columns from the dlc file and rename"""
-    # define the threshold for trimming the trace (in pixels for now)
-    trim_cutoff = 200
+
     # define the likelihood threshold for the DLC points
     likelihood_threshold = 0.8
-    # define the threshold for max amount of cm allowed between points within an animal
-    animal_threshold = 4
-    cricket_threshold = 10
     # just return the output path
     out_path = save_file
     # load the bonsai info
@@ -220,25 +216,6 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
                                 'corner_BR_x', 'corner_BR_y', 'corner_UR_x', 'corner_UR_y'])
         # get the corners
         corner_points = fp.process_corners(corner_info)
-        # if file_info['result'] != 'habi':
-        #     # interpolate the position of the cricket assuming stationarity
-        #     filtered_traces = fp.interpolate_animals(filtered_traces, np.nan)
-        # # eliminate points that separate from either mouse or cricket more than a threshold
-        # filtered_traces = \
-        #     fp.maintain_animals(filtered_traces, animal_threshold,
-        #                         corner_points, paths.arena_coordinates['miniscope'])
-        # add the cricket position under the mouse when it is not visible and last position was close to the mouse
-        # filtered_traces = \
-        #     fp.infer_cricket_position(filtered_traces, cricket_threshold,
-        #                               corner_points, paths.arena_coordinates['miniscope'])
-        # set final position of cricket, assume that cricket is under mouse whenever it is not observed
-        # # for succ trials, it stops when mouse stops
-        # if 'succ' in file_path_dlc:
-        #     # check if the last point for the cricket is a NaN
-        #     if np.isnan(filtered_traces['cricket_0_x'].iloc[-1]):
-        #         # if so, make it the position of the mouse head
-        #         filtered_traces[['cricket_0_x', 'cricket_0_y']].iloc[-1] = \
-        #             filtered_traces[['mouse_head_x', 'mouse_head_y']].iloc[-1]
 
     except IndexError:
         # DLC in VR arena
@@ -270,17 +247,6 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
         for column in filtered_traces.columns:
             if 'cricket' in column:
                 filtered_traces.drop([column], inplace=True, axis=1)
-
-    # # trim the trace at the last large jump of the mouse trajectory (i.e when the mouse enters the arena)
-    # # do it after median filtering to prevent the single point errors to trim the video too much
-    # # calculate the displacement of the mouse center
-    # mouse_displacement = np.sqrt((np.diff(filtered_traces['mouse_x']))**2 + (np.diff(filtered_traces['mouse_y']))**2)
-    # cutoff_frame = np.argwhere(mouse_displacement > trim_cutoff)
-    # # check if it's empty. if so, don't cutoff anything
-    # if cutoff_frame.shape[0] > 0:
-    #     cutoff_frame = cutoff_frame[-1][0]
-    # else:
-    #     cutoff_frame = 0
 
     # save a copy of the untrimmed traces for later
     untrimmed = filtered_traces.copy()
@@ -326,51 +292,10 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
         # interpolate the position of the cricket assuming stationarity
         filtered_traces = fp.interpolate_animals(filtered_traces, np.nan,
                                                  paths.arena_coordinates[file_info['rig']], corner_points, untrimmed)
-    # filtered_traces = \
-    #     fp.infer_cricket_position(filtered_traces, cricket_threshold,
-    #                               corner_points, paths.arena_coordinates['miniscope'])
-    # # interpolate the position of the cricket assuming stationarity
-    # filtered_traces = fp.interpolate_animals(filtered_traces, np.nan)
-
-    # # get only the cricket data
-    # column_list = [el for el in filtered_traces.columns if ('cricket' in el) and ('_x' in el)]
-    # column_list += [el for el in filtered_traces.columns if ('cricket' in el) and ('_y' in el)]
-    # cricket_data = filtered_traces.loc[:, column_list].to_numpy()
-    #
-    # # repair the trajectory
-    # cricket_data = pose_repair(cricket_data, os.path.join(paths.pose_repair_path, 'cricket'), delay=2)
-    #
-    # # put the values back in the main df
-    # filtered_traces.loc[:, column_list] = cricket_data
-
-    # # use an ARIMA to infer the low likelihood points
-    # filtered_traces = fp.median_arima(filtered_traces, filtered_traces.columns)
-    # interpolate the NaN stretches
-    # filtered_traces = fp.interpolate_segments(filtered_traces, np.nan)
-    # filtered_traces = fp.interpolate_animals(filtered_traces, np.nan)
 
     # median filter the traces
     filtered_traces = fp.median_discontinuities(filtered_traces, filtered_traces.columns, kernel_size)
 
-    # trim the trace before and after the places with speed above threshold
-    # calculate speed trace for the mouse
-
-    # filtered_traces
-
-    # find the places where there is no pixel movement in any axis and NaN those
-
-    # cricket_nonans_x = filtered_traces['cricket_x']
-    # cricket_nonans_y = filtered_traces['cricket_y']
-    # find the places with tracking off via delta pixel and NaN them
-    # filtered_traces = find_frozen_tracking(filtered_traces, stretch_length=15)
-    # eliminate discontinuities before interpolating
-    # filtered_traces = nan_large_jumps(filtered_traces, ['cricket_x', 'cricket_y'], max_step=200, max_length=150)
-    # eliminate large jumps
-    # filtered_traces = nan_jumps_dlc(filtered_traces)
-    # # eliminate isolated points
-    # filtered_traces = eliminate_singles(filtered_traces)
-    # interpolate the NaN stretches
-    # filtered_traces = interpolate_segments(filtered_traces, np.nan)
     # parse the bonsai file for the time stamps
     timestamp = []
     bonsai_data = []

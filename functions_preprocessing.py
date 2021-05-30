@@ -961,3 +961,15 @@ def process_corners(corner_frame):
     """Extract the corner coordinates from the trace"""
     corner_processed = np.reshape(np.median(corner_frame, axis=0), (4, 2))
     return corner_processed
+
+
+def cricket_size(data_in, conversion_factor):
+    """Calculate the approximate size of the cricket"""
+    # get the distance between the cricket points
+    delta = fk.distance_calculation(data_in.loc[:, ['cricket_0_x', 'cricket_0_y']].to_numpy(),
+                                    data_in.loc[:, ['cricket_0_head_x', 'cricket_0_head_y']].to_numpy())
+
+    # take the median of the first 50 not-nan points and convert
+    target_points = delta[~np.isnan(delta)]
+    cr_size = np.median(target_points[:50])*conversion_factor
+    return cr_size

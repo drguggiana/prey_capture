@@ -1,6 +1,8 @@
 # imports
 from functions_kinematic import *
+import functions_preprocessing as fp
 import pandas as pd
+import scipy as sc
 
 
 def cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_data, vr=False, cricket_name='cricket_0'):
@@ -45,17 +47,89 @@ def cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_dat
     # if the head data from DLC is available and there's no motive, calculate head direction and delta_look
     if 'mouse_head_x' in data.columns and 'mouse_x_m' not in data.columns and vr is False:
 
+        # define the factor for cricket size (see onenote)
+        cricket_proportion = 1.73
+        cricket_to_head = 0.19
+        cricket_to_tail = 0.57
+        # define the width to length relationship to find the bounding box coordinates
+        cricket_aspect_ratio = 0.288
+        # calculate cricket size
+        c_size = fp.cricket_size(data, cricket_proportion)
+        # save in the dataframe
+        cricket_data[cricket_name+'_size'] = c_size
+
+        # get the mouse coordinates
+        mouse_coord_numpy = data[['mouse_head_x', 'mouse_head_y']].to_numpy()
+
         # also get the cricket to head angle
         head_cricket = heading_calculation(data[['cricket_0_x', 'cricket_0_y']].to_numpy(),
-                                           data[['mouse_head_x', 'mouse_head_y']].to_numpy())
+                                           mouse_coord_numpy)
         # finally, get the delta_head angle
         delta_head = head_cricket - kine_data.head_direction
         # effectively wrap around -180 and 180 to put the center at 0
         delta_head[delta_head > 180] += -180
         delta_head[delta_head < -180] += 180
+        # change nans to 0 as these happen when cricket and mouse overlap
+        delta_head[np.isnan(delta_head)] = 0
         # save in the dataframe
         cricket_data[cricket_name+'_delta_head'] = delta_head
 
+        # generate a vector with the FOV quadrant the cricket is in
+        # 0 is binocular, 1 is left eye, 2 is right eye, 3 is out of view, assume 280 deg total FOV per eye
+        # and 40 deg overlap (from Meyer et al. 2018)
+        fov_quadrant = np.zeros_like(delta_head)
+        # create a vector with the delta head data
+        delta_head_array = delta_head.to_numpy()
+        fov_quadrant[(-140 < delta_head_array) & (delta_head_array < -20)] = 1
+        fov_quadrant[(140 > delta_head_array) & (delta_head_array > 20)] = 2
+        fov_quadrant[np.abs(delta_head_array) >= 140] = 3
+        # save the vector in the dataframe
+        cricket_data[cricket_name+'_quadrant'] = fov_quadrant
+
+        # calculate the visual angle subtended by the cricket
+        # get the unit vector for the cricket body
+        delta_vector = data[['cricket_0_head_x', 'cricket_0_head_y']].to_numpy() \
+            - data[['cricket_0_x', 'cricket_0_y']].to_numpy()
+        # get the length of the head point to body point vector
+        distances = np.linalg.norm(delta_vector, axis=1)
+        unit_vector = delta_vector/np.expand_dims(np.linalg.norm(delta_vector, axis=1), axis=1)
+        # get the x and y coordinates of the edges of the cricket
+        head_point = data[['cricket_0_head_x', 'cricket_0_head_y']].to_numpy() + \
+            np.expand_dims(distances, axis=1)*cricket_to_head*unit_vector
+        tail_point = data[['cricket_0_x', 'cricket_0_y']].to_numpy() - \
+            np.expand_dims(distances, axis=1)*cricket_to_tail*unit_vector
+        # get the perpendicular to the unit vector
+        unit_ortho = np.array([[np.cos(np.pi/2), -np.sin(np.pi/2)], [np.sin(np.pi/2), np.cos(np.pi/2)]])@unit_vector.T
+        unit_ortho = unit_ortho.T
+        # now get the corners of the bounding box
+        head_corner_1 = head_point + \
+            np.expand_dims(distances, axis=1)*cricket_proportion*cricket_aspect_ratio*unit_ortho
+        head_corner_2 = head_point - \
+            np.expand_dims(distances, axis=1)*cricket_proportion*cricket_aspect_ratio*unit_ortho
+        tail_corner_1 = tail_point + \
+            np.expand_dims(distances, axis=1)*cricket_proportion*cricket_aspect_ratio*unit_ortho
+        tail_corner_2 = tail_point - \
+            np.expand_dims(distances, axis=1)*cricket_proportion*cricket_aspect_ratio*unit_ortho
+        # put them on a list for for loops
+        corner_list = [head_corner_1, head_corner_2, tail_corner_1, tail_corner_2]
+        # get the angles
+        angle_list = [heading_calculation(el, mouse_coord_numpy) + 360
+                      for el in corner_list]
+        # turn into an array
+        angle_list = np.array(angle_list).T
+        # get the angles
+        visual_angle = np.max(np.array([sc.spatial.distance.pdist(np.expand_dims(el, axis=1)) for el in angle_list]),
+                              axis=1)
+        # visual_angle = np.apply_along_axis(sc.spatial.distance.pdist, 1, np.expand_dims(angle_list.T, axis=2))
+        # # get the angles of these coordinates, including an offset to wrap
+        # head_angle = heading_calculation(head_vector,
+        #                                  data[['mouse_head_x', 'mouse_head_y']].to_numpy()) + 360
+        # tail_angle = heading_calculation(tail_vector,
+        #                                  data[['mouse_head_x', 'mouse_head_y']].to_numpy()) + 360
+        # # get the delta angle, i.e. the visual angle
+        # visual_angle = head_angle - tail_angle
+        # save the coordinates in the dataframe
+        cricket_data[cricket_name+'_visualangle'] = visual_angle
     return cricket_data
 
 
@@ -125,7 +199,6 @@ def kinematic_calculations(name, data):
         # get the head angle with respect to body
         head_direction = heading_calculation(data[['mouse_head_x', 'mouse_head_y']].to_numpy(),
                                              data[['mouse_x', 'mouse_y']].to_numpy())
-
         # save in the dataframe
         kine_data['head_direction'] = head_direction
 

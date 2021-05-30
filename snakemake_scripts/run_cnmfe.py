@@ -1,6 +1,6 @@
 import os
 import paths
-# from snakemake_scripts.cnmfe import cnmfe_function
+from snakemake_scripts.cnmfe import cnmfe_function
 import sys
 import json
 import functions_bondjango as bd
