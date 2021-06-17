@@ -98,16 +98,14 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
 
-    # # trim the succ trials after cricket capture (define threshold in cm)
-    # filtered_traces = fp.trim_at_last_encounter(files['result'], filtered_traces, threshold=4)
-
     # find the sync file
     sync_path = files['sync_path']
 
     # get a dataframe with the calcium data matched to the bonsai data
     matched_calcium = functions_matching.match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds)
-
-    matched_calcium.to_hdf(out_path, key='matched_calcium', mode='a', format='fixed')
+    # if there is a calcium output, write to the file
+    if matched_calcium is not None:
+        matched_calcium.to_hdf(out_path, key='matched_calcium', mode='a', format='fixed')
 
 # elif files['rig'] == 'VR' and file_date <= datetime.datetime(year=2019, month=11, day=10):
 elif files['rig'] in ['VR', 'VPrey'] and file_date <= datetime.datetime(year=2020, month=6, day=22):

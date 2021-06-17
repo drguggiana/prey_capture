@@ -898,18 +898,31 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, s
     # allocate the trim frames
     trim_frames = [0, data_in.shape[0], data_in.shape[0]]
 
-    # get the mouse coordinates
-    mouse_coord = data_in[['mouse_body3_x', 'mouse_body3_y']].to_numpy()
-    # roughly scale the mouse coordinates
-    mouse_coord = mouse_coord*(np.abs(ref_corners[0][1] - ref_corners[1][1])/np.abs(corners[0][0] - corners[2][0]))
+    # define the list of coordinates to look into for nans
+    target_coordinates = ['mouse', 'mouse_body2', 'mouse_body3']
 
-    # define the frame rate
-    # TODO: get the frame rate from the actual file
-    frame_rate = 0.1
-    # get a rough speed trace
-    temp_speed = np.concatenate(
-        ([0], fk.distance_calculation(mouse_coord[1:, :], mouse_coord[:-1, :]) /
-         frame_rate))
+    # allocate memory for the combined speeds (assumption is speed should be about the same across body parts
+    speed_list = []
+    # for all the coordinate pairs
+    for el in target_coordinates:
+        # get the mouse coordinates
+        mouse_coord = data_in[[el+'_x', el+'_y']].to_numpy()
+        # roughly scale the mouse coordinates
+        mouse_coord = mouse_coord*(np.abs(ref_corners[0][1] - ref_corners[1][1])/np.abs(corners[0][0] - corners[2][0]))
+
+        # define the frame rate
+        # TODO: get the frame time from the actual file
+        frame_time = 0.1
+        # get a rough speed trace
+        temp_speed = np.concatenate(
+            ([0], fk.distance_calculation(mouse_coord[1:, :], mouse_coord[:-1, :]) /
+             frame_time))
+        # store the speed
+        speed_list.append(temp_speed)
+
+    # average the speeds to generate a common trace with the minimum amount of gaps
+    temp_speed = np.nanmean(speed_list, axis=0)
+
     # trim the beginning by finding the end of a nan stretch
     nan_segments, nan_num = label(np.isnan(temp_speed))
     # get the lengths

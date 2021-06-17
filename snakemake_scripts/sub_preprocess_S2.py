@@ -120,6 +120,8 @@ def cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_dat
         # get the angles
         visual_angle = np.max(np.array([sc.spatial.distance.pdist(np.expand_dims(el, axis=1)) for el in angle_list]),
                               axis=1)
+        # filter the list by the quadrant (if not visible, discard)
+        visual_angle[fov_quadrant == 3] = 0
         # visual_angle = np.apply_along_axis(sc.spatial.distance.pdist, 1, np.expand_dims(angle_list.T, axis=2))
         # # get the angles of these coordinates, including an offset to wrap
         # head_angle = heading_calculation(head_vector,
@@ -129,7 +131,7 @@ def cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_dat
         # # get the delta angle, i.e. the visual angle
         # visual_angle = head_angle - tail_angle
         # save the coordinates in the dataframe
-        cricket_data[cricket_name+'_visualangle'] = visual_angle
+        cricket_data[cricket_name+'_visual_angle'] = visual_angle
     return cricket_data
 
 

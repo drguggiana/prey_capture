@@ -189,6 +189,9 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds):
     # load the calcium data
     with h5py.File(calcium_path, mode='r') as f:
         calcium_data = np.array(f['calcium_data'])
+        # if there are no ROIs, skip
+        if calcium_data == 'no_ROIs':
+            return
 
     # # get the time vector from bonsai
     # bonsai_time = filtered_traces.time
@@ -234,6 +237,10 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds):
     matched_bonsai = kinematics_data.drop(['time_vector'], axis=1).apply(interp_trace, raw=False,
                                                                          args=(frame_times_bonsai_sync,
                                                                                frame_times_mini_sync))
+    # round the quadrant vector as it should be discrete
+    quadrant_columns = [el for el in matched_bonsai.columns if ('_quadrant' in el)]
+    for el in quadrant_columns:
+        matched_bonsai[el] = np.round(matched_bonsai[el])
     # add the correct time vector from the interpolated traces
     matched_bonsai['time_vector'] = frame_times_mini_sync
 

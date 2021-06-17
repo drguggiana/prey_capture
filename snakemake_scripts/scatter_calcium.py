@@ -58,8 +58,12 @@ try:
     with h5py.File(calcium_path, 'r') as f:
         # calcium_data = np.array((f['sigfn'])).T
         # calcium_data = np.array(f['estimates/C'])
-        calcium_data = np.array(f['C'])
+        # calcium_data = np.array(f['C'])
         frame_list = np.array(f['frame_list'])
+        # if there are no ROIs, raise to generate an empty file
+        if frame_list == 'no_ROIs':
+            raise ValueError('empty file')
+        calcium_data = np.array(f['S'])
 
     # get the trials in the file
     trials_list = [str(el)[2:-1] for el in frame_list[:, 0]]
@@ -76,8 +80,11 @@ try:
     with h5py.File(out_path, 'w') as file:
         file.create_dataset('calcium_data', data=current_calcium)
 
-except KeyError:
+except (KeyError, ValueError):
     print('This file did not contain any ROIs: ' + calcium_path)
+    # create a dummy empty file
+    with h5py.File(out_path, 'w') as file:
+        file.create_dataset('calcium_data', data='no_ROIs')
 
 # update the bondjango entry (need to sort out some fields)
 ori_data = video_data.copy()

@@ -5,7 +5,6 @@ import sys
 import json
 import functions_bondjango as bd
 import functions_io as fi
-# from cnmfe_params import online_dict
 import functions_misc as fm
 from matplotlib import pyplot as plt
 import re
@@ -57,49 +56,51 @@ if __name__ == "__main__":
 
     # delete the folder contents
     fi.delete_contents(paths.temp_path)
-    # raise IndexError('stop here')
     # combine the selected files into a single tif
     out_path_tif, _, frames_list = fi.combine_tif(video_path, paths.temp_path)
 
-    # get the extraction parameters
+    # # get the extraction parameters
+    # try:
+    #     online_dict = processing_parameters.mouse_parameters[animal]
+    # except KeyError:
+    #     print(f'mouse {animal} not found, using default')
+    #     online_dict = processing_parameters.mouse_parameters['default']
+
     try:
-        online_dict = processing_parameters.mouse_parameters[animal]
-    except KeyError:
-        print(f'mouse {animal} not found, using default')
-        online_dict = processing_parameters.mouse_parameters['default']
+        # run minian
+        minian_out = minian_main()
 
-    # run cnmfe
-    # cnmfe_out, _ = cnmfe_function([out_path_tif], out_path, online_dict, save_output=False)
-    # run minian
-    minian_out = minian_main()
+        # custom save the output to include the frames list
+        for idx, el in enumerate(frames_list.iloc[:, 0]):
+            # parse the line
+            frames_list.iloc[idx, 0] = '_'.join(os.path.basename(el).split('_')[:6])
 
-    # custom save the output to include the frames list
-    for idx, el in enumerate(frames_list.iloc[:, 0]):
-        # parse the line
-        frames_list.iloc[idx, 0] = '_'.join(os.path.basename(el).split('_')[:6])
+        # save in an hdf5 file
+        with h5py.File(out_path, 'w') as f:
+            # save the calcium data
+            for key, value in minian_out.items():
+                f.create_dataset(key, data=np.array(value))
+            # save the frames list
+            f.create_dataset('frame_list', data=frames_list.values.astype('S'))
 
-    # save in an hdf5 file
-    with h5py.File(out_path, 'w') as f:
-        # save the calcium data
-        for key, value in minian_out.items():
-            f.create_dataset(key, data=np.array(value))
-        # save the frames list
-        f.create_dataset('frame_list', data=frames_list.values.astype('S'))
-    # cnmfe_out.frame_list = frames_list.values.tolist()
-    # save the output
-    # cnmfe_out.save(out_path)
+        # produce the contour figure
+        calcium_pic = np.sum(minian_out['A'] > 0, axis=0)
+        plt.imshow(calcium_pic)
 
-    # produce the contour figure
-    calcium_pic = np.sum(minian_out['A'] > 0, axis=0)
-    plt.imshow(calcium_pic)
+        # assemble the pic path
+        pic_path = out_path.replace('_calciumday.hdf5', '_calciumpic.tif')
+        # also save a figure with the contours
+        plt.savefig(pic_path, dpi=200)
 
-    # img = cnmfe_out.estimates.corr_img
-    # img = resize(img, (cnmfe_out.estimates.dims[0], cnmfe_out.estimates.dims[1]))
-    # cnmfe_out.estimates.plot_contours(img=img)
-    # assemble the pic path
-    pic_path = out_path.replace('_calciumday.hdf5', '_calciumpic.tif')
-    # also save a figure with the contours
-    plt.savefig(pic_path, dpi=200)
+    except (ValueError, np.linalg.LinAlgError):
+        print(f'File {video_path} contained no ROIs')
+        # save in an hdf5 file
+        with h5py.File(out_path, 'w') as f:
+            # save an empty
+            f.create_dataset('frame_list', data='no_ROIs')
+        # define pic_path as empty
+        pic_path = ''
+
     # assemble the entry data
     entry_data = {
         'analysis_type': 'calciumday',
