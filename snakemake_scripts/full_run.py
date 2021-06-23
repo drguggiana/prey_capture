@@ -19,7 +19,7 @@ try:
     # date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in path_info]
 except NameError:
     # define the output path
-    raw_path = os.path.join(paths.analysis_path, 'just_preprocess.txt')
+    raw_path = os.path.join(paths.analysis_path, 'full_run.txt')
     # define the string
     paths_all = ['test']
 #     # define the analysis type

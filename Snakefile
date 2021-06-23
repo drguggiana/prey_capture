@@ -106,18 +106,6 @@ rule preprocess:
           "snakemake_scripts/preprocess_all.py"
 
 
-rule just_preprocess:
-    input:
-          expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files'])
-    output:
-          os.path.join(paths.analysis_path, "just_preprocess.txt")
-    params:
-          file_info=expand("{info}", info=config["file_info"].values()),
-          output_info=config["output_info"]
-    script:
-          "snakemake_scripts/just_preprocess.py"
-
-
 rule aggregate_preprocessed:
     input:
           expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files'])
@@ -145,6 +133,49 @@ rule triggered_averages:
           "snakemake_scripts/trigAve.py"
 
 
+def files_to_day(wildcards):
+    name_parts = wildcards.file.split('_')
+    day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
+    animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
+    info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
+
+    day_routes = [el['bonsai_path'].replace('.csv', '_preproc.hdf5').replace('VideoExperiment', 'AnalyzedData')
+                  for el in info_list if (config['calcium_flag'][os.path.basename(el['bonsai_path'])[:-4]]
+                  and el['mouse']==animal and el['date'][:10]==day)]
+    wildcards.day_routes = day_routes
+    return day_routes
+
+
+def days_to_file(wildcards):
+    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    animal = python_dict['mouse']
+    day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
+    rig = python_dict['rig']
+    return os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'regressionday.hdf5')))
+
+
+rule gather_regression:
+    input:
+        files_to_day,
+    output:
+        os.path.join(paths.analysis_path,'{file}_regressionday.hdf5'),
+    # params:
+    #     info = lambda wildcards: config["file_info"][wildcards.file],
+    script:
+        "snakemake_scripts/classify_batch.py"
+
+
+rule scatter_analysis:
+    input:
+        days_to_file,
+    output:
+        os.path.join(paths.analysis_path,"{file}_combinedanalysis.hdf5"),
+    params:
+        file_info = lambda wildcards: config["file_info"][wildcards.file],
+    script:
+        "snakemake_scripts/combine_analyses.py"
+
+
 rule match_cells:
     input:
         expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files']),
@@ -165,3 +196,23 @@ rule visualize_aggregates:
         os.path.join(paths.figures_path, "averages_{query}.html")
     notebook:
         "snakemake_scripts/notebooks/Vis_averages.ipynb"
+
+
+def run_selector(wildcards):
+    """Define which processing stream goes"""
+    if config['analysis_type'] == 'combinedanalysis':
+        return expand(os.path.join(paths.analysis_path,"{file}_combinedanalysis.hdf5"),file=config['files'])
+    elif config['analysis_type'] == 'full_run':
+        return expand(os.path.join(paths.analysis_path,"{file}_preproc.hdf5"),file=config['files'])
+
+
+rule full_run:
+    input:
+          run_selector,
+    output:
+          os.path.join(paths.analysis_path, "full_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"

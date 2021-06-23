@@ -22,6 +22,10 @@ for search_query in search_queries:
 
     # pick the target model based on the search query
     if 'rig:miniscope' in search_query:
+        # if 'analysis_type:combinedanalysis' in search_query:
+        #     target_model = 'analyzed_data'
+        #     target_path = paths.analysis_path
+        # else:
         # define the target model and search query
         target_model = 'video_experiment'
         target_path = paths.videoexperiment_path
@@ -108,15 +112,18 @@ for idx, target_entries in enumerate(new_queries):
                    'dlc_path': paths.dlc_script,
                    'cnmfe_path': paths.calcium_script,
                    'interval': [2, 3],
+                   'analysis_type': parsed_search['analysis_type'],
                    }
     # write the file
     with open(paths.snakemake_config, 'w') as f:
         target_file = yaml.dump(config_dict, f)
 
     # assemble the output path
-    if parsed_search['analysis_type'] == 'just_preprocess':
+    if (parsed_search['analysis_type'] == 'full_run') or (parsed_search['analysis_type'] == 'combinedanalysis'):
         # feed the generic txt file for preprocessing
-        out_path = os.path.join(paths.analysis_path, 'just_preprocess.txt')
+        out_path = os.path.join(paths.analysis_path, 'full_run.txt')
+    # elif parsed_search['analysis_type'] == 'combinedanalysis':
+    #     out_path = os.path.join(paths.analysis_path, 'combinedanalysis.hdf5')
     else:
         # feed the aggregation path
         out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
@@ -129,6 +136,7 @@ for idx, target_entries in enumerate(new_queries):
                               # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               # '--rerun-incomplete',
+                              # '--verbose',  # make the output more verbose for debugging
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)
@@ -137,8 +145,8 @@ for idx, target_entries in enumerate(new_queries):
     print(stdout.decode())
 
     # assemble the output path
-    if parsed_search['analysis_type'] == 'just_preprocess' and \
-            os.path.isfile(os.path.join(paths.analysis_path, 'just_preprocess.txt')):
+    if ((parsed_search['analysis_type'] == 'full_run') or (parsed_search['analysis_type'] == 'combinedanalysis')) and \
+            os.path.isfile(os.path.join(paths.analysis_path, 'full_run.txt')):
         # delete the just_preprocess file (specify de novo to no run risks)
-        os.remove(os.path.join(paths.analysis_path, 'just_preprocess.txt'))
+        os.remove(os.path.join(paths.analysis_path, 'full_run.txt'))
 print('yay')
