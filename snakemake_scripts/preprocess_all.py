@@ -11,7 +11,7 @@ import os
 import yaml
 import matplotlib.pyplot as plt
 import h5py
-from pandas import read_hdf
+from pandas import read_hdf, DataFrame
 import processing_parameters
 
 
@@ -215,14 +215,13 @@ else:
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
-
-# Save the computed kinematics data and arena corners to the H5 file
+# save the kinematics and arena corner data
 kinematics_data.to_hdf(out_path, key='full_traces', mode='w', format='table')
-with h5py.File(out_path, 'a') as f:
-    f['arena_corners'] = corners
+corners_df = DataFrame(data=corners, columns=['x', 'y'])
+corners_df.to_hdf(out_path, key='arena_corners', mode='a')
 
 # For these trials, save the trial set and the trial parameters to the output file
-if files['rig'] in ['VScreen']:
+if 'VScreen' in files['rig']:
     trials.to_hdf(out_path, key='trial_set', mode='a')
     params.to_hdf(out_path, key='params', mode='a')
 

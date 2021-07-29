@@ -11,14 +11,15 @@ def load_h5_df(path):
     """Loads a Pandas data frame from an h5 file"""
 
     h5_obj = pd.HDFStore(path)
-
     # Add a column to the trial_params data set that will properly index the trials
     trial_params = h5_obj.get("trial_set")
     trial_params['trial_num'] = trial_params.index + 1
 
     data = {'traces': h5_obj.get("full_traces"),
             'session_params': h5_obj.get("params"),
-            'trial_params': trial_params}
+            'trial_params': trial_params,
+            'arena_corners': h5_obj.get("arena_corners")
+            }
 
     return data
 
@@ -34,18 +35,29 @@ def load_VScreens_datasets(search_string, exclusion=None):
         animal = "_".join(ds['slug'].split('_')[7:10])
 
         if (exclusion is None) or (exclusion not in ds['analysis_path']):
+            print(ds['slug'])
             exp = load_h5_df(ds['analysis_path'])
             exp['traces']['date'] = date
             exp['traces']['animal'] = animal
             valid_experiments.append(exp)
-            print(ds['analysis_path'])
-            print(date)
+
         else:
             # Skip the excluded experiment
             continue
 
     # load the data
     return valid_experiments
+
+
+def remove_trials_end_early(df):
+    """Parse trial params to only include trials that were run if the experiment ended early"""
+    num_total_trials = df['trial_params']['trial_num'].max()
+    num_completed_trials = df['traces']['trial_num'].max()
+
+    temp_params = df['trial_params'].iloc[:num_completed_trials].copy()
+    df['trial_params'] = temp_params
+
+    return df
 
 
 def calculate_bins(time_trace, bin_duration: int):
@@ -86,6 +98,7 @@ def recalculate_2D_target_mouse_distance(data, arena_corners):
     print('mouse y min:', min(mouse_coord_hd[:, 1]), 'mouse y max:', max(mouse_coord_hd[:, 1]), )
 
     target_coord = data.loc[:, ['target_x', 'target_y']].to_numpy()
+
     # Remove instances where target is at the null position
     target_coord_temp = target_coord[np.all(target_coord != -1, axis=1)]
     target_ylims = np.array([target_coord_temp[:, 1].min(), target_coord_temp[:, 1].max()])
@@ -97,7 +110,7 @@ def recalculate_2D_target_mouse_distance(data, arena_corners):
     arena_ylims = np.array([arena_corners[:, 1].min(), arena_corners[:, 1].max()])
     y_offset = target_ylims - arena_ylims
 
-    # Adjust the positon of the target so that is it as if it is moving along
+    # Adjust the position of the target so that is it as if it is moving along
     # the arena edge
     target_coord_y = target_coord[:, 1].copy()
     target_coord_y[(target_coord_y < 0) & (target_coord_y > -1)] -= y_offset[0]
@@ -135,6 +148,7 @@ def recalculate_3D_target_mouse_distance(data):
 
 def approach_finder(data_in, key, threshold_function,
                     distance_threshold=0.05, window=1.5, start_distance=0.05, speed_minimum=0.15):
+
     all_approaches = []
     all_trials = []
     valid_approaches = []
@@ -160,6 +174,7 @@ def approach_finder(data_in, key, threshold_function,
             all_trials.append(trial_traces)
         else:
             app_id_group = trial_approaches.groupby('event_id')
+
             for a, group in app_id_group:
                 trial_traces.append(trial.copy())
                 is_app.append(group.copy())
@@ -167,15 +182,16 @@ def approach_finder(data_in, key, threshold_function,
                 quarter_idx = len(group) // 4
                 mid_idx = len(group) // 2
 
-                # Qualifications for an approach as in Procacci (decreasing target_mouse_angle, start >= 5cm away, speed >= 15cm/s)
+                # Qualifications for an approach as in Procacci et al
+                # (decreasing target_mouse_angle, start >= 5cm away, speed >= 15cm/s)
                 # angle_start = fk.circmean_deg(group['target_delta_heading'][:quarter_idx].to_list())
                 angle_start = group['target_delta_heading'][quarter_idx]
                 angle_enc = group['target_delta_heading'][mid_idx]
-                angle_change = angle_enc - angle_start
+                angle_change = abs(angle_enc) - abs(angle_start)
                 avg_speed = np.mean(group['mouse_speed'][:mid_idx])
                 start_dist = abs(group[key][mid_idx] - group[key][0])
 
-                if (start_dist >= start_distance) and (avg_speed >= speed_minimum):  # and (angle_change <= 0):
+                if (start_dist >= start_distance) and (avg_speed >= speed_minimum) and (angle_change <= 0):
                     # This is a good encounter
                     good_app.append(group.copy())
                     valid_traces.append(trial)
@@ -183,10 +199,10 @@ def approach_finder(data_in, key, threshold_function,
                     # This does not meet one or more of the criteria, so we remove it.
                     pass
 
-            valid_approaches.append(good_app)
-            valid_trials.append(valid_traces)
             all_approaches.append(is_app)
             all_trials.append(trial_traces)
+            valid_approaches.append(good_app)
+            valid_trials.append(valid_traces)
 
     return all_approaches, all_trials, valid_approaches, valid_trials
 
@@ -196,19 +212,28 @@ def extract_experiment_approaches(data, grouping_params, approach_key, threshold
     experiment_valid_approaches = []
     experiment_approaches = []
 
+    # This lookup list matches the target types as defined in the Unity scene
+    target_lookup = ['2D', '2D', '2D', '3D', '3D', '3D', 'cricket']
+
     grouped = data['trial_params'].groupby(grouping_params)
 
     for key, item in grouped:
         temp_storage_dict = dict.fromkeys(list(output_df.columns))
 
+        target_type = target_lookup[int(key[0])]
+        target_color = key[1]
+        scale = key[2]
+        speed = key[3]
+
         trial_nums = item['trial_num'].to_list()
         parameter_traces = get_trial_traces(data['traces'], trial_nums)
 
-        # Use an updated encounter finder that encorporates Hoy et al. criteria to find interactions with target during each trial
-        all_trial_approaches, approach_trials, valid_approaches, valid_app_trials = approach_finder(parameter_traces,
-                                                                                                    approach_key,
-                                                                                                    threshold_function,
-                                                                                                    **approach_criteria)
+        app_crit = approach_criteria[str(target_type)]
+
+        # Use an updated encounter finder that incorporates Hoy et al. criteria
+        # to find interactions with target during each trial
+        all_trial_approaches, approach_trials, valid_approaches, valid_app_trials = \
+            approach_finder(parameter_traces, approach_key, threshold_function, **app_crit)
 
         for trial_apps, trials in zip(valid_approaches, valid_app_trials):
             if len(trial_apps) != 0:
@@ -222,11 +247,12 @@ def extract_experiment_approaches(data, grouping_params, approach_key, threshold
 
         temp_storage_dict['date'] = [pt['date'][0] for i, pt in parameter_traces.iterrows()]
         temp_storage_dict['animal'] = [pt['animal'][0] for i, pt in parameter_traces.iterrows()]
-        temp_storage_dict['bin'] = [pt['bin'][0] for i, pt in parameter_traces.iterrows()]
+        temp_storage_dict['bin'] = [pt['bins'][0] for i, pt in parameter_traces.iterrows()]
         temp_storage_dict['trial_num'] = trial_nums[:len(parameter_traces)]
-        temp_storage_dict['target_color'] = [key[0] for i in range(len(parameter_traces))]
-        temp_storage_dict['scale'] = np.ones(len(parameter_traces)) * key[1][0] * 100  # Get into cm
-        temp_storage_dict['speed'] = np.ones(len(parameter_traces)) * key[2] * 100  # Get into cm/s
+        temp_storage_dict['target_type'] =[target_type for i in range(len(parameter_traces))]
+        temp_storage_dict['target_color'] = [target_color for i in range(len(parameter_traces))]
+        temp_storage_dict['scale'] = np.ones(len(parameter_traces)) * scale[0] * 100  # Get into cm
+        temp_storage_dict['speed'] = np.ones(len(parameter_traces)) * speed * 100  # Get into cm/s
         temp_storage_dict['approaches'] = [len(e) for e in valid_approaches]
         temp_storage_dict['has_approach'] = [1 if t > 0 else 0 for t in temp_storage_dict['approaches']]
 
