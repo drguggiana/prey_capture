@@ -277,25 +277,28 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format,
         # the path input is actually the data
         data = path_to_dlc
         # get the column names
-        column_list = list(data.columns)
+        column_list_all = list(data.columns)
         # # get only the columns with mouse information
         # column_list = [True if ('mouse' in el) and (('x' in el) or ('y' in el)) else False
         #                for el in column_list]
         # column_list = [True for el in column_list]
         column_list = [True if (('x' in el) or ('y' in el)) else False
-                       for el in column_list]
+                       for el in column_list_all]
+        column_list_out = [el for el in column_list_all if (('x' in el) or ('y' in el))]
+
         # set interpolation flag
         interp_flag = False
         # define the multiplier for the coordinates
-        coord_multiplier = 1
+        coord_multiplier = 1000
     elif '_dlc.h5' in path_to_dlc:
         # data = pd.read_hdf(os.path.join(path_to_dlc, filename + '_dlc.h5'))
         data = pd.read_hdf(path_to_dlc)
         # get the column names
-        column_list = [el[1] for el in np.array(data.columns)]
+        column_list_all = [el[1] for el in np.array(data.columns)]
         # get only the columns with mouse information
         column_list = [True if 'mouse' in el else False
-                       for el in column_list]
+                       for el in column_list_all]
+        column_list_out = [el for el in column_list_all if 'mouse' in el]
         # data_mat = data_mat[:, 1:]
         # set interpolation flag
         interp_flag = True
@@ -309,13 +312,14 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format,
             data = pd.DataFrame(values, columns=labels)
 
         # get the column names
-        column_list = list(data.columns)
+        column_list_all = list(data.columns)
         # # get only the columns with mouse information
         # column_list = [True if ('mouse' in el) and (('x' in el) or ('y' in el)) else False
         #                for el in column_list]
         # column_list = [True for el in column_list]
         column_list = [True if (('x' in el) or ('y' in el)) else False
-                       for el in column_list]
+                       for el in column_list_all]
+        column_list_out = [el for el in column_list_all if (('x' in el) or ('y' in el))]
         # set interpolation flag
         interp_flag = False
         # define the multiplier for the coordinates
@@ -371,7 +375,7 @@ def align_demo(path_to_dlc, path_to_file, filename, file_format,
     if check_video:
         play_aligned_video(a, n, frame_count)
     # return dividing by 1000 to output in the same scale as input
-    return time_series/1000, a
+    return time_series/coord_multiplier, a, column_list_out
 
 
 def run_alignment(path_dlc, path_file, file_format, crop_size, use_video=False,
@@ -385,9 +389,9 @@ def run_alignment(path_dlc, path_file, file_format, crop_size, use_video=False,
     file_name = file_name.replace('_dlc', '')
 
     # call function and save into your VAME data folder
-    egocentric_time_series, video_frames = align_demo(path_dlc, path_file, file_name, file_format,
-                                                      crop_size, use_video=use_video, check_video=check_video,
-                                                      vid_path=video_path)
+    egocentric_time_series, video_frames, column_list = align_demo(path_dlc, path_file, file_name, file_format,
+                                                                   crop_size, use_video=use_video,
+                                                                   check_video=check_video, vid_path=video_path)
 
     # define the output path
     output_path = os.path.join(path_file, 'data', file_name, file_name + '-PE-seq.npy')

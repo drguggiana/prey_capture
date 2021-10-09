@@ -11,6 +11,7 @@ import yaml
 import matplotlib.pyplot as plt
 from pandas import read_hdf
 import processing_parameters
+import h5py
 
 
 def preprocess_selector(csv_path, saving_path, file_info):
@@ -38,6 +39,7 @@ try:
     # get the path to the file, parse and turn into a dictionary
     raw_path = snakemake.input[0]
     calcium_path = snakemake.input[1]
+    match_path = snakemake.input[2]
     files = yaml.load(snakemake.params.info, Loader=yaml.FullLoader)
     # get the save paths
     save_path = snakemake.output[0]
@@ -57,6 +59,7 @@ except NameError:
     files = bd.query_database(target_model, search_string)[0]
     raw_path = files['bonsai_path']
     calcium_path = files['bonsai_path'][:-4] + '_calcium.hdf5'
+    match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], files['rig'], 'cellMatch.hdf5')))
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
                              os.path.basename(files['bonsai_path'][:-4]))+'_preproc.hdf5'
@@ -106,6 +109,9 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # if there is a calcium output, write to the file
     if matched_calcium is not None:
         matched_calcium.to_hdf(out_path, key='matched_calcium', mode='a', format='fixed')
+        # also get the cell matching if it exists
+        cell_matches = functions_matching.match_cells(match_path)
+        cell_matches.to_hdf(out_path, key='cell_matches', mode='a', format='fixed')
 
 # elif files['rig'] == 'VR' and file_date <= datetime.datetime(year=2019, month=11, day=10):
 elif files['rig'] in ['VR', 'VPrey'] and file_date <= datetime.datetime(year=2020, month=6, day=22):

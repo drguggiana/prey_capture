@@ -64,6 +64,7 @@ try:
         if frame_list == 'no_ROIs':
             raise ValueError('empty file')
         calcium_data = np.array(f['S'])
+        # calcium_data = np.array(f['C'])
 
     # get the trials in the file
     trials_list = [str(el)[2:-1] for el in frame_list[:, 0]]

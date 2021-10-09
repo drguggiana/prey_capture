@@ -359,12 +359,12 @@ def plot_polar(data_in, fig=None, color=None, fontsize=None):
     return fig
 
 
-def plot_image(data_in, rows=1, columns=1, fig=None, colormap=None, colorbar=None):
+def plot_image(data_in, rows=1, columns=1, fig=None, colormap=None, colorbar=None, dpi=100):
     """Wrapper for the imshow function in subplots"""
     # create a new figure window
     if fig is None:
         # fig = plt.figure(dpi=300)
-        fig, ax = plt.subplots(nrows=rows, ncols=columns, squeeze=False, dpi=300)
+        fig, ax = plt.subplots(nrows=rows, ncols=columns, squeeze=False, dpi=dpi)
     else:
         ax = fig.subplots(nrows=rows, ncols=columns, squeeze=False)
     # initialize a plot counter

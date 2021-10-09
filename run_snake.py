@@ -93,6 +93,9 @@ for idx, mouse in enumerate(mouse_list):
 
 # for all the full queries
 for idx, target_entries in enumerate(new_queries):
+    # # allow only the desired dates, for testing purposes only
+    # target_entries = [el for el in target_entries if el['slug'][:10] in
+    #                   ['03_23_2021', '03_24_2021', '03_29_2021', '03_30_2021', '03_31_2021']]
 
     parsed_search = new_parsed[idx]
     target_path = new_paths[idx]
@@ -137,6 +140,7 @@ for idx, target_entries in enumerate(new_queries):
                               # '--unlock',   # unlocks the files after force quit
                               # '--rerun-incomplete',
                               # '--verbose',  # make the output more verbose for debugging
+                              # '--debug-dag',  # show the file selection operation, also for debugging
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)

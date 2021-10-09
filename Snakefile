@@ -4,6 +4,7 @@ import paths
 import yaml
 import json
 import datetime
+import numpy as np
 
 
 def yaml_to_json(wildcards):
@@ -22,6 +23,19 @@ def yaml_list_to_json(wildcards):
         url_dict[os.path.basename(el)[:-4]] = python_list[idx]['url']
     json_dict = json.dumps(url_dict).replace('"', '\\"')
     return json_dict
+
+# def yaml_animal(wildcards):
+#     animal_paths = [os.path.basename(el) for el in matched_input(wildcards)]
+#     # animal = '_'.join((wildcards.file.split('_')[:3]))
+#     # python_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader)
+#     #                for el in config["file_info"].keys() if animal in el]
+#     # python_list = [yaml.load(config["file_info"][os.path.basename(el)[:-4]], Loader=yaml.FullLoader)
+#     #                for el in animal_paths]
+#     # url_dict = {}
+#     # for idx, el in enumerate(animal_paths):
+#     #     url_dict[os.path.basename(el)[:-4]] = python_list[idx]['url']
+#     json_dict = json.dumps(animal_paths).replace('"', '\\"')
+#     return json_dict
 
 rule dlc_extraction:
     input:
@@ -88,15 +102,73 @@ rule calcium_scatter:
 
 def calcium_input_selector(wildcards):
     if config["calcium_flag"][wildcards.file]:
-        # return rules.calcium_extraction.output
         return rules.calcium_scatter.output
     else:
         return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
+
+
+# def animal_to_file(wildcards):
+#     python_dict = yaml.load(config["file_info"][wildcards.file],Loader=yaml.FullLoader)
+#     animal = python_dict['mouse']
+#     rig = python_dict['rig']
+#     return os.path.join(paths.analysis_path,'_'.join((animal, rig, 'cellMatch.hdf5')))
+
+
+def matched_input(wildcards):
+    name_parts = wildcards.file.split('_')
+    # day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
+    animal = '_'.join([name_parts[0].upper()] + name_parts[1:3])
+    rig = name_parts[3]
+
+    info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
+    # leave only the files with calcium data
+    # info_list = [el for el in info_list if config['calcium_flag'][el['slug']]]
+
+    # animal_routes = [el['bonsai_path'].replace('.csv', '_preproc.hdf5').replace('VideoExperiment', 'AnalyzedData')
+    #               for el in info_list if (config['calcium_flag'][os.path.basename(el['bonsai_path'])[:-4]]
+    #               and el['mouse']==animal)]
+    # get a list of the available dates
+    # print(config['calcium_flag'])
+    # print(info_list[0]['slug'])
+    available_dates = np.unique([el['slug'][:10] for el in info_list
+                                 if config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True])
+
+    # assemble the paths to the calciumday files
+    animal_routes = ['_'.join((el, animal, rig, 'calciumday.hdf5')) for el in available_dates]
+    animal_routes = [os.path.join(paths.analysis_path, el) for el in animal_routes]
+    # wildcards.day_routes = day_routes
+    return animal_routes
+
+
+rule match_cells:
+    input:
+        # expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files']),
+        matched_input,
+    output:
+        os.path.join(paths.analysis_path,'{file}_cellMatch.hdf5'),
+    # params:
+        # cnmfe_path=config['cnmfe_path'],
+        # info=yaml_animal,
+    shell:
+        r'conda activate caiman & python "{paths.matching_script}" "{input}" "{output}"'
+
+
+def match_selector(wildcards):
+    if config["calcium_flag"][wildcards.file]:
+        # return rules.calcium_extraction.output
+        python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+        animal = python_dict['mouse']
+        rig = python_dict['rig']
+        return os.path.join(paths.analysis_path,'_'.join((animal, rig, 'cellMatch.hdf5')))
+    else:
+        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
+
 
 rule preprocess:
     input:
           dlc_input_selector,
           calcium_input_selector,
+          match_selector,
     output:
           os.path.join(paths.analysis_path, "{file}_preproc.hdf5"),
           os.path.join(paths.analysis_path, "{file}.png")
@@ -168,25 +240,13 @@ rule gather_regression:
 rule scatter_analysis:
     input:
         days_to_file,
+        # animal_to_file,
     output:
         os.path.join(paths.analysis_path,"{file}_combinedanalysis.hdf5"),
     params:
         file_info = lambda wildcards: config["file_info"][wildcards.file],
     script:
         "snakemake_scripts/combine_analyses.py"
-
-
-rule match_cells:
-    input:
-        expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files']),
-    output:
-        os.path.join(paths.analysis_path, 'cellMatch_{query}.hdf5'),
-    params:
-        cnmfe_path=config['cnmfe_path'],
-        info=yaml_to_json,
-    shell:
-          r'conda activate caiman & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
-
 
 
 rule visualize_aggregates:

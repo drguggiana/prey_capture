@@ -190,7 +190,7 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds):
     with h5py.File(calcium_path, mode='r') as f:
         calcium_data = np.array(f['calcium_data'])
         # if there are no ROIs, skip
-        if calcium_data == 'no_ROIs':
+        if (type(calcium_data) == np.ndarray) and (calcium_data == 'no_ROIs'):
             return
 
     # # get the time vector from bonsai
@@ -218,20 +218,37 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds):
     # compare to the frames from bonsai and adjust accordingly (if they don't match, show a warning)
     # plot_2d([[np.diff(frame_times_bonsai_sync[frame_bounds[0]:]),np.diff(kinematics_data['time_vector'].to_numpy())]])
     # if frame_times_bonsai_sync.shape[0] < n_frames_bonsai_file:
-    if frame_times_bonsai_sync.shape[0] < frame_bounds.loc[0, 'original_length']:
+    # get the difference in frames between the full video and sync:
+    delta_sync = frame_bounds.loc[0, 'original_length'] - frame_times_bonsai_sync.shape[0]
+    # if frame_times_bonsai_sync.shape[0] < frame_bounds.loc[0, 'original_length']:
+    # if the difference is higher than 0, trim the data from the end (not the sync)
+    if delta_sync > 0:
         print('File %s has less sync frames than bonsai frames, trimmed bonsai from end' % sync_path)
         # n_frames_bonsai_file = frame_times_bonsai_sync.shape[0]
         # kinematics_data = kinematics_data[:n_frames_bonsai_file]
-        delta_sync = frame_bounds.loc[0, 'original_length'] - frame_times_bonsai_sync.shape[0]
-        kinematics_data = kinematics_data[:-delta_sync]
-        frame_times_bonsai_sync = \
-            frame_times_bonsai_sync[-(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'start']):
-                                    -(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'end']+1)-delta_sync]
-    else:
-        # frame_times_bonsai_sync = frame_times_bonsai_sync[-n_frames_bonsai_file:]
-        frame_times_bonsai_sync = \
-            frame_times_bonsai_sync[-(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'start']):
-                                    -(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'end']+1)]
+
+        kinematics_data = kinematics_data[:-(delta_sync-1)]
+        # frame_times_bonsai_sync = \
+        #     frame_times_bonsai_sync[-(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'start']):
+        #                             -(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'end']+1)-delta_sync]
+    #     frame_times_bonsai_sync = \
+    #         frame_times_bonsai_sync[-(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'start']):
+    #                                 -(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'end']+1)]
+    # else:
+    #     # frame_times_bonsai_sync = frame_times_bonsai_sync[-n_frames_bonsai_file:]
+    #     frame_times_bonsai_sync = \
+    #         frame_times_bonsai_sync[-(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'start']):
+    #                                 -(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'end']+1)]
+
+    # determine the indexes to trim frame_times_bonsai_sync to match the trimming of the data
+    trim_start = frame_bounds.loc[0, 'start']
+    trim_end = frame_bounds.loc[0, 'end']-1
+    # trim the sync frames to match the data from both ends (due to preprocessing here)
+    frame_times_bonsai_sync = frame_times_bonsai_sync[trim_start:trim_end]
+
+    # frame_times_bonsai_sync = \
+    #     frame_times_bonsai_sync[-(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'start']):
+    #                             -(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'end'])]
 
     # interpolate the bonsai traces to match the mini frames
     matched_bonsai = kinematics_data.drop(['time_vector'], axis=1).apply(interp_trace, raw=False,
@@ -272,6 +289,19 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds):
     full_dataframe['time_vector'] = np.array([el - old_time[0] for el in old_time])
 
     return full_dataframe
+
+
+def match_cells(match_path):
+    """Load the cell matching info if it exists"""
+    with h5py.File(match_path, 'r') as f:
+        # load the variables of interest
+        assignments = np.array(f['assignments'])
+        # f.create_dataset('matchings', data=np.array(matchings))
+        date_list = np.array(f['date_list']).astype(str)
+
+    # turn into a data frame
+    cell_matches = pd.DataFrame(data=assignments, columns=date_list)
+    return cell_matches
 
 
 def match_motive(motive_traces, sync_path, kinematics_data):

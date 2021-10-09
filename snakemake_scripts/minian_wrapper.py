@@ -40,10 +40,11 @@ if __name__ == "__main__":
 
     except IndexError:
         # get the search string
-        search_string = processing_parameters.search_string_calcium
+        # search_string = processing_parameters.search_string_calcium
         animal = processing_parameters.animal
         day = processing_parameters.day
         rig = processing_parameters.rig
+        search_string = 'rig:%s, imaging:doric, mouse:%s, slug:%s' % (rig, animal, day)
         # query the database for data to plot
         data_all = bd.query_database('video_experiment', search_string)
         # video_data = data_all[0]

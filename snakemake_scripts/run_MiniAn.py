@@ -22,7 +22,8 @@ def minian_main():
     subset_mc = None
     interactive = True
     output_size = 100
-    n_workers = int(os.getenv("MINIAN_NWORKERS", 4))
+    # n_workers = int(os.getenv("MINIAN_NWORKERS", 4))
+    n_workers = 8
     param_save_minian = {
         "dpath": minian_ds_path,
         "meta_dict": dict(session=-1, animal=-2),
@@ -144,7 +145,7 @@ def minian_main():
     # start the cluster
     cluster = LocalCluster(
         n_workers=n_workers,
-        memory_limit="10GB",
+        memory_limit="5GB",
         resources={"MEM": 1},
         threads_per_worker=2,
         dashboard_address=":8787",
@@ -380,7 +381,7 @@ def minian_main():
     )
     A = A.sel(unit_id=C.coords["unit_id"].values)
 
-    # save final results
+    # save final results for output
     A = save_minian(A.rename("A"), **param_save_minian)
     C = save_minian(C.rename("C"), **param_save_minian)
     S = save_minian(S.rename("S"), **param_save_minian)
@@ -393,4 +394,4 @@ def minian_main():
     client.close()
     cluster.close()
 
-    return {'A': A, 'C': C, 'S': S, 'c0': c0, 'b0': b0, 'b': b, 'f': f}
+    return {'A': A, 'C': C, 'S': S, 'c0': c0, 'b0': b0, 'b': b, 'f': f, 'max_proj': max_proj}
