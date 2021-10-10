@@ -107,13 +107,6 @@ def calcium_input_selector(wildcards):
         return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
 
 
-# def animal_to_file(wildcards):
-#     python_dict = yaml.load(config["file_info"][wildcards.file],Loader=yaml.FullLoader)
-#     animal = python_dict['mouse']
-#     rig = python_dict['rig']
-#     return os.path.join(paths.analysis_path,'_'.join((animal, rig, 'cellMatch.hdf5')))
-
-
 def matched_input(wildcards):
     name_parts = wildcards.file.split('_')
     # day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
@@ -122,14 +115,6 @@ def matched_input(wildcards):
 
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
     # leave only the files with calcium data
-    # info_list = [el for el in info_list if config['calcium_flag'][el['slug']]]
-
-    # animal_routes = [el['bonsai_path'].replace('.csv', '_preproc.hdf5').replace('VideoExperiment', 'AnalyzedData')
-    #               for el in info_list if (config['calcium_flag'][os.path.basename(el['bonsai_path'])[:-4]]
-    #               and el['mouse']==animal)]
-    # get a list of the available dates
-    # print(config['calcium_flag'])
-    # print(info_list[0]['slug'])
     available_dates = np.unique([el['slug'][:10] for el in info_list
                                  if config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True])
 
@@ -170,12 +155,40 @@ rule preprocess:
           calcium_input_selector,
           match_selector,
     output:
-          os.path.join(paths.analysis_path, "{file}_preproc.hdf5"),
+          os.path.join(paths.analysis_path, "{file}_rawcoord.hdf5"),
           os.path.join(paths.analysis_path, "{file}.png")
     params:
           info=lambda wildcards: config["file_info"][wildcards.file]
     script:
           "snakemake_scripts/preprocess_all.py"
+
+
+rule motifs:
+    input: 
+        lambda wildcards: os.path.join(paths.analysis_path, config["files"][wildcards.file] + '_rawcoord.hdf5'),
+    output:
+        os.path.join(paths.analysis_path, "{file}_motifs.hdf5"),
+    shell:
+        r'conda activate vame & python "{paths.vame_latents}" "{input}" "{output}"'
+
+
+def motif_selector(wildcards):
+    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+
+    if python_dict['rig'] == 'miniscope':
+        return rules.motifs.output,
+    else:
+        return python_dict['bonsai_path']
+
+
+rule preprocess_compile:
+    input:
+        lambda wildcards: os.path.join(paths.analysis_path, config["files"][wildcards.file] + '_rawcoord.hdf5'),
+        motif_selector,
+    output:
+        os.path.join(paths.analysis_path, "{file}_preproc.hdf5"),
+    script:
+        "snakemake_scripts/combine_preprocessing.py"
 
 
 rule aggregate_preprocessed:
@@ -263,7 +276,7 @@ def run_selector(wildcards):
     if config['analysis_type'] == 'combinedanalysis':
         return expand(os.path.join(paths.analysis_path,"{file}_combinedanalysis.hdf5"),file=config['files'])
     elif config['analysis_type'] == 'full_run':
-        return expand(os.path.join(paths.analysis_path,"{file}_preproc.hdf5"),file=config['files'])
+        return expand(os.path.join(paths.analysis_path,"{file}_rawcoord.hdf5"),file=config['files'])
 
 
 rule full_run:

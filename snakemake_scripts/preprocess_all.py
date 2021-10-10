@@ -11,7 +11,6 @@ import yaml
 import matplotlib.pyplot as plt
 from pandas import read_hdf
 import processing_parameters
-import h5py
 
 
 def preprocess_selector(csv_path, saving_path, file_info):
@@ -32,7 +31,6 @@ def preprocess_selector(csv_path, saving_path, file_info):
         # set frame bounds to empty
         frame_b = []
     return output_path, traces, corner_out, frame_b
-
 
 # check if launched from snakemake, otherwise, prompt user
 try:
@@ -62,7 +60,7 @@ except NameError:
     match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], files['rig'], 'cellMatch.hdf5')))
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
-                             os.path.basename(files['bonsai_path'][:-4]))+'_preproc.hdf5'
+                             os.path.basename(files['bonsai_path'][:-4]))+'_rawcoord.hdf5'
     pic_path = os.path.join(save_path[:-13] + '.png')
 
 # get the file date
