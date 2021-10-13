@@ -5,6 +5,7 @@ import yaml
 import json
 import datetime
 import numpy as np
+import processing_parameters
 
 
 def yaml_to_json(wildcards):
@@ -116,7 +117,8 @@ def matched_input(wildcards):
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
     # leave only the files with calcium data
     available_dates = np.unique([el['slug'][:10] for el in info_list
-                                 if config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True])
+                                 if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
+                                 (animal in el['mouse']) & (rig in el['rig'])])
 
     # assemble the paths to the calciumday files
     animal_routes = ['_'.join((el, animal, rig, 'calciumday.hdf5')) for el in available_dates]
@@ -168,15 +170,17 @@ rule motifs:
         lambda wildcards: os.path.join(paths.analysis_path, config["files"][wildcards.file] + '_rawcoord.hdf5'),
     output:
         os.path.join(paths.analysis_path, "{file}_motifs.hdf5"),
+    params:
+          info=yaml_to_json,
     shell:
-        r'conda activate vame & python "{paths.vame_latents}" "{input}" "{output}"'
+        r'conda activate vame & python "{paths.vame_latents}" "{input}" "{output}" "{params.info}"'
 
 
 def motif_selector(wildcards):
     python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
 
     if python_dict['rig'] == 'miniscope':
-        return rules.motifs.output,
+        return os.path.join(paths.analysis_path, "{file}_motifs.hdf5"),
     else:
         return python_dict['bonsai_path']
 
@@ -187,6 +191,8 @@ rule preprocess_compile:
         motif_selector,
     output:
         os.path.join(paths.analysis_path, "{file}_preproc.hdf5"),
+    params:
+        info=lambda wildcards: config["file_info"][wildcards.file]
     script:
         "snakemake_scripts/combine_preprocessing.py"
 
@@ -271,17 +277,17 @@ rule visualize_aggregates:
         "snakemake_scripts/notebooks/Vis_averages.ipynb"
 
 
-def run_selector(wildcards):
-    """Define which processing stream goes"""
-    if config['analysis_type'] == 'combinedanalysis':
-        return expand(os.path.join(paths.analysis_path,"{file}_combinedanalysis.hdf5"),file=config['files'])
-    elif config['analysis_type'] == 'full_run':
-        return expand(os.path.join(paths.analysis_path,"{file}_rawcoord.hdf5"),file=config['files'])
+# def run_selector(wildcards):
+#     """Define which processing stream goes"""
+#     if config['analysis_type'] == 'combinedanalysis':
+#         return expand(os.path.join(paths.analysis_path,"{file}_combinedanalysis.hdf5"),file=config['files'])
+#     elif config['analysis_type'] == 'full_run':
+#         return expand(os.path.join(paths.analysis_path,"{file}"+processing_parameters.full_run_file),file=config['files'])
 
 
 rule full_run:
     input:
-          run_selector,
+          expand(os.path.join(paths.analysis_path,"{file}"+processing_parameters.full_run_file),file=config['files']),
     output:
           os.path.join(paths.analysis_path, "full_run.txt")
     params:

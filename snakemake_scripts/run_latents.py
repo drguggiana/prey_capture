@@ -7,22 +7,22 @@ sys.path.append(
 import functions_bondjango as bd
 import processing_parameters
 import paths
-import yaml
 import h5py
 import pandas as pd
 import numpy as np
 import vame
 from sklearn import cluster
+import sys
+import json
 
 # check if launched from snakemake, otherwise, prompt user
 try:
     # get the path to the file, parse and turn into a dictionary
-    input_path = snakemake.input[0]
+    input_path = sys.argv[1]
+    save_path = sys.argv[2]
+    files = json.loads(sys.argv[3])
 
-    files = yaml.load(snakemake.params.info, Loader=yaml.FullLoader)
-    # get the save paths
-    save_path = snakemake.output[0]
-except NameError:
+except IndexError:
     # USE FOR DEBUGGING ONLY (need to edit the search query and the object selection)
     # define the search string
     search_string = processing_parameters.search_string
@@ -52,21 +52,23 @@ with h5py.File(input_path, 'r') as f:
 
 # get the list of columns
 column_list_all = data.columns
-column_list = [el for el in column_list_all if (('x' in el) or ('y' in el))]
+column_list = [el for el in column_list_all if (('x' in el) or ('y' in el)) & ('mouse' in el)]
 
 # get the config info
 config_file = os.path.join(paths.vame_path, paths.vame_current_model_name, 'config.yaml')
 config = vame.read_config(config_file)
 
 # get the egocentrically aligned coordinates
-aligned_traj, frames = vame.egocentric_alignment(config, pose_ref_index=[0, 7], crop_size=(200, 200), 
-                                                 use_video=False, video_format='.mp4', check_video=False, 
-                                                 save_flag=False, filename=[data], column_list=column_list)
+aligned_traj, frames = vame.egocentric_alignment(config, pose_ref_index=[0, 7], crop_size=(200, 200),
+                                                 use_video=False, video_format='.mp4', check_video=False,
+                                                 save_flag=False, filename=[files['slug']], column_list=column_list,
+                                                 dataframe=[data])
 
 # get the motifs and latents
 # assemble the template path
 first_file = os.listdir(os.path.join(paths.vame_results, 'results'))[0]
-template_path = os.path.join(paths.vame_results, 'results', first_file, 'VAME', 'kmeans-15', 'cluster_center_'+first_file+'.npy')
+template_path = os.path.join(paths.vame_results, 'results', first_file, 'VAME', 'kmeans-10',
+                             'cluster_center_'+first_file+'.npy')
 # load the cluster centers
 cluster_centers = np.load(template_path)
 

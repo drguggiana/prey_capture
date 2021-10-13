@@ -141,6 +141,7 @@ for idx, target_entries in enumerate(new_queries):
                               # '--rerun-incomplete',
                               # '--verbose',  # make the output more verbose for debugging
                               # '--debug-dag',  # show the file selection operation, also for debugging
+                              # '--dryrun',  # generates the DAG and everything, but doesn't process
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)

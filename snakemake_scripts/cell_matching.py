@@ -71,8 +71,8 @@ for files in calcium_path:
             continue
         footprint_list.append(np.moveaxis(calcium_data, 0, -1).reshape((-1, calcium_data.shape[0])))
         size_list.append(calcium_data.shape[1:])
-        # template_list.append(np.zeros(size_list[0]))
-        template_list.append(np.array(f['max_proj']))
+        template_list.append(np.zeros(size_list[0]))
+        # template_list.append(np.array(f['max_proj']))
         date_list.append(os.path.basename(files)[:10])
         # frame_lists.append(np.array(f['frame_list']))
 
