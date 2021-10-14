@@ -48,17 +48,19 @@ if '_motifs.hdf5' in motifs_path:
     # load the motifs
     with h5py.File(motifs_path, 'r') as f:
         columns = np.array(f['columns'])
-        egocentric_coord = pd.DataFrame(np.array(f['egocentric_coord']).T, columns=columns)
-        latents = np.array(f['latents'])
-        latent_names = ['latent_'+str(el) for el in np.arange(latents.shape[1])]
-        latents = pd.DataFrame(latents, columns=latent_names)
-        motifs = pd.DataFrame(np.array(f['motifs']).T, columns=['motifs'])
-    # load the data object
-    with pd.HDFStore(save_path, 'a') as obj:
-        # write the motif dataframes to the object
-        obj['egocentric_coord'] = egocentric_coord
-        obj['latents'] = latents
-        obj['motifs'] = motifs
+        if columns[0] != 'all_nans':
+
+            egocentric_coord = pd.DataFrame(np.array(f['egocentric_coord']).T, columns=columns)
+            latents = np.array(f['latents'])
+            latent_names = ['latent_'+str(el) for el in np.arange(latents.shape[1])]
+            latents = pd.DataFrame(latents, columns=latent_names)
+            motifs = pd.DataFrame(np.array(f['motifs']).T, columns=['motifs'])
+            # load the data object
+            with pd.HDFStore(save_path, 'a') as obj:
+                # write the motif dataframes to the object
+                obj['egocentric_coord'] = egocentric_coord
+                obj['latents'] = latents
+                obj['motifs'] = motifs
 
 # assemble the entry data
 entry_data = {

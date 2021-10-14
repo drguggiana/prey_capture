@@ -57,39 +57,47 @@ column_list = [el for el in column_list_all if (('x' in el) or ('y' in el)) & ('
 # get the config info
 config_file = os.path.join(paths.vame_path, paths.vame_current_model_name, 'config.yaml')
 config = vame.read_config(config_file)
+try:
+    # get the egocentrically aligned coordinates
+    aligned_traj, frames = vame.egocentric_alignment(config, pose_ref_index=[0, 7], crop_size=(200, 200),
+                                                     use_video=False, video_format='.mp4', check_video=False,
+                                                     save_flag=False, filename=[files['slug']], column_list=column_list,
+                                                     dataframe=[data])
 
-# get the egocentrically aligned coordinates
-aligned_traj, frames = vame.egocentric_alignment(config, pose_ref_index=[0, 7], crop_size=(200, 200),
-                                                 use_video=False, video_format='.mp4', check_video=False,
-                                                 save_flag=False, filename=[files['slug']], column_list=column_list,
-                                                 dataframe=[data])
+    # get the motifs and latents
+    # assemble the template path
+    first_file = os.listdir(os.path.join(paths.vame_results, 'results'))[0]
+    template_path = os.path.join(paths.vame_results, 'results', first_file, 'VAME', 'kmeans-10',
+                                 'cluster_center_'+first_file+'.npy')
+    # load the cluster centers
+    cluster_centers = np.load(template_path)
 
-# get the motifs and latents
-# assemble the template path
-first_file = os.listdir(os.path.join(paths.vame_results, 'results'))[0]
-template_path = os.path.join(paths.vame_results, 'results', first_file, 'VAME', 'kmeans-10',
-                             'cluster_center_'+first_file+'.npy')
-# load the cluster centers
-cluster_centers = np.load(template_path)
+    # create a new kmeans object
+    random_state = config['random_state_kmeans']
+    n_init = config['n_init_kmeans']
+    n_cluster = config['n_cluster']
+    kmeans_object = cluster.KMeans(init='k-means++', n_clusters=n_cluster, random_state=random_state, n_init=n_init)
+    # set the cluster centers from the template file to apply to this file
+    kmeans_object.cluster_centers_ = cluster_centers
+    # set the number fo threads, required when building the kmeans object without fitting
+    kmeans_object._n_threads = 1
 
-# create a new kmeans object
-random_state = config['random_state_kmeans']
-n_init = config['n_init_kmeans']
-n_cluster = config['n_cluster']
-kmeans_object = cluster.KMeans(init='k-means++', n_clusters=n_cluster, random_state=random_state, n_init=n_init)
-# set the cluster centers from the template file to apply to this file
-kmeans_object.cluster_centers_ = cluster_centers
-# set the number fo threads, required when building the kmeans object without fitting
-kmeans_object._n_threads = 1
-# run the pose segmentation
-latents, clusters = vame.batch_pose_segmentation(config, [0], aligned_traj, kmeans_obj=kmeans_object)
+    # run the pose segmentation
+    latents, clusters = vame.batch_pose_segmentation(config, [0], aligned_traj, kmeans_obj=kmeans_object)
 
-# save the file and create the bondjango entry
-with h5py.File(save_path, 'w') as f:
-    f.create_dataset('egocentric_coord', data=aligned_traj)
-    f.create_dataset('latents', data=np.squeeze(latents))
-    f.create_dataset('motifs', data=np.squeeze(clusters))
-    f.create_dataset('columns', data=column_list)
+    # save the file and create the bondjango entry
+    with h5py.File(save_path, 'w') as f:
+        f.create_dataset('egocentric_coord', data=aligned_traj)
+        f.create_dataset('latents', data=np.squeeze(latents))
+        f.create_dataset('motifs', data=np.squeeze(clusters))
+        f.create_dataset('columns', data=column_list)
+except ValueError:
+    # save the file and create the bondjango entry
+    with h5py.File(save_path, 'w') as f:
+        f.create_dataset('egocentric_coord', data=[])
+        f.create_dataset('latents', data=[])
+        f.create_dataset('motifs', data=[])
+        f.create_dataset('columns', data=['all_nans'])
 # assemble the entry data
 entry_data = {
     'analysis_type': 'motifs',
