@@ -189,6 +189,40 @@ elif files['rig'] in ['VScreen']:
     # Calculate the time bins for the experiment (bins in minutes)
     kinematics_data = vt.target_calculations(kinematics_data, corners, dim)
 
+elif files['rig'] in ['VTarget'] and (files['imaging'] == 'doric'):
+
+    manual_coordinates = paths.arena_coordinates['VR_manual']
+
+    # load the data for the trial structure and parameters
+    trials = read_hdf(files['screen_path'], key='trial_set')
+    params = read_hdf(files['screen_path'], key='params')
+
+    # get the video tracking data
+    out_path, filtered_traces, _ = preprocess_selector(files['bonsai_path'], save_path, files)
+
+    # get the motive tracking data
+    motive_traces, reference_coordinates, obstacle_coordinates = \
+        s1.extract_motive(files['track_path'], files['rig'])
+
+    # scale the traces accordingly
+    filtered_traces, corners = \
+        fp.rescale_pixels(filtered_traces, files, reference_coordinates, manual_coordinates=manual_coordinates)
+
+    # align them temporally based on the sync file
+    filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
+
+    # run the preprocessing kinematic calculations
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
+
+    # find the sync file
+    sync_path = files['sync_path']
+
+    # get a dataframe with the calcium data matched to the bonsai data
+    matched_calcium = functions_matching.match_calcium(calcium_path, sync_path, kinematics_data)
+
+    matched_calcium.to_hdf(out_path, key='matched_calcium', mode='a', format='table')
+
+
 else:
     # TODO: make sure the constants are set to values that make sense for the vr arena
     # run the first stage of preprocessing
