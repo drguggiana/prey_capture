@@ -771,6 +771,7 @@ def read_motive_header(file_path):
                 # Read the lines related to arena and obstacle positions
                 if "arena_corners" in line[0]:
                     arena_corners = loads(line[-1])
+                    arena_corners = np.array(arena_corners)
                 else:
                     obs_name = line[0]
                     obs_centroid = loads(line[-1])

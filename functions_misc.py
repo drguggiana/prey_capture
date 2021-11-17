@@ -128,3 +128,7 @@ def slugify(string_in):
     string_out = string_in.translate(translate_table)
     string_out = u'_'.join(string_out.split()).lower()
     return string_out
+
+
+def flatten_list(list_of_lists):
+    return [item for sublist in list_of_lists for item in sublist]

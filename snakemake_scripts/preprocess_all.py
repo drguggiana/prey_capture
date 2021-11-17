@@ -6,10 +6,12 @@ import snakemake_scripts.sub_preprocess_S1 as s1
 import snakemake_scripts.sub_preprocess_S2 as s2
 import datetime
 import functions_bondjango as bd
+import functions_vrtarget as vt
 import os
 import yaml
 import matplotlib.pyplot as plt
-from pandas import read_hdf
+import h5py
+from pandas import read_hdf, DataFrame
 import processing_parameters
 
 
@@ -132,7 +134,7 @@ elif files['rig'] in ['VR', 'VPrey'] and \
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates['VR']
-    manual_coordinates = paths.arena_coordinates['VR_manual']
+    manual_coordinates = paths.arena_coordinates['VR_manual_pre_08_24_2020']
 
     # scale the traces accordingly
     filtered_traces, corners = \
@@ -149,15 +151,26 @@ elif files['rig'] in ['VR', 'VPrey'] and \
 
 elif files['rig'] in ['VScreen']:
 
+    # define the dimensions of the arena
+    if file_date <= datetime.datetime(year=2021, month=3, day=22):
+        manual_coordinates = paths.arena_coordinates['VR_manual_pre_23_03_2021']
+    else:
+        manual_coordinates = paths.arena_coordinates['VR_manual']
+
+    # Get the dimensionality of the target
+    if '2D' in files['notes']:
+        dim = '2D'
+    elif '3D' in files['notes']:
+        dim = '3D'
+    else:
+        dim = 'mixed'
+
     # load the data for the trial structure and parameters
     trials = read_hdf(files['screen_path'], key='trial_set')
     params = read_hdf(files['screen_path'], key='params')
 
     # get the video tracking data
     out_path, filtered_traces, _ = preprocess_selector(files['bonsai_path'], save_path, files)
-
-    # define the dimensions of the arena
-    manual_coordinates = paths.arena_coordinates['VR_manual']
 
     # get the motive tracking data
     motive_traces, reference_coordinates, obstacle_coordinates = \
@@ -173,6 +186,8 @@ elif files['rig'] in ['VScreen']:
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
+    # Calculate the time bins for the experiment (bins in minutes)
+    kinematics_data = vt.target_calculations(kinematics_data, corners, dim)
 
 else:
     # TODO: make sure the constants are set to values that make sense for the vr arena
@@ -200,9 +215,10 @@ else:
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
-
-# Save the computed kinematics data
+# save the kinematics and arena corner data
 kinematics_data.to_hdf(out_path, key='full_traces', mode='w', format='table')
+corners_df = DataFrame(data=corners, columns=['x', 'y'])
+corners_df.to_hdf(out_path, key='arena_corners', mode='a')
 
 # For these trials, save the trial set and the trial parameters to the output file
 if files['rig'] in ['VScreen', 'VTuning']:

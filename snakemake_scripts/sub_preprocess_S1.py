@@ -313,15 +313,15 @@ def extract_motive(file_path_motive, rig):
                                 'vrcricket_0_y_m', 'vrcricket_0_z_m', 'vrcricket_0_x_m'
                                 ]
             elif parsed_path['datetime'] <= datetime.datetime(year=2020, month=6, day=22):
-                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m'
-                                , 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
-                                , 'vrcricket_0_y_m', 'vrcricket_0_z_m', 'vrcricket_0_x_m'
-                                , 'color_factor'
+                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                                'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
+                                'vrcricket_0_y_m', 'vrcricket_0_z_m', 'vrcricket_0_x_m',
+                                'color_factor'
                                 ]
             else:
-                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m'
-                                , 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
-                                , 'color_factor'
+                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                                'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
+                                'color_factor'
                                 ]
         else:
             # get the number of vr crickets
@@ -334,8 +334,8 @@ def extract_motive(file_path_motive, rig):
             cricket_fields = ['vrcricket_'+str(int(number))+el
                               for number in np.arange(cricket_number) for el in cricket_template]
 
-            column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m'
-                            , 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
+            column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                            'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
                             ] + cricket_fields + [
                             'color_factor'
                             ]
@@ -353,20 +353,19 @@ def extract_motive(file_path_motive, rig):
 
         # Correct for mistakes in coordinate convention
         if rig == 'VScreen':
-            if parsed_path['datetime'] <= datetime.datetime(year=2020, month=11, day=24):
-                column_names = ['time_m', 'trial_num',
-                                'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
-                                'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
-                                'target_y_m', 'target_z_m', 'target_x_m', 'color_factor']
+            column_names = ['time_m', 'trial_num',
+                            'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                            'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
+                            'target_y_m', 'target_z_m', 'target_x_m', 'color_factor']
 
-                # create the column name dictionary
-                column_dict = {old_col: column for old_col, column in zip(raw_data.columns, column_names)}
-                raw_data.rename(columns=column_dict, inplace=True)
+            # create the column name dictionary
+            column_dict = {old_col: column for old_col, column in zip(raw_data.columns, column_names)}
+            raw_data.rename(columns=column_dict, inplace=True)
 
-                # Arena coordinates need to be put into a format that aligns with DLC tracking.
-                # Need to negate the x coordinate to match video mirroring, then flip the x and z coordinates
-                arena_corners_temp = arena_corners.copy()
-                arena_corners = [[corner[1], corner[0]] for corner in arena_corners_temp]
+            # Arena coordinates need to be put into a format that aligns with DLC tracking.
+            # Need to negate the x coordinate to match video mirroring, then flip the x and z coordinates
+            arena_corners_temp = arena_corners.copy()
+            arena_corners = [[corner[1], corner[0]] for corner in arena_corners_temp]
 
     return raw_data, arena_corners, obstacle_positions
 
