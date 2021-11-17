@@ -205,7 +205,7 @@ else:
 kinematics_data.to_hdf(out_path, key='full_traces', mode='w', format='table')
 
 # For these trials, save the trial set and the trial parameters to the output file
-if files['rig'] in ['VScreen']:
+if files['rig'] in ['VScreen', 'VTuning']:
     trials.to_hdf(out_path, key='trial_set', mode='a', format='table')
     params.to_hdf(out_path, key='params', mode='a', format='table')
 
