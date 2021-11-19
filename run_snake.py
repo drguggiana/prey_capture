@@ -126,7 +126,7 @@ for idx, target_entries in enumerate(new_queries):
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
                               # '-F',         # (hard) force rerun everything
-                              '-f',         # (soft) force rerun last step
+                              # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               # '--rerun-incomplete',
                               '-s', paths.snakemake_scripts,

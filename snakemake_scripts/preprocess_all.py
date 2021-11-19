@@ -189,26 +189,25 @@ elif files['rig'] in ['VScreen']:
     # Calculate the time bins for the experiment (bins in minutes)
     kinematics_data = vt.target_calculations(kinematics_data, corners, dim)
 
-elif files['rig'] in ['VTarget'] and (files['imaging'] == 'doric'):
+elif files['rig'] in ['VTuning'] and (files['imaging'] == 'doric'):
 
-    manual_coordinates = paths.arena_coordinates['VR_manual']
+    # manual_coordinates = paths.arena_coordinates['VR_manual'] # no longer needed with DLC corner labeling
 
     # load the data for the trial structure and parameters
     trials = read_hdf(files['screen_path'], key='trial_set')
-    params = read_hdf(files['screen_path'], key='params')
 
-    # get the video tracking data
-    out_path, filtered_traces, _ = preprocess_selector(files['bonsai_path'], save_path, files)
+    # get the video tracking data from DLC
+    out_path, filtered_traces, corners = preprocess_selector(files['bonsai_path'], save_path, files)
 
-    # get the motive tracking data
+    # get the motive tracking data (including trial structure)
     motive_traces, reference_coordinates, obstacle_coordinates = \
-        s1.extract_motive(files['track_path'], files['rig'])
+        s1.extract_motive(files['track_path'], files['rig'], trials=trials)
 
     # scale the traces accordingly
     filtered_traces, corners = \
-        fp.rescale_pixels(filtered_traces, files, reference_coordinates, manual_coordinates=manual_coordinates)
+        fp.rescale_pixels(filtered_traces, files, reference_coordinates, manual_coordinates=corners)
 
-    # align them temporally based on the sync file
+    # align them temporally based on the sync file - upsample to motive time
     filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
 
     # run the preprocessing kinematic calculations
@@ -218,7 +217,8 @@ elif files['rig'] in ['VTarget'] and (files['imaging'] == 'doric'):
     sync_path = files['sync_path']
 
     # get a dataframe with the calcium data matched to the bonsai data
-    matched_calcium = functions_matching.match_calcium(calcium_path, sync_path, kinematics_data)
+    # downsample to miniscope time. Drop the columns containing
+    matched_calcium = functions_matching.match_calcium(calcium_path, sync_path, kinematics_data, rig=files['rig'])
 
     matched_calcium.to_hdf(out_path, key='matched_calcium', mode='a', format='table')
 
