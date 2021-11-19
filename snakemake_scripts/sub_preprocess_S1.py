@@ -404,7 +404,7 @@ def extract_motive(file_path_motive, rig, trials=None):
             column_names = ['time_m', 'trial_num',
                             'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
                             'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
-                            'color_factor']
+                            'grating_phase', 'color_factor']
 
         # create the column name dictionary
         column_dict = {old_col: column for old_col, column in zip(raw_data.columns, column_names)}
