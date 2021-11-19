@@ -112,3 +112,14 @@ def rotate_points(data_in, angles):
         rotated_y[idx] = data_in[idx, 0] * np.sin(np.deg2rad(angle)) - data_in[idx, 1] * np.cos(np.deg2rad(angle))
 
     return np.concatenate((rotated_x, rotated_y), axis=1)
+
+
+def accumulated_distance(data_in):
+    """
+    Calculated the Euclidean distance between two consecutive locations
+    :param data_in: Array in the form [samples, points]
+    :return:
+    """
+    distance = np.zeros(len(data_in))
+    distance[1:] = distance_calculation(data_in[1:, :], data_in[:-1, :])
+    return distance

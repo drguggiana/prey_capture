@@ -760,7 +760,7 @@ def read_motive_header(file_path):
     corner coordinates and the position of objects in the arena, followed by a
     blank line and then the main dataframe. """
     arena_corners = []
-    obstacle_positions = []
+    obstacle_positions = {}
 
     with open(file_path) as f:
         # Read the file line by  line
@@ -771,10 +771,11 @@ def read_motive_header(file_path):
                 # Read the lines related to arena and obstacle positions
                 if "arena_corners" in line[0]:
                     arena_corners = loads(line[-1])
+                    arena_corners = np.array(arena_corners)
                 else:
                     obs_name = line[0]
                     obs_centroid = loads(line[-1])
-                    obstacle_positions.append([obs_name, obs_centroid])
+                    obstacle_positions[str(obs_name)] = obs_centroid
             else:
                 # We have reached the blank line delimiting the positions
                 break
