@@ -53,6 +53,9 @@ with h5py.File(input_path, 'r') as f:
 # get the list of columns
 column_list_all = data.columns
 column_list = [el for el in column_list_all if (('x' in el) or ('y' in el)) & ('mouse' in el)]
+# define the extra columns
+extra_columns = ['mouse_speed']
+column_list += extra_columns
 
 # get the config info
 config_file = os.path.join(paths.vame_path, paths.vame_current_model_name, 'config.yaml')
@@ -62,25 +65,28 @@ try:
     aligned_traj, frames = vame.egocentric_alignment(config, pose_ref_index=[0, 7], crop_size=(200, 200),
                                                      use_video=False, video_format='.mp4', check_video=False,
                                                      save_flag=False, filename=[files['slug']], column_list=column_list,
-                                                     dataframe=[data])
+                                                     dataframe=[data], extra_columns=extra_columns)
 
     # get the motifs and latents
-    # assemble the template path
-    first_file = os.listdir(os.path.join(paths.vame_results, 'results'))[0]
-    template_path = os.path.join(paths.vame_results, 'results', first_file, 'VAME', 'kmeans-10',
-                                 'cluster_center_'+first_file+'.npy')
-    # load the cluster centers
-    cluster_centers = np.load(template_path)
 
     # create a new kmeans object
     random_state = config['random_state_kmeans']
     n_init = config['n_init_kmeans']
     n_cluster = config['n_cluster']
     kmeans_object = cluster.KMeans(init='k-means++', n_clusters=n_cluster, random_state=random_state, n_init=n_init)
-    # set the cluster centers from the template file to apply to this file
-    kmeans_object.cluster_centers_ = cluster_centers
+
     # set the number fo threads, required when building the kmeans object without fitting
     kmeans_object._n_threads = 1
+
+    # assemble the template path
+    first_file = os.listdir(os.path.join(paths.vame_results, 'results'))[0]
+    template_path = os.path.join(paths.vame_results, 'results', first_file, 'VAME', 'kmeans-'+str(n_cluster),
+                                 'cluster_center_'+first_file+'.npy')
+    # load the cluster centers
+    cluster_centers = np.load(template_path)
+
+    # set the cluster centers from the template file to apply to this file
+    kmeans_object.cluster_centers_ = cluster_centers
 
     # run the pose segmentation
     latents, clusters = vame.batch_pose_segmentation(config, [0], aligned_traj, kmeans_obj=kmeans_object)
