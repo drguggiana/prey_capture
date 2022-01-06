@@ -245,6 +245,14 @@ def days_to_file(wildcards):
     return os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'regressionday.hdf5')))
 
 
+def all_days(wildcards):
+    # initialize the output
+    path_list = []
+    # run through all files in the config
+
+    return path_list
+
+
 rule gather_regression:
     input:
         files_to_day,
@@ -266,6 +274,29 @@ rule scatter_analysis:
         file_info = lambda wildcards: config["file_info"][wildcards.file],
     script:
         "snakemake_scripts/combine_analyses.py"
+
+rule tc_day:
+    input:
+        files_to_day,
+    output:
+        os.path.join(paths.analysis_path,'{file}_tcday.hdf5'),
+    params:
+        file_info = lambda wildcards: config["file_info"][wildcards.file],
+    script:
+        "snakemake_scripts/tc_calculate.py"
+
+rule tc_consolidate:
+    input:
+        # days_to_file,
+        # animal_to_file,
+        # expand(os.path.join(paths.analysis_path,"{file}_tcday.hdf5"), file=config['files'])
+        all_days,
+    output:
+        os.path.join(paths.analysis_path,"{file}_tcconsolidate.hdf5"),
+    params:
+        file_info=expand("{info}", info=config["file_info"].values()),
+    script:
+        "snakemake_scripts/tc_consolidate.py"
 
 
 rule visualize_aggregates:
