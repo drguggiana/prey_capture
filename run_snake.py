@@ -48,7 +48,7 @@ for search_query in search_queries:
             search_query += ',imaging:doric'
 
     # also get the target database entries
-    target_entries = bd.query_database(target_model, fd.remove_query_field(search_query, 'analysis_type'))
+    target_entries = bd.query_database(target_model, fd.remove_query_field(search_query, 'analysis_type'))[:10]
     # if there are no entries, skip the iteration
     if len(target_entries) == 0:
         print('No entries: ' + search_query)
@@ -60,6 +60,7 @@ for search_query in search_queries:
     full_paths.append(target_path)
     full_parsed.append(parsed_search)
 
+# TODO: can probably remove the mouse isolation code since I do this inside snakemake
 # allocate a list for the mice
 new_queries = []
 new_paths = []
@@ -139,7 +140,7 @@ for idx, target_entries in enumerate(new_queries):
                               # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               # '--rerun-incomplete',
-                              # '--verbose',  # make the output more verbose for debugging
+                              '--verbose',  # make the output more verbose for debugging
                               # '--debug-dag',  # show the file selection operation, also for debugging
                               # '--dryrun',  # generates the DAG and everything, but doesn't process
                               '-s', paths.snakemake_scripts,

@@ -246,9 +246,23 @@ def days_to_file(wildcards):
 
 
 def all_days(wildcards):
-    # initialize the output
-    path_list = []
+    # initialize the keyword list
+    keyword_list = []
+
     # run through all files in the config
+    for files in config["file_info"].keys():
+        # get the day, rig and animal
+        name_parts = files.split('_')
+        day = '_'.join(name_parts[0:3])
+        rig = name_parts[6]
+        animal = '_'.join(name_parts[7:10])
+        keyword_list.append([day, animal, rig])
+
+    # ID the unique combinations
+    unique_patterns = np.unique(np.array(keyword_list), axis=0)
+    # generate the corresponding file names and output
+    path_list = [os.path.join(paths.analysis_path, '_'.join((el[0], el[1], el[2], 'tcday.hdf5')))
+                 for el in unique_patterns]
 
     return path_list
 
@@ -280,8 +294,8 @@ rule tc_day:
         files_to_day,
     output:
         os.path.join(paths.analysis_path,'{file}_tcday.hdf5'),
-    params:
-        file_info = lambda wildcards: config["file_info"][wildcards.file],
+    # params:
+    #     file_info = lambda wildcards: config["file_info"][wildcards.file],
     script:
         "snakemake_scripts/tc_calculate.py"
 

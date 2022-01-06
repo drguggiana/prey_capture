@@ -9,10 +9,7 @@ import scipy.stats as stat
 import processing_parameters
 import functions_misc as fm
 import h5py
-
-
-def flatten_tc():
-    return
+np.seterr(divide='ignore', invalid='ignore')
 
 
 def clip_calcium(pre_data):
@@ -121,7 +118,7 @@ def parse_features(data):
         return feature_raw_trials, calcium_trials
 
 
-def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs):
+def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, cell_number):
     """Extract the tuning curves (full and half) and their responsivity index"""
 
     # get the number of pairs
@@ -133,8 +130,6 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs):
     # define the number of bins for the TCs
     bin_number = 10
 
-    # get the number of cells
-    cell_number = calcium_trials.shape[1]
     # allocate memory for the trial TCs
     tc_half = {}
     tc_full = {}
@@ -143,7 +138,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs):
     for pair_idx in np.arange(pair_number):
         # get the current feature
         feature_name = target_pairs[pair_idx]
-        feature_names = feature_name.split('|')
+        feature_names = feature_name.split('__')
         current_feature_0 = feature_raw_trials.loc[:, feature_names[0]].to_numpy()
         current_feature_1 = feature_raw_trials.loc[:, feature_names[1]].to_numpy()
         # get the bins from the parameters file
@@ -232,7 +227,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs):
         return tc_half, tc_full, tc_resp
 
 
-def extract_consistency(tc_half, target_pairs):
+def extract_consistency(tc_half, target_pairs, cell_number):
     """Calculate TC consistency"""
 
     # define the number of shuffles
@@ -240,8 +235,6 @@ def extract_consistency(tc_half, target_pairs):
     # define the percentile
     percentile = 95
 
-    # get the number of cells
-    cell_number = len(tc_half)
     # get the number of pairs
     pair_number = len(target_pairs)
 
@@ -287,6 +280,45 @@ def extract_consistency(tc_half, target_pairs):
         return tc_cons
 
 
+def convert_to_dataframe(half_in, full_in, resp_in, cons_in, date, mouse, setup):
+    """Convert the TCs and their metrics into dataframe format"""
+    # allocate an output dict
+    out_dict = {}
+    # cycle through features
+    for feat in half_in.keys():
+        # get all the components
+        c_half = half_in[feat]
+        c_full = full_in[feat]
+        c_resp = resp_in[feat]
+        c_cons = cons_in[feat]
+        # flatten the tcs and generate labels
+        flat_half = []
+        labels_half = []
+        for half in np.arange(2):
+            flat_half.append(np.array([el.flatten() for el in c_half[half]]))
+            labels_half.append(['half_'+str(half)+'_bin_'+str(el) for el in np.arange(flat_half[half].shape[1])])
+
+        flat_full = np.array([el.flatten() for el in c_full])
+        labels_full = ['bin_'+str(el) for el in np.arange(flat_full.shape[1])]
+
+        # turn everything into dataframes
+        df_half = pd.DataFrame(np.hstack(flat_half), columns=np.hstack(labels_half), dtype=np.float32)
+        df_full = pd.DataFrame(flat_full, columns=labels_full, dtype=np.float32)
+        df_resp = pd.DataFrame(c_resp, columns=['Resp_index', 'Resp_test'], dtype=np.float32)
+        df_cons = pd.DataFrame(c_cons, columns=['Cons_index', 'Cons_test'], dtype=np.float32)
+
+        # concatenate
+        df_concat = pd.concat((df_half, df_full, df_resp, df_cons), axis=1)
+        # generate columns for date and animal
+        df_concat['day'] = date
+        df_concat['animal'] = mouse
+        df_concat['rig'] = setup
+        # store
+        out_dict[feat] = df_concat
+
+    return out_dict
+
+
 # get the data paths
 try:
     input_path = snakemake.input
@@ -294,10 +326,11 @@ try:
     out_path = snakemake.output[0]
     # data_all = snakemake.params.file_info
     # get the parts for the file naming
-    name_parts = out_path.split('_')
-    day = name_parts[0]
-    animal = name_parts[1]
-    rig = name_parts[2]
+    name_parts = os.path.basename(out_path).split('_')
+    day = '_'.join(name_parts[:3])
+    animal = '_'.join(name_parts[3:6])
+    rig = name_parts[6]
+
 except NameError:
     # get the search query
     search_string = processing_parameters.search_string
@@ -308,7 +341,8 @@ except NameError:
     # get the day, animal and rig
     day = '_'.join(all_path[0]['slug'].split('_')[0:3])
     rig = all_path[0]['rig']
-    animal = '_'.join(all_path[0]['slug'].split('_')[3:6])
+    animal = all_path[0]['slug'].split('_')[3:6]
+    animal = '_'.join((animal[0].upper(), animal[1:]))
 
     # assemble the output path
     out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'tcday.hdf5')))
@@ -345,22 +379,20 @@ else:
 
     # define the pairs to quantify
     variable_pairs = list(processing_parameters.tc_params.keys())
+    # get the number of cells
+    cell_num = calcium.shape[1]
 
     # get the TCs and their responsivity
-    tcs_half, tcs_full, tcs_resp = extract_tcs_responsivity(features, calcium, variable_pairs)
+    tcs_half, tcs_full, tcs_resp = extract_tcs_responsivity(features, calcium, variable_pairs, cell_num)
     # get the TC consistency
-    tcs_cons = extract_consistency(tcs_half, variable_pairs)
+    tcs_cons = extract_consistency(tcs_half, variable_pairs, cell_num)
 
-    # save the data to an h5py file
-    with h5py.File(out_path, 'w') as f:
+    # convert the outputs into a dataframe
+    tcs_dict = convert_to_dataframe(tcs_half, tcs_full, tcs_resp, tcs_cons, day, animal, rig)
 
-        # for all the features
-        for feature in tcs_half.keys():
-            group = f.create_group(feature)
-            group['half_tcs'] = np.array(tcs_half[feature]).astype(np.float32)
-            group['full_tcs'] = np.array(tcs_full[feature]).astype(np.float32)
-            group['responsivity'] = np.array(tcs_resp[feature]).astype(np.float32)
-            group['consistency'] = np.array(tcs_cons[feature]).astype(np.float32)
+    # for all the features
+    for feature in tcs_dict.keys():
+        tcs_dict[feature].to_hdf(out_path, feature)
 
     # save as a new entry to the data base
     # assemble the entry data
