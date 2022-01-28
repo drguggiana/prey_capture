@@ -1,4 +1,3 @@
-import h5py
 import processing_parameters
 import functions_bondjango as bd
 import os
@@ -28,9 +27,8 @@ if 'miniscope' in input_path[0]:
 else:
     rig = 'VR'
 
-# get a list of all the features from the first file
-with h5py.File(input_path[0], 'r') as f:
-    feature_list = list(f.keys())
+# get a list of the features
+feature_list = processing_parameters.tc_params.keys()
 # for all the features
 for feature in feature_list:
     # allocate a list for the individual dataframes
@@ -41,10 +39,12 @@ for feature in feature_list:
             # read in the data and store
             file_list.append(pd.read_hdf(files, feature))
         except KeyError:
+            print(f'feature:{feature} file: {files}')
             continue
-    # store the concatenated dataframe in the output file
-    joint_df = pd.concat(file_list, axis=0).reset_index(drop=True)
-    joint_df.to_hdf(out_path, feature)
+    if len(file_list) > 0:
+        # store the concatenated dataframe in the output file
+        joint_df = pd.concat(file_list, axis=0).reset_index(drop=True)
+        joint_df.to_hdf(out_path, feature)
 
 # generate database entry
 # assemble the entry data

@@ -8,8 +8,21 @@ import scipy.signal as ss
 import scipy.stats as stat
 import processing_parameters
 import functions_misc as fm
-import h5py
+
 np.seterr(divide='ignore', invalid='ignore')
+
+
+def clipping_function(trace_in, threshold=8):
+    """Clip traces to their threshold-th percentile"""
+    # skip if there are only zeros
+    if np.sum(trace_in) == 0:
+        return trace_in
+    # get the baseline
+    baseline = np.percentile(trace_in[trace_in > 0], threshold)
+
+    # clip the trace
+    trace_in[trace_in < baseline] = 0
+    return trace_in
 
 
 def clip_calcium(pre_data):
@@ -17,11 +30,10 @@ def clip_calcium(pre_data):
 
     # allocate memory for the cleaned up data
     data = []
-
+    # define the clipping threshold in percentile of baseline
+    clip_threshold = 8
     # for all the trials
     for idx, el in enumerate(pre_data):
-        # # get the date
-        # current_date = os.path.basename(el[0])[:10]
 
         # get the current df
         current_df = el[1]
@@ -33,24 +45,14 @@ def clip_calcium(pre_data):
         # get the current calcium data
         cell_data = current_df[cells]
 
-        # calculate a baseline for all cells
-        for name, single in cell_data.items():
-            # skip if there are only zeros
-            if np.sum(single) == 0:
-                continue
-            # get the baseline
-            baseline = np.percentile(single[single > 0], 8)
-
-            # clip the trace
-            single[single < baseline] = 0
-            # store
-            cell_data[name] = single
+        # do the cell clipping
+        cell_data.apply(clipping_function, axis=1, raw=True, threshold=clip_threshold)
 
         # # remove the nans after normalization
         # cell_data[np.isnan(cell_data)] = 0
         # assemble a new data frame with only the matched cells and the rest of the data
         data.append(pd.concat((non_cell_data, cell_data), axis=1))
-        return data
+    return data
 
 
 def parse_features(data):
@@ -73,10 +75,8 @@ def parse_features(data):
         # get the intersection of the labels
         label_intersect = [feat for feat in feature_list if feat in el.columns]
 
-        if len(label_intersect) != len(feature_list):
-            continue
         # get the features of interest
-        target_features = el.loc[:, feature_list]
+        target_features = el.loc[:, label_intersect]
         # get the original columns
         original_columns = target_features.columns
 
@@ -115,7 +115,7 @@ def parse_features(data):
         # store
         calcium_trials.append(cells)
 
-        return feature_raw_trials, calcium_trials
+    return feature_raw_trials, calcium_trials
 
 
 def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, cell_number):
@@ -126,7 +126,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
     # define the number of calcium shuffles
     shuffle_number = 100
     # define the confidence interval cutoff
-    percentile = 95
+    percentile = 99
     # define the number of bins for the TCs
     bin_number = 10
 
@@ -139,12 +139,24 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
         # get the current feature
         feature_name = target_pairs[pair_idx]
         feature_names = feature_name.split('__')
-        current_feature_0 = feature_raw_trials.loc[:, feature_names[0]].to_numpy()
-        current_feature_1 = feature_raw_trials.loc[:, feature_names[1]].to_numpy()
+        # skip the pair and save an empty if the feature is not present
+        try:
+            current_feature_0 = feature_raw_trials.loc[:, feature_names[0]].to_numpy()
+            current_feature_1 = feature_raw_trials.loc[:, feature_names[1]].to_numpy()
+        except KeyError:
+            tc_half[feature_name] = []
+            tc_full[feature_name] = []
+            tc_resp[feature_name] = []
+            continue
         # get the bins from the parameters file
-        bin_ranges = processing_parameters.tc_params[feature_name]
-        # calculate the bin edges based on the ranges
-        bins = [np.linspace(el[0], el[1], num=bin_number + 1) for el in bin_ranges]
+        try:
+            bin_ranges = processing_parameters.tc_params[feature_name]
+            # calculate the bin edges based on the ranges
+            bins = [np.linspace(el[0], el[1], num=bin_number + 1) for el in bin_ranges]
+        except KeyError:
+            # if not in the parameters, go for default and report
+            print(f'Feature {feature_name} not found, default to 10 bins ad hoc')
+            bins = 10
         # allocate a list for the 2 halves
         tc_half_temp = []
         # exclude nan values
@@ -224,7 +236,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
         tc_full[feature_name] = tc_cell_full
         tc_resp[feature_name] = tc_cell_resp
 
-        return tc_half, tc_full, tc_resp
+    return tc_half, tc_full, tc_resp
 
 
 def extract_consistency(tc_half, target_pairs, cell_number):
@@ -249,6 +261,10 @@ def extract_consistency(tc_half, target_pairs, cell_number):
         tc_half_temp = np.zeros([cell_number, 2])
         # get the two halves
         halves = tc_half[feature_name]
+        # if empty, skip
+        if len(halves) == 0:
+            tc_cons[feature_name] = []
+            continue
 
         # calculate the real and shuffle correlation
         for cell in np.arange(cell_number):
@@ -277,7 +293,7 @@ def extract_consistency(tc_half, target_pairs, cell_number):
 
         # store for the variable
         tc_cons[feature_name] = tc_half_temp
-        return tc_cons
+    return tc_cons
 
 
 def convert_to_dataframe(half_in, full_in, resp_in, cons_in, date, mouse, setup):
@@ -291,6 +307,10 @@ def convert_to_dataframe(half_in, full_in, resp_in, cons_in, date, mouse, setup)
         c_full = full_in[feat]
         c_resp = resp_in[feat]
         c_cons = cons_in[feat]
+
+        # if the feature is not present, skip
+        if len(c_half) == 0:
+            continue
         # flatten the tcs and generate labels
         flat_half = []
         labels_half = []
@@ -319,105 +339,112 @@ def convert_to_dataframe(half_in, full_in, resp_in, cons_in, date, mouse, setup)
     return out_dict
 
 
-# get the data paths
-try:
-    input_path = snakemake.input
-    # read the output path and the input file urls
-    out_path = snakemake.output[0]
-    # data_all = snakemake.params.file_info
-    # get the parts for the file naming
-    name_parts = os.path.basename(out_path).split('_')
-    day = '_'.join(name_parts[:3])
-    animal = '_'.join(name_parts[3:6])
-    rig = name_parts[6]
+if __name__ == '__main__':
+    # get the data paths
+    try:
+        input_path = snakemake.input
+        # read the output path and the input file urls
+        out_path = snakemake.output[0]
+        # data_all = snakemake.params.file_info
+        # get the parts for the file naming
+        name_parts = os.path.basename(out_path).split('_')
+        day = '_'.join(name_parts[:3])
+        animal = '_'.join(name_parts[3:6])
+        rig = name_parts[6]
 
-except NameError:
-    # get the search query
-    search_string = processing_parameters.search_string
+    except NameError:
+        # get the search query
+        search_string = processing_parameters.search_string
 
-    # get the paths from the database
-    all_path = bd.query_database('analyzed_data', search_string)
-    input_path = [el['analysis_path'] for el in all_path if '_preproc' in el['slug']]
-    # get the day, animal and rig
-    day = '_'.join(all_path[0]['slug'].split('_')[0:3])
-    rig = all_path[0]['rig']
-    animal = all_path[0]['slug'].split('_')[3:6]
-    animal = '_'.join((animal[0].upper(), animal[1:]))
+        # get the paths from the database
+        all_path = bd.query_database('analyzed_data', search_string)
+        input_path = [el['analysis_path'] for el in all_path if '_preproc' in el['slug']]
+        # get the day, animal and rig
+        day = '_'.join(all_path[0]['slug'].split('_')[0:3])
+        rig = all_path[0]['rig']
+        animal = all_path[0]['slug'].split('_')[3:6]
+        animal = '_'.join([animal[0].upper()] + animal[1:])
 
-    # assemble the output path
-    out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'tcday.hdf5')))
+        # assemble the output path
+        out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'tcday.hdf5')))
 
-# allocate memory for the data
-raw_data = []
-# for all the files
-for files in input_path:
-    # load the data
-    with pd.HDFStore(files) as h:
-        if '/matched_calcium' in h.keys():
+    # allocate memory for the data
+    raw_data = []
+    # allocate memory for excluded trials
+    excluded_trials = []
+    # for all the files
+    for files in input_path:
+        # load the data
+        with pd.HDFStore(files, mode='r') as h:
+            if ('/matched_calcium' in h.keys()) & ('/latents' in h.keys()):
 
-            # concatenate the latents
-            dataframe = pd.concat([h['matched_calcium'], h['latents']], axis=1)
-            # store
-            raw_data.append((files, dataframe))
+                # concatenate the latents
+                dataframe = pd.concat([h['matched_calcium'], h['latents']], axis=1)
+                # store
+                raw_data.append((files, dataframe))
+            else:
+                excluded_trials.append(files)
 
-# skip processing if the file is empty
-if len(raw_data) == 0:
-    # save an empty file and end
-    with h5py.File(out_path, 'w') as f:
-        f.create_dataset('no_ROIs', data=[])
-else:
+    # skip processing if the file is empty
+    if len(raw_data) == 0:
+        # save an empty file and end
+        empty = pd.DataFrame([])
+        empty.to_hdf(out_path, 'no_ROIs')
+    else:
 
-    # clip the calcium traces
-    clipped_data = clip_calcium(raw_data)
+        # clip the calcium traces
+        clipped_data = clip_calcium(raw_data)
 
-    # parse the features
-    features, calcium = parse_features(clipped_data)
+        # parse the features
+        features, calcium = parse_features(clipped_data)
 
-    # concatenate all the trials
-    features = pd.concat(features)
-    calcium = np.concatenate(calcium)
+        # concatenate all the trials
+        features = pd.concat(features)
+        calcium = np.concatenate(calcium)
 
-    # define the pairs to quantify
-    variable_pairs = list(processing_parameters.tc_params.keys())
-    # get the number of cells
-    cell_num = calcium.shape[1]
+        # define the pairs to quantify
+        variable_pairs = list(processing_parameters.tc_params.keys())
+        # get the number of cells
+        cell_num = calcium.shape[1]
 
-    # get the TCs and their responsivity
-    tcs_half, tcs_full, tcs_resp = extract_tcs_responsivity(features, calcium, variable_pairs, cell_num)
-    # get the TC consistency
-    tcs_cons = extract_consistency(tcs_half, variable_pairs, cell_num)
+        # get the TCs and their responsivity
+        tcs_half, tcs_full, tcs_resp = extract_tcs_responsivity(features, calcium, variable_pairs, cell_num)
+        # get the TC consistency
+        tcs_cons = extract_consistency(tcs_half, variable_pairs, cell_num)
 
-    # convert the outputs into a dataframe
-    tcs_dict = convert_to_dataframe(tcs_half, tcs_full, tcs_resp, tcs_cons, day, animal, rig)
+        # convert the outputs into a dataframe
+        tcs_dict = convert_to_dataframe(tcs_half, tcs_full, tcs_resp, tcs_cons, day, animal, rig)
 
-    # for all the features
-    for feature in tcs_dict.keys():
-        tcs_dict[feature].to_hdf(out_path, feature)
+        # for all the features
+        for feature in tcs_dict.keys():
+            tcs_dict[feature].to_hdf(out_path, feature)
+        # # save the excluded trials if any
+        # if len(excluded_trials)
 
-    # save as a new entry to the data base
-    # assemble the entry data
-    entry_data = {
-        'analysis_type': 'tc_analysis',
-        'analysis_path': out_path,
-        'date': '',
-        'pic_path': '',
-        'result': 'multi',
-        'rig': rig,
-        'lighting': 'multi',
-        'imaging': 'multi',
-        'slug': fm.slugify(os.path.basename(out_path)[:-5]),
+        # save as a new entry to the data base
+        # assemble the entry data
+        entry_data = {
+            'analysis_type': 'tc_analysis',
+            'analysis_path': out_path,
+            'date': '',
+            'pic_path': '',
+            'result': 'multi',
+            'rig': rig,
+            'lighting': 'multi',
+            'imaging': 'multi',
+            'slug': fm.slugify(os.path.basename(out_path)[:-5]),
 
-    }
+        }
 
-    # check if the entry already exists, if so, update it, otherwise, create it
-    update_url = '/'.join((paths.bondjango_url, 'analyzed_data', entry_data['slug'], ''))
-    output_entry = bd.update_entry(update_url, entry_data)
-    if output_entry.status_code == 404:
-        # build the url for creating an entry
-        create_url = '/'.join((paths.bondjango_url, 'analyzed_data', ''))
-        output_entry = bd.create_entry(create_url, entry_data)
+        # check if the entry already exists, if so, update it, otherwise, create it
+        update_url = '/'.join((paths.bondjango_url, 'analyzed_data', entry_data['slug'], ''))
+        output_entry = bd.update_entry(update_url, entry_data)
+        if output_entry.status_code == 404:
+            # build the url for creating an entry
+            create_url = '/'.join((paths.bondjango_url, 'analyzed_data', ''))
+            output_entry = bd.create_entry(create_url, entry_data)
 
-    print('The output status was %i, reason %s' %
-          (output_entry.status_code, output_entry.reason))
-    if output_entry.status_code in [500, 400]:
-        print(entry_data)
+        print('The output status was %i, reason %s' %
+              (output_entry.status_code, output_entry.reason))
+        if output_entry.status_code in [500, 400]:
+            print(entry_data)
