@@ -556,7 +556,11 @@ def format_figure(fig, width=None, frame_width=None, height=None, frame_height=N
     xlabel = format_label(xlabel)
     fig.opts(xlabel=xlabel)
 
-    ylabel = str(fig.vdims[0])
+    # define which label to grab depending on the number of kdims
+    if len(fig.kdims) == 1:
+        ylabel = str(fig.vdims[0])
+    else:
+        ylabel = str(fig.kdims[1])
     ylabel = format_label(ylabel)
     fig.opts(ylabel=ylabel)
 
@@ -659,19 +663,19 @@ def save_figure(fig, save_path, fig_width=5, dpi=600, fontsize='small'):
         fig.opts(legend_opts={'label_text_font_size': str(pix(current_fontsize*pt2cm, dpi))+'pt'})
 
     # scale line width
-    try:
-
-        current_line_width = render_fig.renderers[0].glyph.line_width
-        fig.opts(line_width=pix(current_line_width*pt2cm, dpi))
-        fig.opts(hooks=[format_axis_hook])
-
-    except ValueError:
-        for idx, el in enumerate(fig.items()):
-            render_el = hv.render(el[1])
-            current_line_width = render_el.renderers[0].glyph.line_width
-            el[1].opts(line_width=pix(current_line_width*pt2cm, dpi))
-            if idx == 0:
-                el[1].opts(hooks=[format_axis_hook])
+    # TODO: use similar logic to get rid of the other try/except blocks
+    if 'Image' not in str(type(fig)):
+        try:
+            current_line_width = render_fig.renderers[0].glyph.line_width
+            fig.opts(line_width=pix(current_line_width*pt2cm, dpi))
+            fig.opts(hooks=[format_axis_hook])
+        except ValueError:
+            for idx, el in enumerate(fig.items()):
+                render_el = hv.render(el[1])
+                current_line_width = render_el.renderers[0].glyph.line_width
+                el[1].opts(line_width=pix(current_line_width*pt2cm, dpi))
+                if idx == 0:
+                    el[1].opts(hooks=[format_axis_hook])
 
     # save the figure
     hv.save(fig, save_path, backend='bokeh', dpi=dpi)

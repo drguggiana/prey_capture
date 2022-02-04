@@ -137,7 +137,7 @@ def run_preprocess(file_path_bonsai, save_file, file_info,
     return out_path, filtered_traces
 
 
-def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, kernel_size=5):
+def run_dlc_preprocess(file_path_ref, file_path_dlc, save_file, file_info, kernel_size=5):
     """Extract the relevant columns from the dlc file and rename"""
 
     # define the likelihood threshold for the DLC points
@@ -296,31 +296,61 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     # median filter the traces
     filtered_traces = fp.median_discontinuities(filtered_traces, filtered_traces.columns, kernel_size)
 
-    # parse the bonsai file for the time stamps
-    timestamp = []
-    bonsai_data = []
-    with open(file_path_bonsai) as f:
-        for ex_line in f:
-            ex_list = ex_line.split(' ')
-            ex_list.remove('\n')
-            timestamp.append(ex_list.pop())
-            bonsai_data.append([float(el) for el in ex_list])
-
     # parse the path
-    parsed_path = parse_path(file_path_bonsai)
-    # add the time stamps to the main dataframe
-    time = [datetime.datetime.strptime(el[:-7], '%Y-%m-%dT%H:%M:%S.%f')
-            for el in timestamp[frame_bounds.loc[0, 'start']:frame_bounds.loc[0, 'end']-1]]
-    # if time is missing frames, skip them from the end and show a warning (checked comparing the traces)
-    if len(time) < filtered_traces.shape[0]:
-        # calculate the delta
-        delta_frame = filtered_traces.shape[0] - len(time)
-        # show the warning
-        print('Extra frames in video: %i' % delta_frame)
-        # trim filtered traces
-        filtered_traces = filtered_traces.iloc[:-delta_frame, :]
+    parsed_path = parse_path(file_path_ref)
 
-    filtered_traces['time_vector'] = [(el - time[0]).total_seconds() for el in time]
+    # get the file date
+    file_date = datetime.datetime.strptime(file_info['date'], '%Y-%m-%dT%H:%M:%SZ')
+
+    # choose the timestamp mode depending on the date
+    if file_date <= datetime.datetime(year=2021, month=12, day=14):
+        # parse the bonsai file for the time stamps
+        timestamp = []
+        bonsai_data = []
+
+        with open(file_info['bonsai_path']) as f:
+            for ex_line in f:
+                ex_list = ex_line.split(' ')
+                ex_list.remove('\n')
+                timestamp.append(ex_list.pop())
+                bonsai_data.append([float(el) for el in ex_list])
+
+        # add the time stamps to the main dataframe
+        time = [datetime.datetime.strptime(el[:-7], '%Y-%m-%dT%H:%M:%S.%f')
+                for el in timestamp[frame_bounds.loc[0, 'start']:frame_bounds.loc[0, 'end']-1]]
+        # if time is missing frames, skip them from the end and show a warning (checked comparing the traces)
+        if len(time) < filtered_traces.shape[0]:
+            # calculate the delta
+            delta_frame = filtered_traces.shape[0] - len(time)
+            # show the warning
+            print('Extra frames in video: %i' % delta_frame)
+            # trim filtered traces
+            filtered_traces = filtered_traces.iloc[:-delta_frame, :]
+        filtered_traces['time_vector'] = [(el - time[0]).total_seconds() for el in time]
+
+    else:
+        # read the sync file
+        sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'cam_frames',
+                                                               'sync_trigger', 'mini_frames', 'wheel_frames'],
+                                index_col=False)
+        # get the cam frame times based on the triggers
+        # get the camera triggers
+        cam_idx = np.argwhere(np.diff(sync_data.loc[:, 'cam_frames']) > 1).squeeze() + 1
+        # filter them by the sync trigger
+        sync_start = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 1)[0]
+        sync_end = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 2)[0]
+        cam_idx = cam_idx[(cam_idx > sync_start) & (cam_idx < sync_end)]
+        # get the actual frame times
+        time = sync_data.loc[cam_idx, 'Time'].to_numpy()
+        # correct the first frame if there's a discrepancy
+        if time.shape[0] != filtered_traces.shape[0]:
+            delta_frame = time.shape[0] - filtered_traces.shape[0]
+            print(f'Discrepancy of {delta_frame} frames between time and traces')
+            if delta_frame < 0:
+                filtered_traces = filtered_traces.iloc[-delta_frame:, :]
+            else:
+                time = time[delta_frame:]
+        filtered_traces['time_vector'] = [el - time[0] for el in time]
 
     # also the mouse and the date
     filtered_traces['mouse'] = parsed_path['animal']
@@ -330,7 +360,10 @@ def run_dlc_preprocess(file_path_bonsai, file_path_dlc, save_file, file_info, ke
     coordinate_columns += [el for el in filtered_traces.columns if 'cricket_' in el]
     # check for nans
     if np.any(np.isnan(filtered_traces[coordinate_columns].to_numpy())):
-        raise ValueError(f'NaN value found in file {file_info["slug"]}')
+        # raise ValueError(f'NaN value found in file {file_info["slug"]}')
+        coords = filtered_traces[coordinate_columns]
+        coords[np.isnan(filtered_traces[coordinate_columns].to_numpy())] = 0
+        filtered_traces[coordinate_columns] = coords
     # turn corner points into a dataframe
     corner_frame = pd.DataFrame(corner_points.T, columns=['UL', 'BL', 'BR', 'UR'])
 

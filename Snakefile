@@ -64,7 +64,7 @@ def day_selector(wildcards):
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
 
     day_paths = [el['tif_path'] for el in info_list if
-                 (config['calcium_flag'][os.path.basename(el['bonsai_path'])[:-4]]
+                 (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]]
                   and el['mouse']==animal and el['date'][:10]==day)]
     wildcards.day_paths = day_paths
     return day_paths
@@ -182,7 +182,7 @@ def motif_selector(wildcards):
     if python_dict['rig'] == 'miniscope':
         return os.path.join(paths.analysis_path, "{file}_motifs.hdf5"),
     else:
-        return python_dict['bonsai_path']
+        return python_dict['avi_path']
 
 
 rule preprocess_compile:
@@ -230,8 +230,8 @@ def files_to_day(wildcards):
     animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
 
-    day_routes = [el['bonsai_path'].replace('.csv', '_preproc.hdf5').replace('VideoExperiment', 'AnalyzedData')
-                  for el in info_list if (config['calcium_flag'][os.path.basename(el['bonsai_path'])[:-4]]
+    day_routes = [el['avi_path'].replace('.avi', '_preproc.hdf5').replace('VideoExperiment', 'AnalyzedData')
+                  for el in info_list if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]]
                   and el['mouse']==animal and el['date'][:10]==day)]
     wildcards.day_routes = day_routes
     return day_routes

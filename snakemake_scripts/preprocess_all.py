@@ -9,17 +9,20 @@ import functions_bondjango as bd
 import os
 import yaml
 import matplotlib.pyplot as plt
+import matplotlib
 from pandas import read_hdf
 import processing_parameters
+
+matplotlib.use('Agg')
 
 
 def preprocess_selector(csv_path, saving_path, file_info):
     """functions that selects the preprocessing function for the first step, either dlc or not"""
     # check if the input has a dlc path or not
     if (len(file_info['dlc_path']) > 0 and file_info['dlc_path'] != 'N/A') or \
-            os.path.isfile(file_info['bonsai_path'].replace('.csv', '_dlc.h5')):
+            os.path.isfile(file_info['avi_path'].replace('.avi', '_dlc.h5')):
         # assemble the path here, in case the file wasn't in the database
-        dlc_path = file_info['bonsai_path'].replace('.csv', '_dlc.h5')
+        dlc_path = file_info['avi_path'].replace('.avi', '_dlc.h5')
         # if there's a dlc file, use this preprocessing
         output_path, traces, corner_out, frame_b = \
             s1.run_dlc_preprocess(csv_path, dlc_path, saving_path, file_info)
@@ -31,6 +34,7 @@ def preprocess_selector(csv_path, saving_path, file_info):
         # set frame bounds to empty
         frame_b = []
     return output_path, traces, corner_out, frame_b
+
 
 # check if launched from snakemake, otherwise, prompt user
 try:
@@ -55,13 +59,13 @@ except NameError:
 
     # get the queryset
     files = bd.query_database(target_model, search_string)[0]
-    raw_path = files['bonsai_path']
-    calcium_path = files['bonsai_path'][:-4] + '_calcium.hdf5'
+    raw_path = files['avi_path']
+    calcium_path = files['avi_path'][:-4] + '_calcium.hdf5'
     match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], files['rig'], 'cellMatch.hdf5')))
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
-                             os.path.basename(files['bonsai_path'][:-4]))+'_rawcoord.hdf5'
-    pic_path = os.path.join(save_path[:-13] + '.png')
+                             os.path.basename(files['avi_path'][:-4]))+'_rawcoord.hdf5'
+    pic_path = save_path[:-14] + '.png'
 
 # get the file date
 file_date = datetime.datetime.strptime(files['date'], '%Y-%m-%dT%H:%M:%SZ')
@@ -70,7 +74,7 @@ file_date = datetime.datetime.strptime(files['date'], '%Y-%m-%dT%H:%M:%SZ')
 # if miniscope but no imaging, run bonsai only
 if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     # run the first stage of preprocessing
-    out_path, filtered_traces, px_corners, frame_bounds = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, px_corners, frame_bounds = preprocess_selector(files['avi_path'], save_path, files)
 
     # scale the traces accordingly
     filtered_traces, corners = fp.rescale_pixels(filtered_traces, files,
@@ -87,7 +91,7 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     # run the first stage of preprocessing
     # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
     #                                               save_path)
-    out_path, filtered_traces, px_corners, frame_bounds = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, px_corners, frame_bounds = preprocess_selector(files['avi_path'], save_path, files)
 
     # scale the traces accordingly
     filtered_traces, corners = fp.rescale_pixels(filtered_traces, files,
@@ -117,7 +121,7 @@ elif files['rig'] in ['VR', 'VPrey'] and file_date <= datetime.datetime(year=202
     # run the first stage of preprocessing
     # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
     #                                               save_path)
-    out_path, filtered_traces, corners, _ = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, corners, _ = preprocess_selector(files['avi_path'], save_path, files)
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates['VR']
@@ -136,7 +140,7 @@ elif files['rig'] in ['VR', 'VPrey'] and \
     # TODO: make sure the constants are set to values that make sense for the vr arena
 
     # get the video tracking data
-    out_path, filtered_traces, _, _ = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, _, _ = preprocess_selector(files['avi_path'], save_path, files)
 
     # get the motive tracking data
     motive_traces, _, _ = s1.extract_motive(files['track_path'], files['rig'])
@@ -165,7 +169,7 @@ elif files['rig'] in ['VScreen']:
     params = read_hdf(files['screen_path'], key='params')
 
     # get the video tracking data
-    out_path, filtered_traces, _, _ = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, _, _ = preprocess_selector(files['avi_path'], save_path, files)
 
     # define the dimensions of the arena
     manual_coordinates = paths.arena_coordinates['VR_manual']
@@ -189,6 +193,48 @@ elif files['rig'] in ['VScreen']:
     trials.to_hdf(out_path, key='trial_set', mode='a')
     params.to_hdf(out_path, key='params', mode='a')
 
+elif files['rig'] in ['VTuning']:
+    # load the data for the trial structure and parameters
+    trials = read_hdf(files['screen_path'], key='trial_set')
+    params = read_hdf(files['screen_path'], key='params')
+
+    # get the video tracking data
+    out_path, filtered_traces, px_corners, frame_bounds = preprocess_selector(files['avi_path'], save_path, files)
+
+    # define the dimensions of the arena
+    manual_coordinates = paths.arena_coordinates['VR_manual']
+
+    # get the motive tracking data
+    motive_traces, reference_coordinates, obstacle_coordinates = \
+        s1.extract_motive(files['track_path'], files['rig'])
+
+    # scale the traces accordingly
+    filtered_traces, corners = \
+        fp.rescale_pixels(filtered_traces, files, reference_coordinates, manual_coordinates=manual_coordinates)
+
+    # align them temporally based on the sync file
+    filtered_traces = functions_matching.match_motive_2(motive_traces, files['sync_path'], filtered_traces)
+
+    # run the preprocessing kinematic calculations
+    # also saves the data
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+
+    # For these trials, save the trial set and the trial parameters to the output file
+    trials.to_hdf(out_path, key='trial_set', mode='a')
+    params.to_hdf(out_path, key='params', mode='a')
+
+    # find the sync file
+    sync_path = files['sync_path']
+
+    # get a dataframe with the calcium data matched to the bonsai data
+    matched_calcium = functions_matching.match_calcium_2(calcium_path, sync_path, kinematics_data, frame_bounds)
+    # if there is a calcium output, write to the file
+    if matched_calcium is not None:
+        matched_calcium.to_hdf(out_path, key='matched_calcium', mode='a', format='fixed')
+        # also get the cell matching if it exists
+        cell_matches = functions_matching.match_cells(match_path)
+        cell_matches.to_hdf(out_path, key='cell_matches', mode='a', format='fixed')
+
 else:
     # TODO: make sure the constants are set to values that make sense for the vr arena
     # run the first stage of preprocessing
@@ -196,7 +242,7 @@ else:
     #                                               save_path)
 
     # get the video tracking data
-    out_path, filtered_traces, _, _ = preprocess_selector(files['bonsai_path'], save_path, files)
+    out_path, filtered_traces, _, _ = preprocess_selector(files['avi_path'], save_path, files)
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates['VR']

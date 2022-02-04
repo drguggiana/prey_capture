@@ -101,16 +101,16 @@ for idx, target_entries in enumerate(new_queries):
     parsed_search = new_parsed[idx]
     target_path = new_paths[idx]
     # create the config file
-    config_dict = {'files': {os.path.basename(el['bonsai_path'])[:-4]: os.path.basename(el['bonsai_path'])[:-4]
+    config_dict = {'files': {os.path.basename(el['bonsai_avi'])[:-4]: os.path.basename(el['avi_path'])[:-4]
                              for el in target_entries},
-                   'file_info': {os.path.basename(el['bonsai_path'])[:-4]: yaml.dump(el)
+                   'file_info': {os.path.basename(el['avi_path'])[:-4]: yaml.dump(el)
                                  for el in target_entries},
-                   'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['avi_path']) > 0
+                   'dlc_flag': {os.path.basename(el['avi_path'])[:-4]: True if len(el['avi_path']) > 0
                                 else False for el in target_entries},
-                   # 'dlc_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
-                   'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: True if len(el['tif_path']) > 0
+                   # 'dlc_flag': {os.path.basename(el['avi_path'])[:-4]: False for el in target_entries},
+                   'calcium_flag': {os.path.basename(el['avi_path'])[:-4]: True if len(el['tif_path']) > 0
                                     else False for el in target_entries},
-                   # 'calcium_flag': {os.path.basename(el['bonsai_path'])[:-4]: False for el in target_entries},
+                   # 'calcium_flag': {os.path.basename(el['avi_path'])[:-4]: False for el in target_entries},
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
