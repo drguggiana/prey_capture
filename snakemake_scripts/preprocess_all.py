@@ -6,14 +6,13 @@ import snakemake_scripts.sub_preprocess_S1 as s1
 import snakemake_scripts.sub_preprocess_S2 as s2
 import datetime
 import functions_bondjango as bd
+import functions_vrtarget as vt
 import os
 import yaml
 import matplotlib.pyplot as plt
-import matplotlib
-from pandas import read_hdf
+import h5py
+from pandas import read_hdf, DataFrame
 import processing_parameters
-
-matplotlib.use('Agg')
 
 
 def preprocess_selector(csv_path, saving_path, file_info):
@@ -84,7 +83,7 @@ if (files['rig'] == 'miniscope') and (files['imaging'] == 'no'):
     px_corners.to_hdf(out_path, key='corners', mode='a', format='fixed')
 
     # run the preprocessing kinematic calculations
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
 # if miniscope regular, run with the matching of miniscope frames
 elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
@@ -101,7 +100,7 @@ elif files['rig'] == 'miniscope' and (files['imaging'] == 'doric'):
     px_corners.to_hdf(out_path, key='corners', mode='a', format='fixed')
 
     # run the preprocessing kinematic calculations
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
     # find the sync file
     sync_path = files['sync_path']
@@ -132,7 +131,7 @@ elif files['rig'] in ['VR', 'VPrey'] and file_date <= datetime.datetime(year=202
     # corners = []
 
     # run the preprocessing kinematic calculations
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
 elif files['rig'] in ['VR', 'VPrey'] and \
         datetime.datetime(year=2020, month=6, day=23) <= file_date <= datetime.datetime(year=2020, month=7, day=20):
@@ -147,7 +146,7 @@ elif files['rig'] in ['VR', 'VPrey'] and \
 
     # define the dimensions of the arena
     reference_coordinates = paths.arena_coordinates['VR']
-    manual_coordinates = paths.arena_coordinates['VR_manual']
+    manual_coordinates = paths.arena_coordinates['VR_manual_pre_08_24_2020']
 
     # scale the traces accordingly
     filtered_traces, corners = \
@@ -160,9 +159,23 @@ elif files['rig'] in ['VR', 'VPrey'] and \
     filtered_traces = functions_matching.align_spatial(filtered_traces)
 
     # run the preprocessing kinematic calculations
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
 elif files['rig'] in ['VScreen']:
+
+    # define the dimensions of the arena
+    if file_date <= datetime.datetime(year=2021, month=3, day=22):
+        manual_coordinates = paths.arena_coordinates['VR_manual_pre_23_03_2021']
+    else:
+        manual_coordinates = paths.arena_coordinates['VR_manual']
+
+    # Get the dimensionality of the target
+    if '2D' in files['notes']:
+        dim = '2D'
+    elif '3D' in files['notes']:
+        dim = '3D'
+    else:
+        dim = 'mixed'
 
     # load the data for the trial structure and parameters
     trials = read_hdf(files['screen_path'], key='trial_set')
@@ -170,9 +183,6 @@ elif files['rig'] in ['VScreen']:
 
     # get the video tracking data
     out_path, filtered_traces, _, _ = preprocess_selector(files['avi_path'], save_path, files)
-
-    # define the dimensions of the arena
-    manual_coordinates = paths.arena_coordinates['VR_manual']
 
     # get the motive tracking data
     motive_traces, reference_coordinates, obstacle_coordinates = \
@@ -186,12 +196,44 @@ elif files['rig'] in ['VScreen']:
     filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
 
     # run the preprocessing kinematic calculations
-    # also saves the data
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
-    # For these trials, save the trial set and the trial parameters to the output file
-    trials.to_hdf(out_path, key='trial_set', mode='a')
-    params.to_hdf(out_path, key='params', mode='a')
+    # Calculate the time bins for the experiment (bins in minutes)
+    kinematics_data = vt.target_calculations(kinematics_data, corners, dim)
+
+elif files['rig'] in ['VTuning'] and (files['imaging'] == 'doric'):
+
+    # manual_coordinates = paths.arena_coordinates['VR_manual'] # no longer needed with DLC corner labeling
+
+    # load the data for the trial structure and parameters
+    trials = read_hdf(files['screen_path'], key='trial_set')
+
+    # get the video tracking data from DLC
+    out_path, filtered_traces, corners = preprocess_selector(files['bonsai_path'], save_path, files)
+
+    # get the motive tracking data (including trial structure)
+    motive_traces, reference_coordinates, obstacle_coordinates = \
+        s1.extract_motive(files['track_path'], files['rig'], trials=trials)
+
+    # scale the traces accordingly
+    filtered_traces, corners = \
+        fp.rescale_pixels(filtered_traces, files, reference_coordinates, manual_coordinates=corners)
+
+    # align them temporally based on the sync file - upsample to motive time
+    filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
+
+    # run the preprocessing kinematic calculations
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
+
+    # find the sync file
+    sync_path = files['sync_path']
+
+    # get a dataframe with the calcium data matched to the bonsai data
+    # downsample to miniscope time. Drop the columns containing
+    matched_calcium = functions_matching.match_calcium(calcium_path, sync_path, kinematics_data, rig=files['rig'])
+
+    matched_calcium.to_hdf(out_path, key='matched_calcium', mode='a', format='table')
+
 
 elif files['rig'] in ['VTuning']:
     # load the data for the trial structure and parameters
@@ -259,8 +301,17 @@ else:
     filtered_traces = functions_matching.match_motive(motive_traces, files['sync_path'], filtered_traces)
 
     # run the preprocessing kinematic calculations
-    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(out_path, filtered_traces)
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
+# save the kinematics and arena corner data
+kinematics_data.to_hdf(out_path, key='full_traces', mode='w', format='table')
+corners_df = DataFrame(data=corners, columns=['x', 'y'])
+corners_df.to_hdf(out_path, key='arena_corners', mode='a')
+
+# For these trials, save the trial set and the trial parameters to the output file
+if files['rig'] in ['VScreen', 'VTuning']:
+    trials.to_hdf(out_path, key='trial_set', mode='a', format='table')
+    params.to_hdf(out_path, key='params', mode='a', format='table')
 
 # save the filtered trace
 fig_final = plt.figure()

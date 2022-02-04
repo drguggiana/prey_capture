@@ -1,3 +1,4 @@
+import numpy as np
 from sklearn.preprocessing import scale
 from scipy.interpolate import interp1d
 from scipy import signal
@@ -183,7 +184,8 @@ def match_traces(data_3d, data_2d, frame_time_list, coordinate_list, cricket):
     return opencv_3d[:, :min_size].T, opencv_2d[:, :min_size].T, shifted_time, opencv_cricket[:, :min_size].T
 
 
-def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds):
+
+def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds, rig=None, trials=None):
     """Match the kinematic and calcium data provided based on the sync file provided"""
 
     # load the calcium data
@@ -200,7 +202,21 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds):
     # n_frames_bonsai_file = frame_bounds[2]
 
     # load the sync data
-    sync_data = pd.read_csv(sync_path, names=['Time', 'mini_frames', 'bonsai_frames'])
+    # sync_data = pd.read_csv(sync_path, names=['Time', 'mini_frames', 'bonsai_frames'])
+    sync_data = pd.read_csv(sync_path)
+    if rig in ['VR', 'VScreen', 'VTuning']:
+        sync_data.columns = ['Time', 'projector_frames', 'bonsai_frames', 'optitrack_frames', 'mini_frames']
+
+        # get the frame times from the sync file
+        frame_times_bonsai_sync = sync_data.loc[
+            np.concatenate(([0], np.diff(sync_data.projector_frames) > 0)) > 0, 'Time'].to_numpy()
+    else:
+        sync_data.columns = ['Time', 'mini_frames', 'bonsai_frames']
+
+        # get the frame times from the sync file
+        frame_times_bonsai_sync = sync_data.loc[
+            np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0, 'Time'].to_numpy()
+
     # get the number of miniscope frames on the sync file
     n_frames_mini_sync = np.sum(np.diff(sync_data.mini_frames) > 0)
     # match the sync frames with the actual miniscope frames
@@ -212,9 +228,6 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds):
     # bonsai_start_frame = bonsai_ifi[np.argwhere(np.diff(bonsai_ifi, axis=0) > 1000)[0][0] + 1][0]
     # n_frames_bonsai_sync = np.sum(np.diff(sync_data.bonsai_frames.to_numpy()[bonsai_start_frame:]) > 0)
 
-    # get the frame times from the sync file
-    frame_times_bonsai_sync = sync_data.loc[
-                                  np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0, 'Time'].to_numpy()
     # compare to the frames from bonsai and adjust accordingly (if they don't match, show a warning)
     # plot_2d([[np.diff(frame_times_bonsai_sync[frame_bounds[0]:]),np.diff(kinematics_data['time_vector'].to_numpy())]])
     # if frame_times_bonsai_sync.shape[0] < n_frames_bonsai_file:
@@ -250,14 +263,41 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds):
     #     frame_times_bonsai_sync[-(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'start']):
     #                             -(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'end'])]
 
-    # interpolate the bonsai traces to match the mini frames
-    matched_bonsai = kinematics_data.drop(['time_vector'], axis=1).apply(interp_trace, raw=False,
-                                                                         args=(frame_times_bonsai_sync,
-                                                                               frame_times_mini_sync))
-    # round the quadrant vector as it should be discrete
-    quadrant_columns = [el for el in matched_bonsai.columns if ('_quadrant' in el)]
-    for el in quadrant_columns:
-        matched_bonsai[el] = np.round(matched_bonsai[el])
+
+    if trials is not None:
+        # interpolate the bonsai traces to match the mini frames
+        matched_bonsai = kinematics_data.drop(['time_vector'] + list(trials.columns), axis=1).apply(interp_trace,
+                                                                                                 raw=False,
+                                                                             args=(frame_times_bonsai_sync,
+                                                                                   frame_times_mini_sync))
+        # deal with trial numbers
+        # first reset the inter-stim intervals
+        trial_nums = matched_bonsai.trial_num.to_numpy()
+        trial_nums[trial_nums < -500] = 0
+
+        # Find where trials occur, and reassign their index
+        trials = np.argwhere(trial_nums != 0)[0]
+        breaks = np.where(np.diff(trials) != 1)[0] + 1  # add 1 to compensate for the diff
+        split_trials = np.array_split(trials, breaks)
+
+        for trial_num, idxs in enumerate(split_trials):
+            trial_nums[idxs] = trial_num + 1    # Compensate for zero indexing
+
+        matched_bonsai.trial_num = trial_nums
+
+        # now that the trials are reassigned, add the trial data
+        matched_bonsai = assign_trial_parameters(matched_bonsai, trials)
+
+    else:
+        # interpolate the bonsai traces to match the mini frames
+        matched_bonsai = kinematics_data.drop(['time_vector'], axis=1).apply(interp_trace, raw=False,
+                                                                                        args=(frame_times_bonsai_sync,
+                                                                                            frame_times_mini_sync))
+        # round the quadrant vector as it should be discrete
+        quadrant_columns = [el for el in matched_bonsai.columns if ('_quadrant' in el)]
+        for el in quadrant_columns:
+            matched_bonsai[el] = np.round(matched_bonsai[el])
+
     # add the correct time vector from the interpolated traces
     matched_bonsai['time_vector'] = frame_times_mini_sync
 
@@ -370,6 +410,20 @@ def match_motive(motive_traces, sync_path, kinematics_data):
     full_dataframe['time_vector'] = np.array([el - old_time[0] for el in old_time])
 
     return full_dataframe
+
+
+def assign_trial_parameters(motive_traces, trial_list):
+    # add columns for the motive_traces df for the trial params
+    param_cols = list(trial_list.columns)
+    for pc in param_cols:
+        motive_traces[pc] = -1000
+
+    # Now assign the trial parameters to the motive_traces dataframe by matching trial numbers
+    for index, row in trial_list.iterrows():
+        trial_num = index + 1
+        motive_traces.loc[motive_traces.trial_num == trial_num, param_cols] = row[param_cols].to_list()
+
+    return motive_traces
 
 
 def consecutive(data, stepsize=1):

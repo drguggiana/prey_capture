@@ -4,6 +4,7 @@ from tkinter import filedialog
 from functions_misc import tk_killwindow
 import functions_preprocessing as fp
 from functions_io import parse_path
+from functions_matching import assign_trial_parameters
 import functions_kinematic as fk
 import numpy as np
 import pandas as pd
@@ -231,11 +232,48 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, save_file, file_info, kerne
         ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
                                 'cricket_0_x', 'cricket_0_y'])
 
+        # get the likelihoods
+        likelihood_frame = pd.DataFrame(raw_h5[[
+            [el for el in column_names if ('head' in el) and ('likelihood' in el)][0],
+            [el for el in column_names if ('body_center' in el) and ('likelihood' in el)][0],
+            [el for el in column_names if ('tail_base' in el) and ('likelihood' in el)][0],
+            [el for el in column_names if ('cricket' in el) and ('likelihood' in el)][0],
+        ]].to_numpy(), columns=['mouse_head', 'mouse', 'mouse_base', 'cricket_0'])
+
+        # nan the trace where the likelihood is too low
+        # for all the columns
+        for col in likelihood_frame.columns:
+            # get the vector for nans
+            nan_vector = likelihood_frame[col] < likelihood_threshold
+            # nan the points
+            filtered_traces.loc[nan_vector, col + '_x'] = np.nan
+            filtered_traces.loc[nan_vector, col + '_y'] = np.nan
+
         # The camera that records video in the VR arena flips the video about the
         # horizontal axis when saving. To correct, flip the y coordinates from DLC
         filtered_traces = fp.flip_DLC_y(filtered_traces)
-        # output an empty for the corners
-        corner_points = []
+
+        # Process DLC-labeled corners, if present
+        try:
+            corner_info = pd.DataFrame(raw_h5[[
+                [el for el in column_names if ('corner_UL' in el) and ('x' in el)][0],
+                [el for el in column_names if ('corner_UL' in el) and ('y' in el)][0],
+                [el for el in column_names if ('corner_BL' in el) and ('x' in el)][0],
+                [el for el in column_names if ('corner_BL' in el) and ('y' in el)][0],
+                [el for el in column_names if ('corner_BR' in el) and ('x' in el)][0],
+                [el for el in column_names if ('corner_BR' in el) and ('y' in el)][0],
+                [el for el in column_names if ('corner_UR' in el) and ('x' in el)][0],
+                [el for el in column_names if ('corner_UR' in el) and ('y' in el)][0],
+            ]].to_numpy(), columns=['corner_UL_x', 'corner_UL_y', 'corner_BL_x', 'corner_BL_y',
+                                    'corner_BR_x', 'corner_BR_y', 'corner_UR_x', 'corner_UR_y'])
+
+            # Flip the DLC y and get the corners
+            corner_info = fp.flip_DLC_y(corner_info)
+            corner_points = process_corners(corner_info)
+
+        except IndexError:
+            # output an empty for the corners
+            corner_points = []
 
     # eliminate the cricket if there is no real cricket or this is a VScreen experiment
     if ('nocricket' in file_info['notes'] and 'VR' in file_info['rig']) or \
@@ -370,7 +408,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, save_file, file_info, kerne
     return out_path, filtered_traces, corner_frame, frame_bounds
 
 
-def extract_motive(file_path_motive, rig):
+def extract_motive(file_path_motive, rig, trials=None):
     """Extract the encoded traces in the current motive file"""
 
     # parse the path
@@ -395,15 +433,15 @@ def extract_motive(file_path_motive, rig):
                                 'vrcricket_0_y_m', 'vrcricket_0_z_m', 'vrcricket_0_x_m'
                                 ]
             elif parsed_path['datetime'] <= datetime.datetime(year=2020, month=6, day=22):
-                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m'
-                                , 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
-                                , 'vrcricket_0_y_m', 'vrcricket_0_z_m', 'vrcricket_0_x_m'
-                                , 'color_factor'
+                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                                'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
+                                'vrcricket_0_y_m', 'vrcricket_0_z_m', 'vrcricket_0_x_m',
+                                'color_factor'
                                 ]
             else:
-                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m'
-                                , 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
-                                , 'color_factor'
+                column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                                'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
+                                'color_factor'
                                 ]
         else:
             # get the number of vr crickets
@@ -416,8 +454,8 @@ def extract_motive(file_path_motive, rig):
             cricket_fields = ['vrcricket_'+str(int(number))+el
                               for number in np.arange(cricket_number) for el in cricket_template]
 
-            column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m'
-                            , 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
+            column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                            'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m'
                             ] + cricket_fields + [
                             'color_factor'
                             ]
@@ -433,22 +471,39 @@ def extract_motive(file_path_motive, rig):
         arena_corners, obstacle_positions, df_line = fp.read_motive_header(file_path_motive)
         raw_data = pd.read_csv(file_path_motive, header=0, skiprows=df_line)
 
+        # Create a default column names list
+        column_names = list(raw_data.columns)
+
         # Correct for mistakes in coordinate convention
         if rig == 'VScreen':
-            if parsed_path['datetime'] <= datetime.datetime(year=2020, month=11, day=24):
-                column_names = ['time_m', 'trial_num',
-                                'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
-                                'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
-                                'target_y_m', 'target_z_m', 'target_x_m', 'color_factor']
+            column_names = ['time_m', 'trial_num',
+                            'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                            'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
+                            'target_y_m', 'target_z_m', 'target_x_m',
+                            'color_factor']
 
-                # create the column name dictionary
-                column_dict = {old_col: column for old_col, column in zip(raw_data.columns, column_names)}
-                raw_data.rename(columns=column_dict, inplace=True)
+        elif rig == 'VTuning':
+            column_names = ['time_m', 'trial_num',
+                            'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                            'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
+                            'grating_phase', 'color_factor']
 
-                # Arena coordinates need to be put into a format that aligns with DLC tracking.
-                # Need to negate the x coordinate to match video mirroring, then flip the x and z coordinates
-                arena_corners_temp = arena_corners.copy()
-                arena_corners = [[corner[1], corner[0]] for corner in arena_corners_temp]
+        # create the column name dictionary
+        column_dict = {old_col: column for old_col, column in zip(raw_data.columns, column_names)}
+        raw_data.rename(columns=column_dict, inplace=True)
+
+        # Arena coordinates need to be put into a format that aligns with DLC tracking.
+        arena_corners_temp = arena_corners.copy()
+        arena_corners = [[corner[1], corner[0]] for corner in arena_corners_temp]
+
+        # Obstacle centroid coordinates also need to be formatted to align with DLC tracking
+        for obstacle in obstacle_positions:
+            obstacle_positions_temp = obstacle_positions[obstacle].copy()
+            obstacle_positions[obstacle] = [obstacle_positions_temp[-1], obstacle_positions_temp[0]]
+
+    # Add the trial parameters to the motive dataframe if present
+    if trials is not None:
+        raw_data = assign_trial_parameters(raw_data, trials)
 
     return raw_data, arena_corners, obstacle_positions
 

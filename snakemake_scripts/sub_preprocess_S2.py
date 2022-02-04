@@ -135,7 +135,7 @@ def cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_dat
     return cricket_data
 
 
-def kinematic_calculations(name, data):
+def kinematic_calculations(data):
     """Calculate basic kinematic parameters of mouse and cricket"""
 
     # define which coordinates to use depending on the available data
@@ -221,7 +221,7 @@ def kinematic_calculations(name, data):
     else:
         real_crickets = 0
 
-    # check for vr crickets
+    # check for vr crickets or vr targets
     if ('vrcricket_0_x' in data.columns) or ('target_x_m' in data.columns):
         # get the number of vr crickets
         vr_cricket_list = np.unique([el[:11] for el in data.columns if 'vrcricket' in el])
