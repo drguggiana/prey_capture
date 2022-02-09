@@ -410,7 +410,7 @@ def interpolate_animals(files, target_values, ref_corners, corners, untrimmed, d
         # add to the output frame
         cricket_interpolated.loc[:, col] = data
 
-    return pd.concat([mouse_coordinates, cricket_interpolated], axis=1)
+    return pd.concat([mouse_coordinates, cricket_interpolated, files[['time_vector', 'sync_frames']]], axis=1)
 
 
 def eliminate_singles(files):
@@ -791,7 +791,7 @@ def read_motive_header(file_path):
 
     with open(file_path) as f:
         # Read the file line by  line
-        reader = csv.reader(f, delimiter=" ")
+        reader = csv.reader(f, delimiter=":")
 
         for line_num, line in enumerate(reader):
             if line:
@@ -912,8 +912,7 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, s
         mouse_coord = mouse_coord*(np.abs(ref_corners[0][1] - ref_corners[1][1])/np.abs(corners[0][0] - corners[2][0]))
 
         # define the frame rate
-        # TODO: get the frame time from the actual file
-        frame_time = 0.1
+        frame_time = np.mean(np.diff(data_in['time_vector']))
         # get a rough speed trace
         temp_speed = np.concatenate(
             ([0], fk.distance_calculation(mouse_coord[1:, :], mouse_coord[:-1, :]) /
@@ -928,6 +927,7 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, s
     nan_segments, nan_num = label(np.isnan(temp_speed))
     # get the lengths
     nan_lengths = np.array([np.sum(nan_segments == el) for el in np.arange(1, nan_num+1)])
+
     # get the ends
     nan_ends = [np.argwhere(np.diff((nan_segments == el).astype(int)) == -1) for el in np.arange(1, nan_num+1)]
     nan_ends = np.array([el[0][0] if el.shape[0] > 0 else np.nan for el in nan_ends])
@@ -935,6 +935,10 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, s
     nan_vector = ~np.isnan(nan_ends)
     nan_lengths = nan_lengths[nan_vector]
     nan_ends = nan_ends[nan_vector].astype(int)
+    # if the first element is a nan, eliminate it first (check second due to adding a zero above)
+    if np.isnan(temp_speed[1]):
+        nan_lengths[0] = nan_threshold + 1
+
     # get the trim frame
     try:
         trim_frames[0] = nan_ends[np.argwhere(nan_lengths > nan_threshold)[-1][0]]
@@ -953,10 +957,10 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, s
 
         # get the lengths
         slow_lengths = np.array([np.sum(slow_segments == el) for el in np.arange(1, slow_num + 1)])
-        # get the ends
+        # get the starts
         slow_starts = [np.argwhere(np.diff((slow_segments == el).astype(int)) == 1) for el in np.arange(1, slow_num + 1)]
         slow_starts = np.array([el[0][0] if el.shape[0] > 0 else np.nan for el in slow_starts])
-        # remove the lengths with nan as the end
+        # remove the lengths with nan as the start
         nan_vector = ~np.isnan(slow_starts)
         slow_lengths = slow_lengths[nan_vector]
         slow_starts = slow_starts[nan_vector].astype(int)
@@ -968,6 +972,9 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, s
             print('End not trimmed for file')
     # format the frame bounds as a dataframe
     trim_frames = pd.DataFrame(np.array(trim_frames).reshape([1, 3]), columns=['start', 'end', 'original_length'])
+    # reset the time variable
+    time = data_out.loc[:, 'time_vector']
+    data_out.loc[:, 'time_vector'] = [el - time[0] for el in time]
     return data_out, trim_frames
 
 

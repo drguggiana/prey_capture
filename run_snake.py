@@ -101,7 +101,7 @@ for idx, target_entries in enumerate(new_queries):
     parsed_search = new_parsed[idx]
     target_path = new_paths[idx]
     # create the config file
-    config_dict = {'files': {os.path.basename(el['bonsai_avi'])[:-4]: os.path.basename(el['avi_path'])[:-4]
+    config_dict = {'files': {os.path.basename(el['avi_path'])[:-4]: os.path.basename(el['avi_path'])[:-4]
                              for el in target_entries},
                    'file_info': {os.path.basename(el['avi_path'])[:-4]: yaml.dump(el)
                                  for el in target_entries},

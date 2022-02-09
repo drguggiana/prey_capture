@@ -35,10 +35,10 @@ except IndexError:
 
     # get the queryset
     files = bd.query_database(target_model, search_string)[0]
-    input_path = files['bonsai_path'].replace('.csv', '_rawcoord.hdf5').replace('VideoExperiment', 'AnalyzedData')
+    input_path = files['avi_path'].replace('.avi', '_rawcoord.hdf5').replace('VideoExperiment', 'AnalyzedData')
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
-                             os.path.basename(files['bonsai_path'][:-4]))+'_motifs.hdf5'
+                             os.path.basename(files['avi_path'][:-4]))+'_motifs.hdf5'
 
 # load the data
 with h5py.File(input_path, 'r') as f:
@@ -52,7 +52,8 @@ with h5py.File(input_path, 'r') as f:
 
 # get the list of columns
 column_list_all = data.columns
-column_list = [el for el in column_list_all if (('x' in el) or ('y' in el)) & ('mouse' in el)]
+# column_list = [el for el in column_list_all if (('x' in el) or ('y' in el)) & ('mouse' in el)]
+column_list = [el for el in column_list_all if (('x' in el) or ('y' in el))]
 # define the extra columns
 extra_columns = ['mouse_speed']
 column_list += extra_columns
@@ -87,6 +88,10 @@ try:
 
     # set the cluster centers from the template file to apply to this file
     kmeans_object.cluster_centers_ = cluster_centers
+
+    # get the trajectories for latents
+    column_idx = [True if 'mouse' in el else False for el in column_list]
+    vame_trajectories = aligned_traj[column_idx, :]
 
     # run the pose segmentation
     latents, clusters = vame.batch_pose_segmentation(config, [0], aligned_traj, kmeans_obj=kmeans_object)

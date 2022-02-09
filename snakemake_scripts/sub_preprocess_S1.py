@@ -1,11 +1,8 @@
 # imports
-from tkinter import filedialog
-# import functions_plotting as fplot
-from functions_misc import tk_killwindow
 import functions_preprocessing as fp
 from functions_io import parse_path
 from functions_matching import assign_trial_parameters
-import functions_kinematic as fk
+import functions_matching as fm
 import numpy as np
 import pandas as pd
 import datetime
@@ -73,7 +70,7 @@ def pose_repair(data_in, model_path, delay=4):
     return data_out
 
 
-def run_preprocess(file_path_bonsai, save_file, file_info,
+def run_preprocess(file_path_bonsai, file_info,
                    kernel_size=21, max_step=300, max_length=50):
     """Preprocess the bonsai file"""
     # parse the bonsai file
@@ -129,22 +126,15 @@ def run_preprocess(file_path_bonsai, save_file, file_info,
             if 'cricket' in column:
                 filtered_traces.drop([column], inplace=True, axis=1)
 
-    # create the file name
-    filtered_traces.to_hdf(save_file, key='full_traces', mode='w', format='table')
-
-    # append to the outpath list
-    out_path = save_file
-
-    return out_path, filtered_traces
+    return filtered_traces
 
 
-def run_dlc_preprocess(file_path_ref, file_path_dlc, save_file, file_info, kernel_size=5):
+def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
     """Extract the relevant columns from the dlc file and rename"""
 
     # define the likelihood threshold for the DLC points
-    likelihood_threshold = 0.8
-    # just return the output path
-    out_path = save_file
+    likelihood_threshold = 0.9
+
     # load the bonsai info
     raw_h5 = pd.read_hdf(file_path_dlc)
     # get the column names
@@ -269,7 +259,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, save_file, file_info, kerne
 
             # Flip the DLC y and get the corners
             corner_info = fp.flip_DLC_y(corner_info)
-            corner_points = process_corners(corner_info)
+            corner_points = fp.process_corners(corner_info)
 
         except IndexError:
             # output an empty for the corners
@@ -288,6 +278,15 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, save_file, file_info, kerne
 
     # save a copy of the untrimmed traces for later
     untrimmed = filtered_traces.copy()
+
+    # get the file date
+    file_date = datetime.datetime.strptime(file_info['date'], '%Y-%m-%dT%H:%M:%SZ')
+
+    # align the DLC frames with the sync time
+    filtered_traces = fm.match_dlc(filtered_traces, file_info, file_date)
+
+    # Trim the traces so that the nans and the beginning and end of the trajectory are removed
+    # (due to no mouse or cricket at the beginning and then bad tracking during cricket consumption)
     # if it's not the miniscope rig, use the simpler trimming
     if file_info['rig'] != 'miniscope':
         # define the frame bounds as empty
@@ -334,63 +333,72 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, save_file, file_info, kerne
     # median filter the traces
     filtered_traces = fp.median_discontinuities(filtered_traces, filtered_traces.columns, kernel_size)
 
+    # # choose the timestamp mode depending on the date
+    # if file_date <= datetime.datetime(year=2021, month=12, day=14):
+    #
+    #     # load the sync file
+    #     sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'mini_frames', 'camera_frames'], index_col=False)
+    #     # get the camera triggers
+    #     cam_idx = np.argwhere(np.diff(sync_data.loc[:, 'camera_frames']) > 0).squeeze() + 1
+    #     # get the actual frame times
+    #     time = sync_data.loc[cam_idx, 'Time'].to_numpy()
+    #     # assume the frames terminate properly with the end of the experiment, so trim from the end to match the frames
+    #     # in the DLC file
+    #     time = time[-filtered_traces.shape[0]:]
+    #     # add the column to the dataframe
+    #     filtered_traces['time_vector'] = [el - time[0] for el in time]
+    #
+    #     # parse the bonsai file for the time stamps
+    #     timestamp = []
+    #     bonsai_data = []
+    #
+    #     with open(file_info['bonsai_path']) as f:
+    #         for ex_line in f:
+    #             ex_list = ex_line.split(' ')
+    #             ex_list.remove('\n')
+    #             timestamp.append(ex_list.pop())
+    #             bonsai_data.append([float(el) for el in ex_list])
+    #
+    #     # add the time stamps to the main dataframe
+    #     time = [datetime.datetime.strptime(el[:-7], '%Y-%m-%dT%H:%M:%S.%f')
+    #             for el in timestamp[frame_bounds.loc[0, 'start']:frame_bounds.loc[0, 'end']-1]]
+    #     # if time is missing frames, skip them from the end and show a warning (checked comparing the traces)
+    #     if len(time) < filtered_traces.shape[0]:
+    #         # calculate the delta
+    #         delta_frame = filtered_traces.shape[0] - len(time)
+    #         # show the warning
+    #         print('Extra frames in video: %i' % delta_frame)
+    #         # trim filtered traces
+    #         filtered_traces = filtered_traces.iloc[:-delta_frame, :]
+    #     filtered_traces['time_vector'] = [(el - time[0]).total_seconds() for el in time]
+    #
+    # else:
+    #     # read the sync file
+    #     sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'camera_frames',
+    #                                                            'sync_trigger', 'mini_frames', 'wheel_frames'],
+    #                             index_col=False)
+    #     # get the cam frame times based on the triggers
+    #     # get the camera triggers
+    #     cam_idx = np.argwhere(np.diff(sync_data.loc[:, 'camera_frames']) > 1).squeeze() + 1
+    #     # filter them by the sync trigger
+    #     sync_start = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 1)[0]
+    #     sync_end = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 2)[0]
+    #     cam_idx = cam_idx[(cam_idx > sync_start) & (cam_idx < sync_end)]
+    #     # get the actual frame times
+    #     time = sync_data.loc[cam_idx, 'Time'].to_numpy()
+    #     # correct the first frame if there's a discrepancy
+    #     if time.shape[0] != filtered_traces.shape[0]:
+    #         delta_frame = time.shape[0] - filtered_traces.shape[0]
+    #         print(f'Discrepancy of {delta_frame} frames between time and traces')
+    #         if delta_frame < 0:
+    #             filtered_traces = filtered_traces.iloc[-delta_frame:, :]
+    #         else:
+    #             time = time[delta_frame:]
+    #     filtered_traces['time_vector'] = [el - time[0] for el in time]
+
     # parse the path
     parsed_path = parse_path(file_path_ref)
-
-    # get the file date
-    file_date = datetime.datetime.strptime(file_info['date'], '%Y-%m-%dT%H:%M:%SZ')
-
-    # choose the timestamp mode depending on the date
-    if file_date <= datetime.datetime(year=2021, month=12, day=14):
-        # parse the bonsai file for the time stamps
-        timestamp = []
-        bonsai_data = []
-
-        with open(file_info['bonsai_path']) as f:
-            for ex_line in f:
-                ex_list = ex_line.split(' ')
-                ex_list.remove('\n')
-                timestamp.append(ex_list.pop())
-                bonsai_data.append([float(el) for el in ex_list])
-
-        # add the time stamps to the main dataframe
-        time = [datetime.datetime.strptime(el[:-7], '%Y-%m-%dT%H:%M:%S.%f')
-                for el in timestamp[frame_bounds.loc[0, 'start']:frame_bounds.loc[0, 'end']-1]]
-        # if time is missing frames, skip them from the end and show a warning (checked comparing the traces)
-        if len(time) < filtered_traces.shape[0]:
-            # calculate the delta
-            delta_frame = filtered_traces.shape[0] - len(time)
-            # show the warning
-            print('Extra frames in video: %i' % delta_frame)
-            # trim filtered traces
-            filtered_traces = filtered_traces.iloc[:-delta_frame, :]
-        filtered_traces['time_vector'] = [(el - time[0]).total_seconds() for el in time]
-
-    else:
-        # read the sync file
-        sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'cam_frames',
-                                                               'sync_trigger', 'mini_frames', 'wheel_frames'],
-                                index_col=False)
-        # get the cam frame times based on the triggers
-        # get the camera triggers
-        cam_idx = np.argwhere(np.diff(sync_data.loc[:, 'cam_frames']) > 1).squeeze() + 1
-        # filter them by the sync trigger
-        sync_start = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 1)[0]
-        sync_end = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 2)[0]
-        cam_idx = cam_idx[(cam_idx > sync_start) & (cam_idx < sync_end)]
-        # get the actual frame times
-        time = sync_data.loc[cam_idx, 'Time'].to_numpy()
-        # correct the first frame if there's a discrepancy
-        if time.shape[0] != filtered_traces.shape[0]:
-            delta_frame = time.shape[0] - filtered_traces.shape[0]
-            print(f'Discrepancy of {delta_frame} frames between time and traces')
-            if delta_frame < 0:
-                filtered_traces = filtered_traces.iloc[-delta_frame:, :]
-            else:
-                time = time[delta_frame:]
-        filtered_traces['time_vector'] = [el - time[0] for el in time]
-
-    # also the mouse and the date
+    # add the mouse and the date
     filtered_traces['mouse'] = parsed_path['animal']
     filtered_traces['datetime'] = parsed_path['datetime']
 
@@ -398,14 +406,14 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, save_file, file_info, kerne
     coordinate_columns += [el for el in filtered_traces.columns if 'cricket_' in el]
     # check for nans
     if np.any(np.isnan(filtered_traces[coordinate_columns].to_numpy())):
-        # raise ValueError(f'NaN value found in file {file_info["slug"]}')
-        coords = filtered_traces[coordinate_columns]
-        coords[np.isnan(filtered_traces[coordinate_columns].to_numpy())] = 0
-        filtered_traces[coordinate_columns] = coords
+        raise ValueError(f'NaN value found in file {file_info["slug"]}')
+        # coords = filtered_traces[coordinate_columns]
+        # coords[np.isnan(filtered_traces[coordinate_columns].to_numpy())] = 0
+        # filtered_traces[coordinate_columns] = coords
     # turn corner points into a dataframe
     corner_frame = pd.DataFrame(corner_points.T, columns=['UL', 'BL', 'BR', 'UR'])
 
-    return out_path, filtered_traces, corner_frame, frame_bounds
+    return filtered_traces, corner_frame, frame_bounds
 
 
 def extract_motive(file_path_motive, rig, trials=None):

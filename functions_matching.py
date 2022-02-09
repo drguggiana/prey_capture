@@ -8,7 +8,7 @@ from functions_misc import add_edges, interp_trace, normalize_matrix
 import h5py
 import pandas as pd
 import os
-import time
+import datetime
 
 
 def align_traces_maxrate(frame_rate_1, frame_rate_2, data_1, data_2, sign_vector, frame_times, cricket, z=1):
@@ -184,7 +184,6 @@ def match_traces(data_3d, data_2d, frame_time_list, coordinate_list, cricket):
     return opencv_3d[:, :min_size].T, opencv_2d[:, :min_size].T, shifted_time, opencv_cricket[:, :min_size].T
 
 
-
 def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds, rig=None, trials=None):
     """Match the kinematic and calcium data provided based on the sync file provided"""
 
@@ -263,7 +262,6 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds, rig=No
     #     frame_times_bonsai_sync[-(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'start']):
     #                             -(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'end'])]
 
-
     if trials is not None:
         # interpolate the bonsai traces to match the mini frames
         matched_bonsai = kinematics_data.drop(['time_vector'] + list(trials.columns), axis=1).apply(interp_trace,
@@ -291,8 +289,8 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds, rig=No
     else:
         # interpolate the bonsai traces to match the mini frames
         matched_bonsai = kinematics_data.drop(['time_vector'], axis=1).apply(interp_trace, raw=False,
-                                                                                        args=(frame_times_bonsai_sync,
-                                                                                            frame_times_mini_sync))
+                                                                             args=(frame_times_bonsai_sync,
+                                                                                   frame_times_mini_sync))
         # round the quadrant vector as it should be discrete
         quadrant_columns = [el for el in matched_bonsai.columns if ('_quadrant' in el)]
         for el in quadrant_columns:
@@ -617,60 +615,38 @@ def align_spatial(input_traces):
 def match_motive_2(motive_traces, sync_path, kinematics_data):
     """Match the motive and video traces based on the sync file, updated to second gen rig"""
 
-    # # get the number of frames from the bonsai file
-    # n_frames_bonsai_file = kinematics_data.shape[0]
-
     # load the sync data
-    sync_data = pd.read_csv(sync_path, names=['Time', 'projector_frames', 'bonsai_frames',
-                                              'sync_trigger', 'mini_frames', 'wheel_frames'])
-    # # get the number of miniscope frames on the sync file
-    # n_frames_motive_sync = np.sum(np.abs(np.diff(sync_data.projector_frames)) > 0)
+    sync_data = pd.read_csv(sync_path, names=['Time', 'projector_frames', 'camera_frames',
+                                              'sync_trigger', 'mini_frames', 'wheel_frames'], index_col=False)
 
-    # match the sync frames with the actual miniscope frames
-    frame_times_motive_sync = sync_data.loc[
-        np.concatenate(([0], np.abs(np.diff(sync_data.projector_frames)) > 0)) > 0, 'Time'].to_numpy()
-    # get the number of motive frames
-    n_frames_motive_sync = frame_times_motive_sync.shape[0]
-    # trim the trace to where the tracking starts
-    first_frame = np.argwhere(motive_traces['time_m'])[0][0]
-    trimmed_traces = motive_traces.iloc[first_frame:n_frames_motive_sync, :].reset_index(drop=True)
-    # # get the number of frames in motive (assuming the extras in sync are at the end and therefore will be cropped)
-    # n_frames_motive_sync = trimmed_traces.shape[0]
-    # also trim the frame times (assuming frame 1 in both is the same)
-    frame_times_motive_sync = frame_times_motive_sync[first_frame:n_frames_motive_sync+first_frame]
-    # plot_2d([[sync_data['projector_frames']]], dpi=100)
-    # plot_2d([[sync_data['projector_frames'], sync_data['bonsai_frames']]], dpi=100)
-    # get the frame times for bonsai
-    frame_times_bonsai_sync = sync_data.loc[
-                                  np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0,
-                                  'Time'].to_numpy() # [-n_frames_bonsai_file:]
+    # get the start and end triggers
+    sync_start = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 1)[0][0]
+    sync_end = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 2)[0][0]
 
-    # trim the frame times to start the same time as motive
-    bonsai_start = np.argmin(np.abs(frame_times_motive_sync[0]-frame_times_bonsai_sync))
-    frame_times_bonsai_sync = frame_times_bonsai_sync[bonsai_start:]
-    # get the number of frames from bonsai
-    n_frames_bonsai_file = frame_times_bonsai_sync.shape[0]
-    # check if there are extra bonsai frames (most likely at the end) and trim them if so
-    if kinematics_data.shape[0] < n_frames_bonsai_file:
-        n_frames_bonsai_file = kinematics_data.shape[0]
-        frame_times_bonsai_sync = frame_times_bonsai_sync[:n_frames_bonsai_file]
-    # trim the bonsai data accordingly (assumption is that the frames go all the way to the end)
-    kinematics_data = kinematics_data.iloc[-n_frames_bonsai_file:].reset_index(drop=True)
+    # trim the sync data to the experiment
+    sync_data = sync_data.iloc[sync_start:sync_end, :].reset_index(drop=True)
 
-    # interpolate the bonsai traces to match the mini frames
+    # get the motive frame times
+    frame_times_motive_sync = sync_data.loc[np.argwhere(
+        np.abs(np.diff(sync_data.loc[:, 'projector_frames'])) > 2).squeeze() + 1, 'Time'].to_numpy()
+
+    frame_times_cam_sync = sync_data.loc[np.argwhere(
+        np.diff(sync_data.loc[:, 'camera_frames']) > 2).squeeze() + 1, 'Time'].to_numpy()
+
+    # TODO: add heuristics to deal with missing frames
+
+    # interpolate the camera traces to match the mini frames
     matched_bonsai = kinematics_data.drop(['time_vector', 'mouse', 'datetime'],
-                                          axis=1).apply(interp_trace, raw=False, args=(frame_times_bonsai_sync,
+                                          axis=1).apply(interp_trace, raw=False, args=(frame_times_cam_sync,
                                                         frame_times_motive_sync))
+
+    # trim the motive frames to the start of the experiment
+    trimmed_traces = motive_traces
 
     # add the correct time vector from the interpolated traces
     matched_bonsai['time_vector'] = frame_times_motive_sync
     matched_bonsai['mouse'] = kinematics_data.loc[0, 'mouse']
     matched_bonsai['datetime'] = kinematics_data.loc[0, 'datetime']
-
-    # trim the motive data
-
-    # # if the motive data has less frames than the ones detected during triggers, show a warning
-    # delta_frames = n_frames_motive_sync - motive_traces.shape[0]
 
     # concatenate both data frames
     full_dataframe = pd.concat([matched_bonsai, trimmed_traces.drop(['time_m'], axis=1)], axis=1)
@@ -682,9 +658,163 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
     return full_dataframe
 
 
-def match_calcium_2(calcium_path, sync_path, kinematics_data, frame_bounds):
-    return
+def match_calcium_2(calcium_path, sync_path, kinematics_data, frame_bounds, rig=None, trials=None):
+    # load the calcium data (cells x time), transpose to get time x cells
+    with h5py.File(calcium_path, mode='r') as f:
+        calcium_data = np.array(f['calcium_data']).T
+        # if there are no ROIs, skip
+        if (type(calcium_data) == np.ndarray) and (calcium_data == 'no_ROIs'):
+            return
+
+    # load the sync data
+    sync_data = pd.read_csv(sync_path)
+    if sync_data.shape[1] == 3:
+        sync_data.columns = ['Time', 'mini_frames', 'camera_frames']
+    else:
+        sync_data.columns = ['Time', 'projector_frames', 'camera_frames', 'optitrack_frames', 'mini_frames']
+
+    # get the camera frame times
+    frame_idx_camera_sync = kinematics_data['sync_frames'].to_numpy().astype(int)
+    frame_times_camera_sync = sync_data.loc[frame_idx_camera_sync, 'Time'].to_numpy()
+    # get the miniscope frame indexes from the sync file
+    frame_idx_mini_sync = np.argwhere(np.diff(sync_data.loc[:, 'mini_frames']) > 0).squeeze() + 1
+    # interpolate missing triggers (based on experience)
+    frame_idx_mini_sync = interpolate_frame_triggers(frame_idx_mini_sync)
+    # get the delta frames with the calcium
+    delta_frames = frame_idx_mini_sync.shape[0] - calcium_data.shape[0]
+    # remove extra detections coming from terminating the calcium mid frame (I think)
+    if delta_frames > 0:
+        print(f'There were {delta_frames} triggers more than frames on file {os.path.basename(calcium_path)}')
+        frame_idx_mini_sync = frame_idx_mini_sync[:-delta_frames]
+    elif delta_frames < 0:
+        print(f'There were {-delta_frames} more frames than triggers on file {os.path.basename(calcium_path)}')
+        calcium_data = calcium_data[:delta_frames, :]
+    # trim calcium according to the frames left within the behavior
+    calcium_data = calcium_data[frame_idx_mini_sync > frame_idx_camera_sync[0], :]
+    # and then remove frames before the behavior starts
+    frame_idx_mini_sync = frame_idx_mini_sync[frame_idx_mini_sync > frame_idx_camera_sync[0]]
+
+    # get the actual mini times
+    frame_times_mini_sync = sync_data.loc[frame_idx_mini_sync, 'Time'].to_numpy()
+
+    if trials is not None:
+        # interpolate the bonsai traces to match the mini frames
+        matched_bonsai = kinematics_data.drop(['time_vector'] + list(trials.columns), axis=1).apply(interp_trace,
+                                                                                                 raw=False,
+                                                                             args=(frame_times_camera_sync,
+                                                                                   frame_times_mini_sync))
+        # deal with trial numbers
+        # first reset the inter-stim intervals
+        trial_nums = matched_bonsai.trial_num.to_numpy()
+        trial_nums[trial_nums < -500] = 0
+
+        # Find where trials occur, and reassign their index
+        trials = np.argwhere(trial_nums != 0)[0]
+        breaks = np.where(np.diff(trials) != 1)[0] + 1  # add 1 to compensate for the diff
+        split_trials = np.array_split(trials, breaks)
+
+        for trial_num, idxs in enumerate(split_trials):
+            trial_nums[idxs] = trial_num + 1    # Compensate for zero indexing
+
+        matched_bonsai.trial_num = trial_nums
+
+        # now that the trials are reassigned, add the trial data
+        matched_bonsai = assign_trial_parameters(matched_bonsai, trials)
+
+    else:
+        # interpolate the bonsai traces to match the mini frames
+        matched_bonsai = kinematics_data.drop(['time_vector', 'sync_frames'], axis=1).apply(interp_trace, raw=False,
+                                                                                        args=(frame_times_camera_sync,
+                                                                                            frame_times_mini_sync))
+        # round the quadrant vector as it should be discrete
+        quadrant_columns = [el for el in matched_bonsai.columns if ('_quadrant' in el)]
+        for el in quadrant_columns:
+            matched_bonsai[el] = np.round(matched_bonsai[el])
+
+    # add the correct time vector from the interpolated traces
+    matched_bonsai['time_vector'] = frame_times_mini_sync
+
+    # print a single dataframe with the calcium matched positions and timestamps
+    calcium_dataframe = pd.DataFrame(calcium_data,
+                                     columns=['_'.join(('cell', str(el))) for el in range(calcium_data.shape[1])])
+    # concatenate both data frames
+    full_dataframe = pd.concat([matched_bonsai, calcium_dataframe], axis=1)
+
+    # reset the time vector
+    old_time = full_dataframe['time_vector']
+    full_dataframe.loc[:, 'time_vector'] = np.array([el - old_time[0] for el in old_time])
+
+    return full_dataframe
 
 
 def match_wheel():
     return
+
+
+def match_dlc(filtered_traces, file_info, file_date):
+    """Match the DLC traces with the sync time"""
+
+    # choose the timestamp mode depending on the date
+    if file_date <= datetime.datetime(year=2021, month=12, day=14):
+
+        # load the sync file
+        sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'mini_frames', 'camera_frames'], index_col=False)
+        # get the camera triggers
+        cam_idx = np.argwhere(np.diff(sync_data.loc[:, 'camera_frames']) > 0).squeeze() + 1
+        # get the actual frame times
+        time = sync_data.loc[cam_idx, 'Time'].to_numpy()
+
+    else:
+        # read the sync file
+        sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'camera_frames',
+                                                               'sync_trigger', 'mini_frames', 'wheel_frames'],
+                                index_col=False)
+        # get the cam frame times based on the triggers
+        # get the camera triggers
+        cam_idx = np.argwhere(np.diff(sync_data.loc[:, 'camera_frames']) > 1).squeeze() + 1
+        # filter them by the sync trigger
+        sync_start = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 1)[0]
+        sync_end = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 2)[0]
+        cam_idx = cam_idx[(cam_idx > sync_start) & (cam_idx < sync_end)]
+        # get the actual frame times
+        time = sync_data.loc[cam_idx, 'Time'].to_numpy()
+
+    # correct if there's a discrepancy and report
+    if time.shape[0] != filtered_traces.shape[0]:
+        delta_frame = time.shape[0] - filtered_traces.shape[0]
+        print(f'Discrepancy of {delta_frame} frames between time and traces')
+        if delta_frame < 0:
+            # correct the traces
+            filtered_traces = filtered_traces.iloc[-delta_frame:, :]
+        else:
+            # correct the time vector and camera idx
+            time = time[delta_frame:]
+            cam_idx = cam_idx[delta_frame:]
+
+    # save the time and the frames
+    filtered_traces['time_vector'] = [el - time[0] for el in time]
+    filtered_traces['sync_frames'] = cam_idx
+
+    return filtered_traces
+
+
+def interpolate_frame_triggers(triggers_in, threshold=1.5):
+    """Interpolate missing triggers in the sequence based on the median interval"""
+    # allocate the output
+    triggers_out = list(triggers_in)
+    # get the intervals
+    intervals = np.diff(triggers_in)
+    # get the median interval
+    median_interval = int(np.median(intervals))
+    # get the indexes of the intervals that violate threshold times the median or more (since they are continuous)
+    long_interval_idx = np.argwhere(intervals > threshold*median_interval).flatten()
+    # cycle through the intervals
+    for idx in long_interval_idx:
+        # determine the number of frames to interpolate
+        frame_number = np.round(intervals[idx]/median_interval) - 1
+        # generate and add them to the list
+        for _ in np.arange(frame_number):
+            triggers_out.append(triggers_out[idx] + median_interval)
+    # sort the list and output
+    triggers_out = np.sort(np.array(triggers_out))
+    return triggers_out

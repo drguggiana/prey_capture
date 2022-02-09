@@ -161,6 +161,8 @@ def kinematic_calculations(data):
 
     # get the time
     time_vector = data.time_vector.to_numpy()
+    # get the sync frames
+    sync_frames = data.sync_frames.to_numpy()
 
     mouse_speed = np.concatenate(
         ([0], distance_calculation(mouse_coord_hd[1:, :], mouse_coord_hd[:-1, :]) /
@@ -168,13 +170,13 @@ def kinematic_calculations(data):
     mouse_acceleration = np.concatenate(([0], np.diff(mouse_speed)))
 
     # save the traces to a variable
-    angle_traces = np.vstack((mouse_heading, mouse_speed, mouse_acceleration, time_vector)).T
+    angle_traces = np.vstack((mouse_heading, mouse_speed, mouse_acceleration, time_vector, sync_frames)).T
     # replace infinity values with NaNs (in the kinematic traces)
     angle_traces[np.isinf(angle_traces)] = np.nan
 
     # create a dataframe with the results
     kine_data = pd.DataFrame(angle_traces, columns=['mouse_heading', 'mouse_speed', 'mouse_acceleration',
-                                                    'time_vector'])
+                                                    'time_vector', 'sync_frames'])
 
     # if the motive flag is on, also calculate head direction
     if 'mouse_x_m' in data.columns:
@@ -252,9 +254,6 @@ def kinematic_calculations(data):
         vr_crickets = len(vr_cricket_list)
     else:
         vr_crickets = 0
-
-    # save the data to file
-    kine_data.to_hdf(name, key='full_traces', mode='a', format='fixed')
 
     # return the dataframe
     return kine_data, real_crickets, vr_crickets
