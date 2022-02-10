@@ -665,6 +665,10 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, frame_bounds, rig=
         # if there are no ROIs, skip
         if (type(calcium_data) == np.ndarray) and (calcium_data == 'no_ROIs'):
             return
+    # check if there are nans in the columns, if so, also skip
+    if kinematics_data.columns[0] == 'badFile':
+        print(f'File {os.path.basename(calcium_path)} not matched due to NaNs')
+        return
 
     # load the sync data
     sync_data = pd.read_csv(sync_path)
@@ -755,7 +759,24 @@ def match_dlc(filtered_traces, file_info, file_date):
     """Match the DLC traces with the sync time"""
 
     # choose the timestamp mode depending on the date
-    if file_date <= datetime.datetime(year=2021, month=12, day=14):
+    # (this is here mostly just in case, should be able to handle files before the sync file)
+    if file_date <= datetime.datetime(year=2019, month=11, day=10):
+        # parse the bonsai file for the time stamps
+        timestamp = []
+
+        with open(file_info['bonsai_path']) as f:
+            for ex_line in f:
+                ex_list = ex_line.split(' ')
+                ex_list.remove('\n')
+                timestamp.append(ex_list.pop())
+
+        # add the time stamps to the main dataframe
+        time = np.array([datetime.datetime.strptime(el[:-7], '%Y-%m-%dT%H:%M:%S.%f') for el in timestamp])
+        time = (time - time[0]).total_seconds()
+        cam_idx = np.ones_like(time) * np.nan
+
+    elif (file_date <= datetime.datetime(year=2021, month=12, day=14)) & \
+         (file_date > datetime.datetime(year=2019, month=11, day=10)):
 
         # load the sync file
         sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'mini_frames', 'camera_frames'], index_col=False)

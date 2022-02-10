@@ -363,6 +363,9 @@ def interpolate_animals(files, target_values, ref_corners, corners, untrimmed, d
     # make rows that contain a nan entirely nan
     nan_vector = np.any(np.isnan(cricket_coordinates.to_numpy()), axis=1)
     cricket_coordinates.iloc[nan_vector, :] = np.nan
+    # if all the rows are nans, exit returning the original dataframe
+    if np.sum(nan_vector) == cricket_coordinates.shape[0]:
+        return files
 
     distance_mouse = \
         fk.distance_calculation(cricket_coordinates[['cricket_0_x', 'cricket_0_y']].to_numpy(),

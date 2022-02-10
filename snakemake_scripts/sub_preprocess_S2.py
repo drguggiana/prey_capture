@@ -138,6 +138,15 @@ def cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_dat
 def kinematic_calculations(data):
     """Calculate basic kinematic parameters of mouse and cricket"""
 
+    # check if there are nans. if so, return a badFile dataframe
+    coordinate_columns = [el for el in data.columns if ('_x' in el) | ('_y' in el)]
+    if np.any(np.isnan(data[coordinate_columns])):
+        real_crickets = 0
+        vr_crickets = 0
+        kine_data = pd.DataFrame(['badFile'], columns=['badFile'])
+
+        return kine_data, real_crickets, vr_crickets
+
     # define which coordinates to use depending on the available data
     if 'mouse_x_m' in data.columns:
         mouse_coord_hd = data.loc[:, ['mouse_x_m', 'mouse_y_m']].to_numpy()

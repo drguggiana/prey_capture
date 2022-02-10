@@ -61,45 +61,45 @@ for search_query in search_queries:
     full_parsed.append(parsed_search)
 
 # TODO: can probably remove the mouse isolation code since I do this inside snakemake
-# allocate a list for the mice
-new_queries = []
-new_paths = []
-new_parsed = []
-mouse_list = []
-# for all the search queries
-for idx, search_query in enumerate(full_parsed):
-    # modify query if cellMatch
-    if search_query['analysis_type'] == 'cellMatch':
-        # extract only the mice from the search query that have calcium
-        mouse_list.append(np.unique([el['mouse'] for el in full_queries[idx] if len(el['fluo_path']) > 0]))
-    else:
-        new_queries.append(full_queries[idx])
-        new_paths.append(full_paths[idx])
-        new_parsed.append(search_query)
-# consolidate the mice in the list
-mouse_list = np.unique([el for sublist in mouse_list for el in sublist])
+# # allocate a list for the mice
+# new_queries = []
+# new_paths = []
+# new_parsed = []
+# mouse_list = []
+# # for all the search queries
+# for idx, search_query in enumerate(full_parsed):
+#     # modify query if cellMatch
+#     if search_query['analysis_type'] == 'cellMatch':
+#         # extract only the mice from the search query that have calcium
+#         mouse_list.append(np.unique([el['mouse'] for el in full_queries[idx] if len(el['fluo_path']) > 0]))
+#     else:
+#         new_queries.append(full_queries[idx])
+#         new_paths.append(full_paths[idx])
+#         new_parsed.append(search_query)
+# # consolidate the mice in the list
+# mouse_list = np.unique([el for sublist in mouse_list for el in sublist])
 
-# get the entries
-for idx, mouse in enumerate(mouse_list):
-    target_entries = bd.query_database('vr_experiment', 'slug:' + mouse)
-    target_entries.append(bd.query_database('video_experiment', 'slug:' + mouse))
-
-    target_entries = [el for sublist in target_entries for el in sublist]
-    # filter out the no fluo
-    target_entries = [el for el in target_entries if len(el['fluo_path']) > 0]
-    # append to the query list
-    new_queries.append(target_entries)
-    new_parsed.append({'analysis_type': 'cellMatch'})
-    new_paths.append([])
+# # get the entries
+# for idx, mouse in enumerate(mouse_list):
+#     target_entries = bd.query_database('vr_experiment', 'slug:' + mouse)
+#     target_entries.append(bd.query_database('video_experiment', 'slug:' + mouse))
+#
+#     target_entries = [el for sublist in target_entries for el in sublist]
+#     # filter out the no fluo
+#     target_entries = [el for el in target_entries if len(el['fluo_path']) > 0]
+#     # append to the query list
+#     new_queries.append(target_entries)
+#     new_parsed.append({'analysis_type': 'cellMatch'})
+#     new_paths.append([])
 
 # for all the full queries
-for idx, target_entries in enumerate(new_queries):
+for idx, target_entries in enumerate(full_queries):
     # # allow only the desired dates, for testing purposes only
     # target_entries = [el for el in target_entries if el['slug'][:10] in
     #                   ['03_23_2021', '03_24_2021', '03_29_2021', '03_30_2021', '03_31_2021']]
 
-    parsed_search = new_parsed[idx]
-    target_path = new_paths[idx]
+    parsed_search = full_parsed[idx]
+    target_path = full_paths[idx]
     # create the config file
     config_dict = {'files': {os.path.basename(el['avi_path'])[:-4]: os.path.basename(el['avi_path'])[:-4]
                              for el in target_entries},

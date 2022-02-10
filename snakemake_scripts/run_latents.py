@@ -50,65 +50,78 @@ with h5py.File(input_path, 'r') as f:
         labels = np.array(f['full_traces/block0_items']).astype(str)
     data = pd.DataFrame(values, columns=labels)
 
-# get the list of columns
-column_list_all = data.columns
-# column_list = [el for el in column_list_all if (('x' in el) or ('y' in el)) & ('mouse' in el)]
-column_list = [el for el in column_list_all if (('x' in el) or ('y' in el))]
-# define the extra columns
-extra_columns = ['mouse_speed']
-column_list += extra_columns
-
-# get the config info
-config_file = os.path.join(paths.vame_path, paths.vame_current_model_name, 'config.yaml')
-config = vame.read_config(config_file)
-try:
-    # get the egocentrically aligned coordinates
-    aligned_traj, frames = vame.egocentric_alignment(config, pose_ref_index=[0, 7], crop_size=(200, 200),
-                                                     use_video=False, video_format='.mp4', check_video=False,
-                                                     save_flag=False, filename=[files['slug']], column_list=column_list,
-                                                     dataframe=[data], extra_columns=extra_columns)
-
-    # get the motifs and latents
-
-    # create a new kmeans object
-    random_state = config['random_state_kmeans']
-    n_init = config['n_init_kmeans']
-    n_cluster = config['n_cluster']
-    kmeans_object = cluster.KMeans(init='k-means++', n_clusters=n_cluster, random_state=random_state, n_init=n_init)
-
-    # set the number fo threads, required when building the kmeans object without fitting
-    kmeans_object._n_threads = 1
-
-    # assemble the template path
-    first_file = os.listdir(os.path.join(paths.vame_results, 'results'))[0]
-    template_path = os.path.join(paths.vame_results, 'results', first_file, 'VAME', 'kmeans-'+str(n_cluster),
-                                 'cluster_center_'+first_file+'.npy')
-    # load the cluster centers
-    cluster_centers = np.load(template_path)
-
-    # set the cluster centers from the template file to apply to this file
-    kmeans_object.cluster_centers_ = cluster_centers
-
-    # get the trajectories for latents
-    column_idx = [True if 'mouse' in el else False for el in column_list]
-    vame_trajectories = aligned_traj[column_idx, :]
-
-    # run the pose segmentation
-    latents, clusters = vame.batch_pose_segmentation(config, [0], aligned_traj, kmeans_obj=kmeans_object)
-
-    # save the file and create the bondjango entry
-    with h5py.File(save_path, 'w') as f:
-        f.create_dataset('egocentric_coord', data=aligned_traj)
-        f.create_dataset('latents', data=np.squeeze(latents))
-        f.create_dataset('motifs', data=np.squeeze(clusters))
-        f.create_dataset('columns', data=column_list)
-except ValueError:
+# if the badFile tag is there, skip the file
+if data.columns[0] == 'badFile':
     # save the file and create the bondjango entry
     with h5py.File(save_path, 'w') as f:
         f.create_dataset('egocentric_coord', data=[])
         f.create_dataset('latents', data=[])
         f.create_dataset('motifs', data=[])
         f.create_dataset('columns', data=['all_nans'])
+else:
+
+    # get the list of columns
+    column_list_all = data.columns
+    # column_list = [el for el in column_list_all if (('x' in el) or ('y' in el)) & ('mouse' in el)]
+    column_list = [el for el in column_list_all if (('_x' in el) or ('_y' in el))]
+    # define the extra columns
+    extra_columns = ['mouse_speed']
+    column_list += extra_columns
+
+    # get the config info
+    config_file = os.path.join(paths.vame_path, paths.vame_current_model_name, 'config.yaml')
+    config = vame.read_config(config_file)
+
+    # set nans to 0
+    data[np.isnan(data)] = 0
+
+    # get the egocentrically aligned coordinates
+    aligned_traj, frames = vame.egocentric_alignment(config, pose_ref_index=[0, 7], crop_size=(200, 200),
+                                                     use_video=False, video_format='.mp4', check_video=False,
+                                                     save_flag=False, filename=[files['slug']], column_list=column_list,
+                                                     dataframe=[data], extra_columns=extra_columns)
+
+    try:
+        # get the motifs and latents
+        # create a new kmeans object
+        random_state = config['random_state_kmeans']
+        n_init = config['n_init_kmeans']
+        n_cluster = config['n_cluster']
+        kmeans_object = cluster.KMeans(init='k-means++', n_clusters=n_cluster, random_state=random_state, n_init=n_init)
+
+        # set the number fo threads, required when building the kmeans object without fitting
+        kmeans_object._n_threads = 1
+
+        # assemble the template path
+        first_file = os.listdir(os.path.join(paths.vame_results, 'results'))[0]
+        template_path = os.path.join(paths.vame_results, 'results', first_file, 'VAME', 'kmeans-'+str(n_cluster),
+                                     'cluster_center_'+first_file+'.npy')
+        # load the cluster centers
+        cluster_centers = np.load(template_path)
+
+        # set the cluster centers from the template file to apply to this file
+        kmeans_object.cluster_centers_ = cluster_centers
+
+        # get the trajectories for latents
+        column_idx = [True if 'mouse' in el else False for el in column_list]
+        vame_trajectories = aligned_traj[column_idx, :]
+
+        # run the pose segmentation
+        latents, clusters = vame.batch_pose_segmentation(config, [0], vame_trajectories, kmeans_obj=kmeans_object)
+
+        # save the file and create the bondjango entry
+        with h5py.File(save_path, 'w') as f:
+            f.create_dataset('egocentric_coord', data=aligned_traj)
+            f.create_dataset('latents', data=np.squeeze(latents))
+            f.create_dataset('motifs', data=np.squeeze(clusters))
+            f.create_dataset('columns', data=column_list)
+    except ValueError:
+        # save the file and create the bondjango entry
+        with h5py.File(save_path, 'w') as f:
+            f.create_dataset('egocentric_coord', data=aligned_traj)
+            f.create_dataset('latents', data=[])
+            f.create_dataset('motifs', data=[])
+            f.create_dataset('columns', data=['all_nans'])
 # assemble the entry data
 entry_data = {
     'analysis_type': 'motifs',

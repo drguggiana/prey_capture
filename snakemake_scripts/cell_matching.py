@@ -78,7 +78,7 @@ for files in calcium_path:
 
 # run the matching software
 spatial_union, assignments, matchings = register_multisession(
-    A=footprint_list, dims=size_list[0], templates=template_list, thresh_cost=1.1)
+    A=footprint_list, dims=size_list[0], templates=template_list, thresh_cost=0.9)
 
 # fplot.plot_image([spatial_union[:, 0].reshape((630, 630))])
 # save the matching results
