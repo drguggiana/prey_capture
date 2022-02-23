@@ -332,15 +332,23 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds, rig=No
 
 def match_cells(match_path):
     """Load the cell matching info if it exists"""
-    with h5py.File(match_path, 'r') as f:
-        # load the variables of interest
-        assignments = np.array(f['assignments'])
-        # f.create_dataset('matchings', data=np.array(matchings))
-        date_list = np.array(f['date_list']).astype(str)
+    try:
+        with h5py.File(match_path, 'r') as f:
+            # load the variables of interest
+            assignments = np.array(f['assignments'])
+            # f.create_dataset('matchings', data=np.array(matchings))
+            date_list = np.array(f['date_list']).astype(str)
+    except OSError:
+        return empty_dataframe()
 
     # turn into a data frame
     cell_matches = pd.DataFrame(data=assignments, columns=date_list)
     return cell_matches
+
+
+def empty_dataframe(column_label='empty'):
+    """Return an empty dataframe"""
+    return pd.DataFrame(data=[], columns=[column_label])
 
 
 def match_motive(motive_traces, sync_path, kinematics_data):
@@ -779,7 +787,7 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     frame_idx_camera_sync = kinematics_data['sync_frames'].to_numpy().astype(int)
     frame_times_camera_sync = sync_data.loc[frame_idx_camera_sync, 'Time'].to_numpy()
     # get the miniscope frame indexes from the sync file
-    frame_idx_mini_sync = np.argwhere(np.diff(sync_data.loc[:, 'mini_frames']) > 0).squeeze() + 1
+    frame_idx_mini_sync = np.argwhere(np.diff(np.round(sync_data.loc[:, 'mini_frames'])) > 0).squeeze() + 1
     # interpolate missing triggers (based on experience)
     frame_idx_mini_sync = interpolate_frame_triggers(frame_idx_mini_sync)
     # get the delta frames with the calcium
@@ -799,36 +807,25 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     # get the actual mini times
     frame_times_mini_sync = sync_data.loc[frame_idx_mini_sync, 'Time'].to_numpy()
 
+    # interpolate the bonsai traces to match the mini frames
+    matched_bonsai = kinematics_data.drop(['time_vector', 'sync_frames', 'mouse', 'datetime'],
+                                          axis=1).apply(interp_trace, raw=False, args=(frame_times_camera_sync,
+                                                                                       frame_times_mini_sync))
     if trials is not None:
-        # interpolate the bonsai traces to match the mini frames
-        matched_bonsai = kinematics_data.drop(['time_vector'] + list(trials.columns), axis=1).apply(interp_trace,
-                                                                                                 raw=False,
-                                                                             args=(frame_times_camera_sync,
-                                                                                   frame_times_mini_sync))
-        # deal with trial numbers
-        # first reset the inter-stim intervals
-        trial_nums = matched_bonsai.trial_num.to_numpy()
-        trial_nums[trial_nums < -500] = 0
 
-        # Find where trials occur, and reassign their index
-        trials = np.argwhere(trial_nums != 0)[0]
-        # TODO: ask about where vs argwhere
-        breaks = np.where(np.diff(trials) != 1)[0] + 1  # add 1 to compensate for the diff
-        split_trials = np.array_split(trials, breaks)
-
-        for trial_num, idxs in enumerate(split_trials):
-            trial_nums[idxs] = trial_num + 1    # Compensate for zero indexing
-
-        matched_bonsai.trial_num = trial_nums
+        # repair the trial_num column
+        matched_bonsai.loc[:, 'trial_num'] = np.round(matched_bonsai.loc[:, 'trial_num'])
+        # remove the color factor
+        matched_bonsai = matched_bonsai.drop(columns=['color_factor'])
 
         # now that the trials are reassigned, add the trial data
         matched_bonsai = assign_trial_parameters(matched_bonsai, trials)
 
     else:
-        # interpolate the bonsai traces to match the mini frames
-        matched_bonsai = kinematics_data.drop(['time_vector', 'sync_frames'], axis=1).apply(interp_trace, raw=False,
-                                                                                        args=(frame_times_camera_sync,
-                                                                                            frame_times_mini_sync))
+        # # interpolate the bonsai traces to match the mini frames
+        # matched_bonsai = kinematics_data.drop(['time_vector', 'sync_frames', 'mouse', 'datetime'],
+        #                                       axis=1).apply(interp_trace, raw=False, args=(frame_times_camera_sync,
+        #                                                                                    frame_times_mini_sync))
         # round the quadrant vector as it should be discrete
         quadrant_columns = [el for el in matched_bonsai.columns if ('_quadrant' in el)]
         for el in quadrant_columns:

@@ -33,9 +33,9 @@ for search_query in search_queries:
         # define the target model and search query
         target_model = 'vr_experiment'
         target_path = paths.vrexperiment_path
-        if 'rig' not in search_query:
-            # if the rig argument wasn't give it, add it
-            search_query += ',rig:vr'
+        # if 'rig' not in search_query:
+        #     # if the rig argument wasn't give it, add it
+        #     search_query += ',rig:vr'
 
     # parse the search string
     parsed_search = fd.parse_search_string(search_query)
@@ -55,42 +55,13 @@ for search_query in search_queries:
         continue
     else:
         print(str(len(target_entries)) + ' entries: ' + search_query)
+
+    # remove virtual mouse entries
+    target_entries = [el for el in target_entries if 'DG_virtual_mouse' != el['mouse']]
     # add the queries to the list
     full_queries.append(target_entries)
     full_paths.append(target_path)
     full_parsed.append(parsed_search)
-
-# TODO: can probably remove the mouse isolation code since I do this inside snakemake
-# # allocate a list for the mice
-# new_queries = []
-# new_paths = []
-# new_parsed = []
-# mouse_list = []
-# # for all the search queries
-# for idx, search_query in enumerate(full_parsed):
-#     # modify query if cellMatch
-#     if search_query['analysis_type'] == 'cellMatch':
-#         # extract only the mice from the search query that have calcium
-#         mouse_list.append(np.unique([el['mouse'] for el in full_queries[idx] if len(el['fluo_path']) > 0]))
-#     else:
-#         new_queries.append(full_queries[idx])
-#         new_paths.append(full_paths[idx])
-#         new_parsed.append(search_query)
-# # consolidate the mice in the list
-# mouse_list = np.unique([el for sublist in mouse_list for el in sublist])
-
-# # get the entries
-# for idx, mouse in enumerate(mouse_list):
-#     target_entries = bd.query_database('vr_experiment', 'slug:' + mouse)
-#     target_entries.append(bd.query_database('video_experiment', 'slug:' + mouse))
-#
-#     target_entries = [el for sublist in target_entries for el in sublist]
-#     # filter out the no fluo
-#     target_entries = [el for el in target_entries if len(el['fluo_path']) > 0]
-#     # append to the query list
-#     new_queries.append(target_entries)
-#     new_parsed.append({'analysis_type': 'cellMatch'})
-#     new_paths.append([])
 
 # for all the full queries
 for idx, target_entries in enumerate(full_queries):

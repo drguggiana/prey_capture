@@ -1,6 +1,7 @@
 # imports
 import functions_matching as fm
 import functions_preprocessing as fp
+import functions_plotting as fplot
 import paths
 import snakemake_scripts.sub_preprocess_S1 as s1
 import snakemake_scripts.sub_preprocess_S2 as s2
@@ -72,6 +73,12 @@ except NameError:
 
 # get the file date
 file_date = datetime.datetime.strptime(files['date'], '%Y-%m-%dT%H:%M:%SZ')
+
+# initialize the cricket and trial variables
+real_crickets = 0
+vr_crickets = 0
+trials = None
+params = None
 
 # decide the analysis path based on the file name and date
 # if miniscope but no imaging, run bonsai only
@@ -286,7 +293,7 @@ elif files['rig'] in ['VWheel']:
     params = read_hdf(files['screen_path'], key='params')
 
     # run the first stage of preprocessing
-    filtered_traces, px_corners, frame_bounds = preprocess_selector(files['avi_path'], files)
+    filtered_traces, corners, frame_bounds = preprocess_selector(files['avi_path'], files)
 
     # TODO: program this once there's an eye tracking network
     # compute the eye metrics
@@ -316,8 +323,15 @@ elif files['rig'] in ['VWheel']:
             # also get the cell matching if it exists
             cell_matches = fm.match_cells(match_path)
             cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
-# else:
-#     # TODO: make sure the constants are set to values that make sense for the vr arena
+else:
+    # return all empty outputs and print a warning
+    # TODO: replace with logging
+    filtered_traces = fm.empty_dataframe()
+    kinematics_data = fm.empty_dataframe()
+    corners = []
+    print(f'File {files["slug"]} has an invalid rig type')
+
+
 #     # run the first stage of preprocessing
 #     # out_path, filtered_traces = s1.run_preprocess(files['bonsai_path'],
 #     #                                               save_path)
@@ -347,44 +361,13 @@ kinematics_data.to_hdf(save_path, key='full_traces', mode='a', format='fixed')
 corners_df = DataFrame(data=corners, columns=['x', 'y'])
 corners_df.to_hdf(save_path, key='arena_corners', mode='a')
 
-# For these trials, save the trial set and the trial parameters to the output file
-if files['rig'] in ['VScreen', 'VTuning']:
-    trials.to_hdf(save_path, key='trial_set', mode='a', format='table')
-    params.to_hdf(save_path, key='params', mode='a', format='table')
+# # For these trials, save the trial set and the trial parameters to the output file
+# if files['rig'] in ['VTuning', 'VWheel']:
+#     trials.to_hdf(save_path, key='trial_set', mode='a', format='table')
+#     params.to_hdf(save_path, key='params', mode='a', format='table')
 
-# save the filtered trace
-fig_final = plt.figure()
-ax = fig_final.add_subplot(111)
-# plt.gca().invert_xaxis()
-# plt.gca().invert_yaxis()
-
-# plot the filtered trace
-a = ax.scatter(filtered_traces.mouse_x, filtered_traces.mouse_y,
-               c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Blues')
-cbar = fig_final.colorbar(a, ax=ax)
-cbar.set_label('Time (s)')
-ax.axis('equal')
-
-# for all the real crickets
-for real_cricket in range(real_crickets):
-    ax.scatter(filtered_traces['cricket_'+str(real_cricket)+'_x'],
-               filtered_traces['cricket_'+str(real_cricket)+'_y'],
-               c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Oranges')
-
-# for all the virtual crickets or virtual targets
-for vr_cricket in range(vr_crickets):
-    try:
-        ax.scatter(filtered_traces['vrcricket_' + str(vr_cricket) + '_x'],
-                   filtered_traces['vrcricket_' + str(vr_cricket) + '_y'],
-                   c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
-    except:
-        ax.scatter(filtered_traces['target_x_m'], filtered_traces['target_y_m'],
-                   c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
-
-# plot the found corners if existent
-if len(corners) > 0:
-    for corner in corners:
-        ax.scatter(corner[0], corner[1], c='black')
+# generate the output figure
+fig_final = fplot.preprocessing_figure(filtered_traces, real_crickets, vr_crickets, corners)
 
 # define the path for the figure
 fig_final.savefig(pic_path, bbox_inches='tight')

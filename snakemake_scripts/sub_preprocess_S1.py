@@ -460,8 +460,8 @@ def run_preprocess_eye(file_path_ref, file_path_dlc, file_info, kernel_size=5):
         [el for el in column_names if ('mouseBarR' in el) and ('y' in el)][0],
         [el for el in column_names if ('mouseHead' in el) and ('x' in el)][0],
         [el for el in column_names if ('mouseHead' in el) and ('y' in el)][0],
-    ]].to_numpy(), columns=['eye_a_x', 'eye_a_y', 'eye_b', 'eye_b',
-                            'eye_c', 'eye_c', 'eye_d', 'eye_d'])
+    ]].to_numpy(), columns=['eye_a_x', 'eye_a_y', 'eye_b_x', 'eye_b_y',
+                            'eye_c_x', 'eye_c_y', 'eye_d_x', 'eye_d_y'])
 
     # get the file date
     file_date = datetime.datetime.strptime(file_info['date'], '%Y-%m-%dT%H:%M:%SZ')

@@ -553,6 +553,44 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
     return texts
 
 
+def preprocessing_figure(filtered_traces, real_crickets, vr_crickets, corners):
+    """Generate the figure with the preprocessing summary"""
+    # save the filtered trace
+    fig_final = plt.figure()
+    ax = fig_final.add_subplot(111)
+    # TODO: define the plotting for the VWHeel trials
+    if 'mouse_x' in filtered_traces.columns:
+
+        # plot the filtered trace
+        a = ax.scatter(filtered_traces.mouse_x, filtered_traces.mouse_y,
+                       c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Blues')
+        cbar = fig_final.colorbar(a, ax=ax)
+        cbar.set_label('Time (s)')
+        ax.axis('equal')
+
+        # for all the real crickets
+        for real_cricket in range(real_crickets):
+            ax.scatter(filtered_traces['cricket_' + str(real_cricket) + '_x'],
+                       filtered_traces['cricket_' + str(real_cricket) + '_y'],
+                       c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Oranges')
+
+        # for all the virtual crickets or virtual targets
+        for vr_cricket in range(vr_crickets):
+            try:
+                ax.scatter(filtered_traces['vrcricket_' + str(vr_cricket) + '_x'],
+                           filtered_traces['vrcricket_' + str(vr_cricket) + '_y'],
+                           c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
+            except:
+                ax.scatter(filtered_traces['target_x_m'], filtered_traces['target_y_m'],
+                           c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
+
+    # plot the found corners if existent
+    if len(corners) > 0:
+        for corner in corners:
+            ax.scatter(corner[0], corner[1], c='black')
+    return fig_final
+
+
 def plot_heatmap(values, xlabels, ylabels, ax=None, **kwargs):
     if ax is None:
         fig, ax = plt.subplots()
