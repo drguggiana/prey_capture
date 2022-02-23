@@ -313,13 +313,15 @@ rule tc_consolidate:
         "snakemake_scripts/tc_consolidate.py"
 
 
-rule visualize_aggregates:
-    input:
-        os.path.join(paths.analysis_path, "preprocessing_{query}.hdf5")
-    output:
-        os.path.join(paths.figures_path, "averages_{query}.html")
-    notebook:
-        "snakemake_scripts/notebooks/Vis_averages.ipynb"
+
+
+# rule visualize_aggregates:
+#     input:
+#         os.path.join(paths.analysis_path, "preprocessing_{query}.hdf5")
+#     output:
+#         os.path.join(paths.figures_path, "averages_{query}.html")
+#     notebook:
+#         "snakemake_scripts/notebooks/Vis_averages.ipynb"
 
 
 # def run_selector(wildcards):

@@ -72,7 +72,10 @@ if len(motive_path) > 0:
         motive_data = pd.read_csv(motive_path, header=0, skiprows=df_line)
 
     # trim the motive data to the first trial
-    motive_data = motive_data.iloc[np.argwhere(motive_data.loc[:, [' trial_num']].to_numpy() == 0)[0][0]:, :]
+    try:
+        motive_data = motive_data.iloc[np.argwhere(motive_data.loc[:, [' trial_num']].to_numpy() == 0)[0][0]:, :]
+    except KeyError:
+        motive_data = motive_data.iloc[np.argwhere(motive_data.loc[:, ['trial_num']].to_numpy() == 0)[0][0]:, :]
     motive_count = motive_data.shape[0]
     print(f'Motive frames in the motive file: {motive_count}')
 
@@ -105,13 +108,14 @@ if len(motive_path) > 0:
 
     print(f'Motive frames in the sync file: {sync_motive.shape[0]}')
 
+# TODO: expand to preprocessed files
 # plot sync frames
 fig = plt.figure()
 
 # plot each field
 for idx, el in enumerate(sync_data.columns[1:]):
     ax = fig.add_subplot(len(sync_data.columns[1:]), 1, idx+1)
-    ax.plot(sync_data['Time'].to_numpy(), np.round(sync_data[el].to_numpy()))
+    ax.plot(sync_data['Time'].to_numpy(), sync_data[el].to_numpy())
     plt.ylabel(el)
 
 # show target frame

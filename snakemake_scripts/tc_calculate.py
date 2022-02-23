@@ -134,6 +134,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
     tc_half = {}
     tc_full = {}
     tc_resp = {}
+    tc_counts = {}
     # for all the features
     for pair_idx in np.arange(pair_number):
         # get the current feature
@@ -147,6 +148,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
             tc_half[feature_name] = []
             tc_full[feature_name] = []
             tc_resp[feature_name] = []
+            tc_counts[feature_name] = []
             continue
         # get the bins from the parameters file
         try:
@@ -164,8 +166,10 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
         counts_feature_0 = current_feature_0[keep_vector_full]
         counts_feature_1 = current_feature_1[keep_vector_full]
         # get the counts
-        feature_counts = stat.binned_statistic_2d(counts_feature_0, counts_feature_1, counts_feature_0,
-                                                  statistic='count', bins=bins)[0]
+        feature_counts_raw = stat.binned_statistic_2d(counts_feature_0, counts_feature_1, counts_feature_0,
+                                                      statistic='count', bins=bins)[0]
+        feature_counts = feature_counts_raw.copy()
+
         # zero the positions with less than 3 counts
         feature_counts[feature_counts < 3] = 0
         # for first and second half
@@ -235,8 +239,9 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
         tc_half[feature_name] = tc_half_temp
         tc_full[feature_name] = tc_cell_full
         tc_resp[feature_name] = tc_cell_resp
+        tc_counts[feature_name] = feature_counts_raw
 
-    return tc_half, tc_full, tc_resp
+    return tc_half, tc_full, tc_resp, tc_counts
 
 
 def extract_consistency(tc_half, target_pairs, cell_number):
@@ -296,7 +301,7 @@ def extract_consistency(tc_half, target_pairs, cell_number):
     return tc_cons
 
 
-def convert_to_dataframe(half_in, full_in, resp_in, cons_in, date, mouse, setup):
+def convert_to_dataframe(half_in, full_in, counts_in, resp_in, cons_in, date, mouse, setup):
     """Convert the TCs and their metrics into dataframe format"""
     # allocate an output dict
     out_dict = {}
@@ -305,6 +310,7 @@ def convert_to_dataframe(half_in, full_in, resp_in, cons_in, date, mouse, setup)
         # get all the components
         c_half = half_in[feat]
         c_full = full_in[feat]
+        c_count = counts_in[feat]
         c_resp = resp_in[feat]
         c_cons = cons_in[feat]
 
@@ -321,14 +327,18 @@ def convert_to_dataframe(half_in, full_in, resp_in, cons_in, date, mouse, setup)
         flat_full = np.array([el.flatten() for el in c_full])
         labels_full = ['bin_'+str(el) for el in np.arange(flat_full.shape[1])]
 
+        flat_count = np.array([el.flatten() for el in c_count])
+        labels_count = ['count_' + str(el) for el in np.arange(flat_count.shape[1])]
+
         # turn everything into dataframes
         df_half = pd.DataFrame(np.hstack(flat_half), columns=np.hstack(labels_half), dtype=np.float32)
         df_full = pd.DataFrame(flat_full, columns=labels_full, dtype=np.float32)
+        df_count = pd.DataFrame(flat_count, columns=labels_count, dtype=np.float32)
         df_resp = pd.DataFrame(c_resp, columns=['Resp_index', 'Resp_test'], dtype=np.float32)
         df_cons = pd.DataFrame(c_cons, columns=['Cons_index', 'Cons_test'], dtype=np.float32)
 
         # concatenate
-        df_concat = pd.concat((df_half, df_full, df_resp, df_cons), axis=1)
+        df_concat = pd.concat((df_half, df_full, df_count, df_resp, df_cons), axis=1)
         # generate columns for date and animal
         df_concat['day'] = date
         df_concat['animal'] = mouse
@@ -408,12 +418,12 @@ if __name__ == '__main__':
         cell_num = calcium.shape[1]
 
         # get the TCs and their responsivity
-        tcs_half, tcs_full, tcs_resp = extract_tcs_responsivity(features, calcium, variable_pairs, cell_num)
+        tcs_half, tcs_full, tcs_resp, tc_counts = extract_tcs_responsivity(features, calcium, variable_pairs, cell_num)
         # get the TC consistency
         tcs_cons = extract_consistency(tcs_half, variable_pairs, cell_num)
 
         # convert the outputs into a dataframe
-        tcs_dict = convert_to_dataframe(tcs_half, tcs_full, tcs_resp, tcs_cons, day, animal, rig)
+        tcs_dict = convert_to_dataframe(tcs_half, tcs_full, tc_counts, tcs_resp, tcs_cons, day, animal, rig)
 
         # for all the features
         for feature in tcs_dict.keys():

@@ -24,7 +24,6 @@ def pose_repair(data_in, model_path, delay=4):
     # nan_vector = np.any(np.isnan(data_in), axis=1)
     nan_vector = np.isnan(data_in)
     # select the points with NaNs for inference
-    # current_points = data_in[nan_vector, :]
     current_points = data_in
     # assemble the design matrix
     # define the constants (based on model trained)
@@ -34,16 +33,6 @@ def pose_repair(data_in, model_path, delay=4):
 
     # allocate memory for the design matrix
     design_matrix = np.zeros((number_timepoints, number_features*delay + number_features))
-    # # pad the data according to the delay
-    # current_points = np.concatenate((np.zeros((delay, number_features)), current_points), axis=0)
-    # # assemble the design matrix
-    # # for all the points
-    # for points in np.arange(number_timepoints):
-    #     design_matrix[points, :] = current_points[points:points+delay+1, :].reshape([1, -1])
-    #
-    # # get the input data
-    # # x = design_matrix[:, number_features:]
-    # x = design_matrix
 
     current_points = np.concatenate((np.zeros((int(delay / 2), number_features)), current_points,
                                      np.zeros((int(delay / 2), number_features))), axis=0)
@@ -55,9 +44,6 @@ def pose_repair(data_in, model_path, delay=4):
     # extract the prediction and validation matrices
     design_matrix[np.isnan(design_matrix)] = 0
 
-    # eval_X = design_matrix[:, number_features:]
-    # eval_X = design_matrix
-    # eval_y = design_matrix[:, :number_features]
     x = np.concatenate((design_matrix[:, :number_features * int(delay / 2)],
                         design_matrix[:, -number_features * int(delay / 2):]), axis=1)
     # turn NaNs into 0
@@ -65,7 +51,6 @@ def pose_repair(data_in, model_path, delay=4):
     # run the inference
     predicted_points = model.predict(x)
     # replace the points in the input data
-    # data_out[nan_vector, :] = predicted_points[nan_vector, :]
     data_out[nan_vector] = predicted_points[nan_vector]
     return data_out
 
@@ -169,7 +154,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
                                 'mouse_body3_x', 'mouse_body3_y', 'mouse_base_x', 'mouse_base_y',
                                 'cricket_0_head_x', 'cricket_0_head_y', 'cricket_0_x', 'cricket_0_y'])
 
-        # get the likelihoods
+        # get the likelihoods of the movable body parts
         likelihood_frame = pd.DataFrame(raw_h5[[
             [el for el in column_names if ('mouseSnout' in el) and ('likelihood' in el)][0],
             [el for el in column_names if ('mouseBarL' in el) and ('likelihood' in el)][0],
@@ -454,6 +439,43 @@ def extract_motive(file_path_motive, rig, trials=None):
         raw_data = assign_trial_parameters(raw_data, trials)
 
     return raw_data, arena_corners, obstacle_positions
+
+
+def run_preprocess_eye(file_path_ref, file_path_dlc, file_info, kernel_size=5):
+    """Extract the coordinates of the tracked eye"""
+    # TODO: placeholder code, needs to be replaced by the correct code with the proper parsing of eye network files
+
+    # load the bonsai info
+    raw_h5 = pd.read_hdf(file_path_dlc)
+    # get the column names
+    column_names = raw_h5.columns
+
+    # DLC in small arena
+    filtered_traces = pd.DataFrame(raw_h5[[
+        [el for el in column_names if ('mouseSnout' in el) and ('x' in el)][0],
+        [el for el in column_names if ('mouseSnout' in el) and ('y' in el)][0],
+        [el for el in column_names if ('mouseBarL' in el) and ('x' in el)][0],
+        [el for el in column_names if ('mouseBarL' in el) and ('y' in el)][0],
+        [el for el in column_names if ('mouseBarR' in el) and ('x' in el)][0],
+        [el for el in column_names if ('mouseBarR' in el) and ('y' in el)][0],
+        [el for el in column_names if ('mouseHead' in el) and ('x' in el)][0],
+        [el for el in column_names if ('mouseHead' in el) and ('y' in el)][0],
+    ]].to_numpy(), columns=['eye_a_x', 'eye_a_y', 'eye_b', 'eye_b',
+                            'eye_c', 'eye_c', 'eye_d', 'eye_d'])
+
+    # get the file date
+    file_date = datetime.datetime.strptime(file_info['date'], '%Y-%m-%dT%H:%M:%SZ')
+    # align the DLC frames with the sync time
+    filtered_traces = fm.match_dlc(filtered_traces, file_info, file_date)
+    # parse the path
+    parsed_path = parse_path(file_path_ref)
+    # add the mouse and date
+    filtered_traces['mouse'] = parsed_path['animal']
+    filtered_traces['datetime'] = parsed_path['datetime']    # generate the frame bounds dataframe using all frames
+    frame_bounds = [0, filtered_traces.shape[0], filtered_traces.shape[0]]
+    frame_bounds = pd.DataFrame(np.array(frame_bounds).reshape([1, 3]), columns=['start', 'end', 'original_length'])
+
+    return filtered_traces, [], frame_bounds
 
 
 # if __name__ == '__main__':
