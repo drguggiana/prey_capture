@@ -302,9 +302,9 @@ def infer_cricket_position(data_in, threshold, corners, ref_corners):
     # identify the points that are within the threshold and are missing
     # target_points = np.argwhere((distance_mouse < threshold) & np.isnan(cricket_coordinates['cricket_0_x'])).flatten()
     target_points = np.argwhere(np.all(
-        np.isnan(cricket_coordinates.loc[:, cricket_columns]), axis=1) &
+        np.isnan(cricket_coordinates.loc[:, cricket_columns]).to_numpy(), axis=1) &
                  np.all(~np.isnan(
-                     data_in.loc[:, ['mouse_x', 'mouse_y', 'mouse_head_x', 'mouse_head_y']]), axis=1)).flatten()
+                     data_in.loc[:, ['mouse_x', 'mouse_y', 'mouse_head_x', 'mouse_head_y']]).to_numpy(), axis=1)).flatten()
     # if target points is empty, skip
     if target_points.shape[0] > 0:
         # assign the position of the mouse to those points
@@ -348,29 +348,51 @@ def interpolate_segments(files, target_value):
     return interpolated_traces
 
 
-def interpolate_animals(files, target_values):
-    """Interpolate the mouse NaNs and prolong the cricket ones"""
+def interpolate_animals(files, target_values, ref_corners, corners, untrimmed, distance_threshold=6):
+    """Correct the cricket position"""
     # extract the mouse coordinates
     mouse_columns = [el for el in files.columns if 'mouse' in el]
     mouse_coordinates = files[mouse_columns]
 
-    # # interpolate with the usual method
-    # mouse_interpolated = interpolate_segments(mouse_coordinates, target_values)
-    # fill in the missing values in the skeleton
-
-    #
-
-
     # get the cricket coordinates
     cricket_columns = [el for el in files.columns if 'cricket' in el]
-    cricket_coordinates = files[cricket_columns]
+    cricket_coordinates = files[cricket_columns].copy()
+    cricket_untrimmed = untrimmed[cricket_columns].copy()
     # copy the data
     cricket_interpolated = cricket_coordinates.copy()
+    # make rows that contain a nan entirely nan
+    nan_vector = np.any(np.isnan(cricket_coordinates.to_numpy()), axis=1)
+    cricket_coordinates.iloc[nan_vector, :] = np.nan
+    # if all the rows are nans, exit returning the original dataframe
+    if np.sum(nan_vector) == cricket_coordinates.shape[0]:
+        return files
+
+    distance_mouse = \
+        fk.distance_calculation(cricket_coordinates[['cricket_0_x', 'cricket_0_y']].to_numpy(),
+                                mouse_coordinates[['mouse_x', 'mouse_y']].to_numpy())
+    # convert the distance to cm
+    distance_mouse = distance_mouse*(np.abs(ref_corners[0][1] -
+                                            ref_corners[1][1])/np.abs(corners[0][0] - corners[2][0]))
+    # add an offset at the beginning cause the starts of nan segments will always have nan distance
+    distance_mouse = np.hstack(([100], distance_mouse))
+
+    # if the first position is nan, copy the first not-nan position here
+    if np.isnan(cricket_coordinates.iloc[0, 0]):
+        # find the first not-nan
+        first_notnan = \
+            cricket_untrimmed.iloc[np.all(~np.isnan(cricket_untrimmed.to_numpy()), axis=1), :].to_numpy()[0, :]
+        cricket_coordinates.iloc[0, :] = first_notnan
 
     # for all the columns
     for col in cricket_coordinates.columns:
         # get the data
         data = cricket_coordinates[col].to_numpy()
+        # get the target column
+        if 'head' in col:
+            target_column = 'mouse_snout_' + col[-1]
+        else:
+            target_column = 'mouse_head_' + col[-1]
+
         # find the target value
         if np.isnan(target_values):
             nan_locations, nan_numbers = label(np.isnan(data))
@@ -381,12 +403,17 @@ def interpolate_animals(files, target_values):
         for segment in np.arange(1, nan_numbers+1):
             # get the start of the segment
             segment_start = np.argwhere(nan_locations == segment).flatten()[0]
-            # replace the segment by the values
-            data[nan_locations == segment] = data[segment_start-1]
+            # select the action depending on distance
+            if distance_mouse[segment_start] < distance_threshold:
+                # replace the segment by the position of the mouse
+                data[nan_locations == segment] = mouse_coordinates.loc[nan_locations == segment, target_column]
+            else:
+                # replace the segment by the last valid value
+                data[nan_locations == segment] = data[segment_start-1]
         # add to the output frame
         cricket_interpolated.loc[:, col] = data
 
-    return pd.concat([mouse_interpolated, cricket_interpolated], axis=1)
+    return pd.concat([mouse_coordinates, cricket_interpolated, files[['time_vector', 'sync_frames']]], axis=1)
 
 
 def eliminate_singles(files):
@@ -554,7 +581,7 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
                                                      np.array(reference).astype('float32'))
     # get the new corners
     new_corners = np.concatenate((corner_coordinates, np.ones((corner_coordinates.shape[0], 1))), axis=1)
-    new_corners = np.matmul(perspective_matrix, new_corners.T).T
+    new_corners = np.matmul(new_corners, perspective_matrix.T)
     new_corners = np.array([el[:2] / el[2] for el in new_corners])
 
     # copy the traces
@@ -572,15 +599,18 @@ def rescale_pixels(traces, db_data, reference, manual_coordinates=None):
             # add a vector of ones for the matrix multiplication
             original_data = np.concatenate((original_data, np.ones((original_data.shape[0], 1))), axis=1)
             # transform
-            new_data = np.matmul(perspective_matrix, original_data.T).T
-            new_data = np.array([el[:2]/el[2] for el in new_data])
+            new_data = np.matmul(original_data, perspective_matrix.T)
+            new_data = np.array([el[:2] / el[2] for el in new_data])
 
-            # simple scaling for debugging
-            # new_data = original_data*(np.abs(reference[0][1] - reference[1][1])/
-            # np.abs(corner_coordinates[0][0] - corner_coordinates[2][0]))
+            # # basic scaling for debugging
+            # new_data = original_data*(np.abs(reference[0][1] - reference[1][1]) /
+            #                           np.abs(corner_coordinates[0][0] - corner_coordinates[2][0]))
 
             # replace the original data
             new_traces[[column + 'x', column + 'y']] = new_data[:, :2]
+
+    # # turn the perspective matrix into a dataframe
+    # output_matrix = pd.DataFrame(perspective_matrix)
 
     return new_traces, new_corners
 
@@ -764,7 +794,7 @@ def read_motive_header(file_path):
 
     with open(file_path) as f:
         # Read the file line by  line
-        reader = csv.reader(f, delimiter=" ")
+        reader = csv.reader(f, delimiter=":")
 
         for line_num, line in enumerate(reader):
             if line:
@@ -862,3 +892,109 @@ def parse_bonsai(path_in):
 
             parsed_data.append([ex_list, timestamp])
     return parsed_data
+
+
+def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, speed_threshold=1):
+    """Trim the successfull traces after cricket capture"""
+
+    # # allocate the output
+    # data_out = data_in.copy()
+    # allocate the trim frames
+    trim_frames = [0, data_in.shape[0], data_in.shape[0]]
+
+    # define the list of coordinates to look into for nans
+    target_coordinates = ['mouse', 'mouse_body2', 'mouse_body3']
+
+    # allocate memory for the combined speeds (assumption is speed should be about the same across body parts
+    speed_list = []
+    # for all the coordinate pairs
+    for el in target_coordinates:
+        # get the mouse coordinates
+        mouse_coord = data_in[[el+'_x', el+'_y']].to_numpy()
+        # roughly scale the mouse coordinates
+        mouse_coord = mouse_coord*(np.abs(ref_corners[0][1] - ref_corners[1][1])/np.abs(corners[0][0] - corners[2][0]))
+
+        # define the frame rate
+        frame_time = np.mean(np.diff(data_in['time_vector']))
+        # get a rough speed trace
+        temp_speed = np.concatenate(
+            ([0], fk.distance_calculation(mouse_coord[1:, :], mouse_coord[:-1, :]) /
+             frame_time))
+        # store the speed
+        speed_list.append(temp_speed)
+
+    # average the speeds to generate a common trace with the minimum amount of gaps
+    temp_speed = np.nanmean(speed_list, axis=0)
+
+    # trim the beginning by finding the end of a nan stretch
+    nan_segments, nan_num = label(np.isnan(temp_speed))
+    # get the lengths
+    nan_lengths = np.array([np.sum(nan_segments == el) for el in np.arange(1, nan_num+1)])
+
+    # get the ends
+    nan_ends = [np.argwhere(np.diff((nan_segments == el).astype(int)) == -1) for el in np.arange(1, nan_num+1)]
+    nan_ends = np.array([el[0][0] if el.shape[0] > 0 else np.nan for el in nan_ends])
+    # remove the lengths with nan as the end
+    nan_vector = ~np.isnan(nan_ends)
+    nan_lengths = nan_lengths[nan_vector]
+    nan_ends = nan_ends[nan_vector].astype(int)
+    # if the first element is a nan, eliminate it first (check second due to adding a zero above)
+    if np.isnan(temp_speed[1]):
+        nan_lengths[0] = nan_threshold + 1
+
+    # get the trim frame
+    try:
+        trim_frames[0] = nan_ends[np.argwhere(nan_lengths > nan_threshold)[-1][0]]
+    except IndexError:
+        trim_frames[0] = 0
+    # trim the trace
+    data_out = data_in.iloc[trim_frames[0]:, :].reset_index(drop=True)
+    # TODO: is this legit? should the succ trials not be trimmed?
+    # # if it's a success, skip
+    # if result == 'succ':
+    #
+    #     # find the last spot in the speed trace where the speed goes below threshold
+    #     # slow_frames = np.array([el[0] for el in np.argwhere(medfilt(temp_speed, kernel_size=11) < speed_threshold)])
+    #     slow_segments, slow_num = label(medfilt(temp_speed, kernel_size=11) < speed_threshold)
+    #     # get the beginning of the last one
+    #
+    #     # get the lengths
+    #     slow_lengths = np.array([np.sum(slow_segments == el) for el in np.arange(1, slow_num + 1)])
+    #     # get the starts
+    #     slow_starts = [np.argwhere(np.diff((slow_segments == el).astype(int)) == 1) for el in np.arange(1, slow_num + 1)]
+    #     slow_starts = np.array([el[0][0] if el.shape[0] > 0 else np.nan for el in slow_starts])
+    #     # remove the lengths with nan as the start
+    #     nan_vector = ~np.isnan(slow_starts)
+    #     slow_lengths = slow_lengths[nan_vector]
+    #     slow_starts = slow_starts[nan_vector].astype(int)
+    #     try:
+    #         trim_frames[1] = slow_starts[np.argwhere((slow_lengths > 1) & (slow_starts > trim_frames[0]))[-1][0]]
+    #         # trim the trace
+    #         data_out = data_out.iloc[:trim_frames[1] - trim_frames[0] - 1, :].reset_index(drop=True)
+    #     except IndexError:
+    #         print('End not trimmed for file')
+
+    # format the frame bounds as a dataframe
+    trim_frames = pd.DataFrame(np.array(trim_frames).reshape([1, 3]), columns=['start', 'end', 'original_length'])
+    # reset the time variable
+    time = data_out.loc[:, 'time_vector']
+    data_out.loc[:, 'time_vector'] = [el - time[0] for el in time]
+    return data_out, trim_frames
+
+
+def process_corners(corner_frame):
+    """Extract the corner coordinates from the trace"""
+    corner_processed = np.reshape(np.median(corner_frame, axis=0), (4, 2))
+    return corner_processed
+
+
+def cricket_size(data_in, conversion_factor):
+    """Calculate the approximate size of the cricket"""
+    # get the distance between the cricket points
+    delta = fk.distance_calculation(data_in.loc[:, ['cricket_0_x', 'cricket_0_y']].to_numpy(),
+                                    data_in.loc[:, ['cricket_0_head_x', 'cricket_0_head_y']].to_numpy())
+
+    # take the median of the first 50 not-nan points and convert
+    target_points = delta[~np.isnan(delta)]
+    cr_size = np.median(target_points[:50])*conversion_factor
+    return cr_size

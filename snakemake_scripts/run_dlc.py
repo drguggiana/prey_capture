@@ -26,8 +26,12 @@ try:
 except IndexError:
     # define the search string
     search_string = processing_parameters.search_string
+    if 'miniscope' in search_string:
+        target_model = 'video_experiment'
+    else:
+        target_model = 'vr_experiment'
     # query the database for data to plot
-    data_all = bd.query_database('video_experiment', search_string)
+    data_all = bd.query_database(target_model, search_string)
     video_data = data_all[0]
     video_path = video_data['avi_path']
     # assemble the output path
@@ -48,7 +52,9 @@ if video_data['rig'] == 'miniscope':
 else:
     # dlc.analyze_videos(paths.config_path, [temp_video_path], destfolder=paths.temp_path)
     # uncomment when the vr network is trained
-    dlc.analyze_videos(paths.config_path_vr, [temp_video_path], destfolder=paths.temp_path)
+    # dlc.analyze_videos(paths.config_path_vr, [temp_video_path], destfolder=paths.temp_path)
+    # TODO: replace by correct DLC network, will probs have to add a case for vwheel too
+    dlc.analyze_videos(paths.config_vame_path, [temp_video_path], destfolder=paths.temp_path)
     target_model = 'vr_experiment'
 
 # filter the data

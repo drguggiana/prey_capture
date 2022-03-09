@@ -5,7 +5,7 @@ from os import path
 import shutil
 import datetime
 from skimage import io
-from skimage.external import tifffile as tif
+# from skimage.io import tifffile as tif
 import pandas as pd
 import psutil
 
@@ -72,6 +72,7 @@ def combine_tif(filenames, processing_path=None):
     if len(im_1.shape) == 2:
         im_1 = np.expand_dims(im_1, 2)
         im_1 = np.transpose(im_1, [2, 0, 1])
+    print(np.max(im_1))
     # save the file name and the number of frames
     frames_list.append([filenames[0], im_1.shape[0]])
     # assemble the output path
@@ -95,8 +96,12 @@ def combine_tif(filenames, processing_path=None):
         im_1 = np.concatenate((im_1, im_n))
         # save the file name and the number of frames
         frames_list.append([filenames[i], im_n.shape[0]])
+    # scale the output to max and turn into uint8 (for MiniAn)
+    max_value = np.max(im_1)
+    for idx, frames in enumerate(im_1):
+        im_1[idx, :, :] = ((frames/max_value)*255).astype('uint8')
     # save the final stack
-    tif.imsave(out_path_tif, im_1.astype('uint16'), bigtiff=True)
+    io.imsave(out_path_tif, im_1, bigtiff=True)
     # save the info about the files
     frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
     frames_list.to_csv(out_path_log)
@@ -135,6 +140,12 @@ def parse_path(in_path):
         counter = 7
     elif path_parts[6] == 'VScreen':
         rig = 'VScreen'
+        counter = 7
+    elif path_parts[6] == 'VTuning':
+        rig = 'VTuning'
+        counter = 7
+    elif path_parts[6] == 'VWheel':
+        rig = 'VWheel'
         counter = 7
     else:
         rig = 'VR'

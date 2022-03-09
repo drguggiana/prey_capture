@@ -3,9 +3,11 @@ import matplotlib.pyplot as plt
 from matplotlib import animation, ticker
 import numpy as np
 import sklearn.cluster as clu
+import holoviews as hv
+from bokeh.themes.theme import Theme
 
 # define the standard font sizes
-small = 7
+small = '7pt'
 medium = 10
 large = 12
 # define the conversion constant from pt to cm
@@ -19,13 +21,13 @@ font_sizes_raw = {
         'labels': small,
         'xticks': small,
         'yticks': small,
-        'zticks': small-2,
+        # 'zticks': small-2,
         'ticks': small,
         'minor_xticks': small,
         'minor_yticks': small,
         'minor_ticks': small,
         'title': small,
-        'legend': small-1,
+        # 'legend': small-1,
         'legend_title': small,
     },
     'medium': {
@@ -61,6 +63,52 @@ font_sizes_raw = {
         'legend_title': large,
     },
 }
+
+attr_dict = {
+    'attrs': {
+        'Figure': {
+            'background_fill_color': '#FFFFFF',
+            'border_fill_color': '#FFFFFF',
+            'outline_line_color': '#FFFFFF',
+        },
+        # 'Grid': {
+        #     'grid_line_dash': [6, 4],
+        #     'grid_line_alpha': .3,
+        # },
+        'Text':
+            {
+                'text_font': 'Arial',
+                # 'text_font_size': 20,
+            },
+
+        'Axis': {
+            'major_label_text_color': 'black',
+            'axis_label_text_color': 'black',
+            'major_tick_line_color': 'black',
+            'axis_line_color': "black",
+            'axis_line_width': 2,
+            'axis_line_cap': 'round',
+            'axis_label_text_font_size': '14pt',
+            'major_label_text_font_size': '14pt',
+            'minor_tick_line_color': None,
+            'major_tick_in': 0,
+            'major_tick_line_cap': 'round',
+        },
+        'Legend': {
+            'label_text_font_size': '7pt',
+        }
+    }
+}
+
+
+def set_theme():
+    """set the default theme for the figures"""
+    theme = Theme(
+        json=attr_dict
+    )
+
+    hv.renderer('bokeh').theme = theme
+    return theme
 
 
 def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-', color=None,
@@ -136,7 +184,7 @@ def plot_2d(data_in, rows=1, columns=1, labels=None, markers=None, linestyle='-'
                     line2d[0].set_marker(markers[plot_counter - 1][count])
                 else:
                     line2d[0].set_marker('.')
-                if linestyle is not '-':
+                if linestyle != '-':
                     line2d[0].set_linestyle(linestyle[plot_counter - 1][count])
                 # change the font size if provided
                 if fontsize is not None:
@@ -359,12 +407,12 @@ def plot_polar(data_in, fig=None, color=None, fontsize=None):
     return fig
 
 
-def plot_image(data_in, rows=1, columns=1, fig=None, colormap=None, colorbar=None):
+def plot_image(data_in, rows=1, columns=1, fig=None, colormap=None, colorbar=None, dpi=100):
     """Wrapper for the imshow function in subplots"""
     # create a new figure window
     if fig is None:
         # fig = plt.figure(dpi=300)
-        fig, ax = plt.subplots(nrows=rows, ncols=columns, squeeze=False, dpi=300)
+        fig, ax = plt.subplots(nrows=rows, ncols=columns, squeeze=False, dpi=dpi)
     else:
         ax = fig.subplots(nrows=rows, ncols=columns, squeeze=False)
     # initialize a plot counter
@@ -505,6 +553,44 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
     return texts
 
 
+def preprocessing_figure(filtered_traces, real_crickets, vr_crickets, corners):
+    """Generate the figure with the preprocessing summary"""
+    # save the filtered trace
+    fig_final = plt.figure()
+    ax = fig_final.add_subplot(111)
+    # TODO: define the plotting for the VWHeel trials
+    if 'mouse_x' in filtered_traces.columns:
+
+        # plot the filtered trace
+        a = ax.scatter(filtered_traces.mouse_x, filtered_traces.mouse_y,
+                       c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Blues')
+        cbar = fig_final.colorbar(a, ax=ax)
+        cbar.set_label('Time (s)')
+        ax.axis('equal')
+
+        # for all the real crickets
+        for real_cricket in range(real_crickets):
+            ax.scatter(filtered_traces['cricket_' + str(real_cricket) + '_x'],
+                       filtered_traces['cricket_' + str(real_cricket) + '_y'],
+                       c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Oranges')
+
+        # for all the virtual crickets or virtual targets
+        for vr_cricket in range(vr_crickets):
+            try:
+                ax.scatter(filtered_traces['vrcricket_' + str(vr_cricket) + '_x'],
+                           filtered_traces['vrcricket_' + str(vr_cricket) + '_y'],
+                           c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
+            except:
+                ax.scatter(filtered_traces['target_x_m'], filtered_traces['target_y_m'],
+                           c=filtered_traces.time_vector, marker='o', linestyle='-', cmap='Greens')
+
+    # plot the found corners if existent
+    if len(corners) > 0:
+        for corner in corners:
+            ax.scatter(corner[0], corner[1], c='black')
+    return fig_final
+
+
 def plot_heatmap(values, xlabels, ylabels, ax=None, **kwargs):
     if ax is None:
         fig, ax = plt.subplots()
@@ -561,9 +647,153 @@ def search2path(search_string):
     return search_string
 
 
-# calculate the actual font sizes in pixels
-font_sizes = {
-    'small':    {key: pix(value*pt2cm) for key, value in font_sizes_raw['small'].items()},
-    'medium':   {key: pix(value*pt2cm) for key, value in font_sizes_raw['medium'].items()},
-    'large':    {key: pix(value*pt2cm) for key, value in font_sizes_raw['large'].items()},
-}
+def format_label(label):
+    """Format labels for plots"""
+    new_label = label.replace('cricket_0', 'cricket_-')
+    new_label = new_label.split('_')
+    new_label = ' '.join([el.capitalize() for el in new_label])
+    return new_label
+
+
+def format_figure(fig, width=None, frame_width=None, height=None, frame_height=None, fontsize='small'):
+    """Apply basic figure formattings"""
+    # rotate x axislabels
+    fig.opts(xrotation=45)
+    # apply sizing
+    if width is not None:
+        fig.opts(width=width)
+    elif frame_width is not None:
+        fig.opts(frame_width=frame_width)
+    if height is not None:
+        fig.opts(height=height)
+    elif frame_height is not None:
+        fig.opts(frame_height=frame_height)
+    # Format the title and axis labels
+    xlabel = str(fig.kdims[0])
+    xlabel = format_label(xlabel)
+    fig.opts(xlabel=xlabel)
+
+    # define which label to grab depending on the number of kdims
+    if len(fig.kdims) == 1:
+        ylabel = str(fig.vdims[0])
+    else:
+        ylabel = str(fig.kdims[1])
+    ylabel = format_label(ylabel)
+    fig.opts(ylabel=ylabel)
+
+    # label = fig.label
+    # label = format_label(label)
+    # fig.opts(title=label)
+
+    # apply font sizing
+    fig.opts(fontsize=font_sizes_raw[fontsize])
+    # hardcoded scaling factor to correct too large fonts (maybe holoviews bug)
+    fig.opts(fontscale=0.745)
+
+    return fig
+
+
+def format_axis_hook(plot, element):
+    """Hook to rescale axis components"""
+    # define the dpi (alternatively, global from outside?)
+    # TODO: make dpi definition prettier/more universal
+    dpi = 600
+    # get the plot dict
+    b = plot.state
+    # scale the axis line width
+    current_axis_width = b.below[0].axis_line_width
+    b.below[0].axis_line_width = pix(current_axis_width * pt2cm, dpi)
+    b.left[0].axis_line_width = pix(current_axis_width * pt2cm, dpi)
+    # scale the outer tick length
+    current_tick_length = b.below[0].major_tick_out
+    b.below[0].major_tick_out = pix(current_tick_length * pt2cm, dpi)
+    b.left[0].major_tick_out = pix(current_tick_length * pt2cm, dpi)
+    # scale the tick width
+    current_tick_width = b.below[0].major_tick_line_width
+    b.below[0].major_tick_line_width = pix(current_tick_width * pt2cm, dpi)
+    b.left[0].major_tick_line_width = pix(current_tick_width * pt2cm, dpi)
+    # scale the tick standoff
+    current_tick_standoff = b.below[0].major_label_standoff
+    b.below[0].major_label_standoff = pix(current_tick_standoff * pt2cm, dpi)
+    b.left[0].major_label_standoff = pix(current_tick_standoff * pt2cm, dpi)
+    # scale the axis label standoff
+    current_label_standoff = b.below[0].axis_label_standoff
+    b.below[0].axis_label_standoff = pix(current_label_standoff * pt2cm, dpi)
+    b.left[0].axis_label_standoff = pix(current_label_standoff * pt2cm, dpi)
+
+
+def save_figure(fig, save_path, fig_width=5, dpi=600, fontsize='small'):
+    """Save figure for publication"""
+
+    # fig = original_fig.opts(clone=True)
+    # print(fig.opts.info())
+    # fig
+    # render the plot as a bokeh element to get the inner features
+    render_fig = hv.render(fig)
+    # get the original width and height of the figure
+    px_width = render_fig.properties_with_values()['plot_width']
+    # set flag for which dim to change later
+    flag_width = 'plot'
+    # get the frame width if the plot one wasn't defined
+    if px_width is None:
+        px_width = render_fig.properties_with_values()['frame_width']
+        flag_width = 'frame'
+    # repeat for height
+    px_height = render_fig.properties_with_values()['plot_height']
+    flag_height = 'plot'
+    if px_height is None:
+        px_height = render_fig.properties_with_values()['frame_height']
+        flag_height = 'frame'
+
+    # get their ratio
+    h_w_ratio = px_height / px_width
+
+    # scale the dimensions of the figure
+    if flag_width == 'plot':
+        fig.opts(width=pix(fig_width, dpi))
+    else:
+        fig.opts(frame_width=pix(fig_width, dpi))
+
+    if flag_height == 'plot':
+        fig.opts(height=pix(fig_width * h_w_ratio, dpi))
+    else:
+        fig.opts(frame_height=pix(fig_width * h_w_ratio, dpi))
+
+    # scale the font sizes
+    scaled_fontsizes = {}
+    for key, value in font_sizes_raw[fontsize].items():
+        number = int(value[:-2])
+        number = pix(number * pt2cm, dpi)
+        scaled_fontsizes[key] = str(number) + 'pt'
+    # apply the scaling for the final figure
+    fig.opts(fontsize=scaled_fontsizes)
+    # hardcoded scaling factor to correct too large fonts (maybe holoviews bug)
+    fig.opts(fontscale=0.745)
+    # check if legend is present
+    try:
+        is_legend = True if fig.opts.get()['show_legend']['show_legend'] else False
+    except KeyError:
+        is_legend = False
+    if is_legend:
+        # scale legend
+        current_fontsize = float(render_fig.above[0].label_text_font_size[:-2])
+        fig.opts(legend_opts={'label_text_font_size': str(pix(current_fontsize*pt2cm, dpi))+'pt'})
+
+    # scale line width
+    # TODO: use similar logic to get rid of the other try/except blocks
+    if 'Image' not in str(type(fig)):
+        try:
+            current_line_width = render_fig.renderers[0].glyph.line_width
+            fig.opts(line_width=pix(current_line_width*pt2cm, dpi))
+            fig.opts(hooks=[format_axis_hook])
+        except ValueError:
+            for idx, el in enumerate(fig.items()):
+                render_el = hv.render(el[1])
+                current_line_width = render_el.renderers[0].glyph.line_width
+                el[1].opts(line_width=pix(current_line_width*pt2cm, dpi))
+                if idx == 0:
+                    el[1].opts(hooks=[format_axis_hook])
+
+    # save the figure
+    hv.save(fig, save_path, backend='bokeh', dpi=dpi)
+    return fig
