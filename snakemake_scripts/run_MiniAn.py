@@ -126,7 +126,7 @@ def minian_main():
         open_minian,
         save_minian,
     )
-    from minian.visualization import (
+    # from minian.visualization import (
         # CNMFViewer,
         # VArrayViewer,
         # generate_videos,
@@ -136,8 +136,8 @@ def minian_main():
         # visualize_seeds,
         # visualize_spatial_update,
         # visualize_temporal_update,
-        write_video,
-    )
+        # write_video,
+    # )
 
     # get the path
     dpath = os.path.abspath(dpath)
@@ -205,9 +205,9 @@ def minian_main():
         chunks={"frame": -1, "height": chk["height"], "width": chk["width"]},
     )
 
-    # OPTIONAL generate motion corrected video
-    vid_arr = xr.concat([varr_ref, Y_fm_chk], "width").chunk({"width": -1})
-    write_video(vid_arr, "minian_mc.mp4", dpath)
+    # # OPTIONAL generate motion corrected video
+    # vid_arr = xr.concat([varr_ref, Y_fm_chk], "width").chunk({"width": -1})
+    # write_video(vid_arr, "minian_mc.mp4", dpath)
 
     # CNMF Initialization
 

@@ -630,9 +630,10 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
     last_motive = -1 if motive_traces.loc[motive_traces.shape[0]-1, 'trial_num'] == 0 else motive_traces.shape[0]
     # trim the motive frames to the start and end of the experiment
     trimmed_traces = motive_traces.iloc[first_motive:last_motive, :].reset_index(drop=True)
-    # TODO: remove this for regular trials, only here for old ones
+    # TODO: remove this for regular trials, only here for 21.2.2022 ones
+    if np.max(trimmed_traces.loc[:, 'color_factor']) > 81:
+        trimmed_traces.loc[:, 'color_factor'] = trimmed_traces.loc[:, 'color_factor']/255
     # normalize the number to 0 1 2 3 range
-    trimmed_traces.loc[:, 'color_factor'] = trimmed_traces.loc[:, 'color_factor']/255
     trimmed_traces.loc[:, 'color_factor'] = np.array([int('0b'+format(int(el)-1, '#09b')[2] +
                                                           format(int(el)-1, '#09b')[4], 2)
                                                       if el > 0 else 0 for el in trimmed_traces.loc[:, 'color_factor']])
@@ -670,7 +671,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
         frames_1 = np.round(sync_data.loc[:, 'projector_frames_2'] / 4).astype(int)
         # assemble the actual sequence
         frame_code = (frames_0 | frames_1).to_numpy()
-
+        # TODO: turn this into a function
         fixed_code = frame_code.copy()
         # for all the frames
         for idx, frame in enumerate(frame_code[1:-1]):
@@ -694,28 +695,48 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
                     fixed_code[idx] = 0
                     continue
 
-        # get the motive-based frame code
+        # get the motive-based frame code in sync
         idx_code = np.argwhere(np.abs(np.diff(fixed_code)) > 0).squeeze() + 1
         motive_code = fixed_code[idx_code]
-
         # if the frame numbers don't match, find the first motive color number and match that
         last_number = trimmed_traces.loc[trimmed_traces.shape[0]-1, 'color_factor']
         # trim the idx based on the last appearance of the last_number in motive_code
         trim_idx = np.argwhere(motive_code == last_number)[-1][0]+1
-        idx_code = idx_code[-trimmed_traces.shape[0]-1:trim_idx]
-
-        # test_code = np.vstack((fixed_code[idx_code], trimmed_traces['color_factor'].to_numpy()))
+        idx_code = idx_code[-(trimmed_traces.shape[0]+1):trim_idx]
+        # if idx_code.shape[0] < trimmed_traces.shape[0]:
+        #
+        #     # get the difference in frames
+        #     delta_frames = trimmed_traces.shape[0] - idx_code.shape[0]
+        #     # get trimmed traces trimmed
+        #     idx_code = idx_code[delta_frames:]
+            # display_code = fixed_code[idx_code]
         # get the frame times
         frame_times_motive_sync = sync_data.loc[idx_code, 'Time'].to_numpy()
+        # trim the motive frames to be contained within the camera frames
+        if frame_times_motive_sync[0] < frame_times_cam_sync[0]:
+            start_idx = np.argwhere(frame_times_motive_sync > frame_times_cam_sync[0])[0][0]
+            frame_times_motive_sync = frame_times_motive_sync[start_idx:]
+            idx_code = idx_code[start_idx:]
+            trimmed_traces = trimmed_traces.iloc[start_idx:, :].reset_index(drop=True)
+        if frame_times_motive_sync[-1] > frame_times_cam_sync[-1]:
+            end_idx = np.argwhere(frame_times_motive_sync < frame_times_cam_sync[-1])[-1][0] + 1
+            frame_times_motive_sync = frame_times_motive_sync[:end_idx]
+            idx_code = idx_code[:end_idx]
+            trimmed_traces = trimmed_traces.iloc[:end_idx, :].reset_index(drop=True)
 
-    # interpolate the camera traces to match the mini frames
+        if trimmed_traces.shape[0] > frame_times_motive_sync.shape[0]:
+            delta_frames = trimmed_traces.shape[0] - frame_times_motive_sync.shape[0]
+            trimmed_traces = trimmed_traces.iloc[delta_frames:, :].reset_index(drop=True)
+
+    # interpolate the camera traces to match the unity frames
     matched_camera = kinematics_data.drop(['time_vector', 'mouse', 'datetime', 'sync_frames'],
                                           axis=1).apply(interp_trace, raw=False, args=(frame_times_cam_sync,
                                                         frame_times_motive_sync))
 
     # fig = plt.figure()
     # ax = fig.add_subplot(211)
-    # ax.scatter(sync_data.loc[:, 'Time'], sync_data.loc[:, 'projector_frames'])
+    # # ax.scatter(sync_data.loc[:, 'Time'], sync_data.loc[:, 'projector_frames'])
+    # ax.scatter(sync_data.loc[:, 'Time'], sync_data.loc[:, 'camera_frames'])
     # ax.scatter(sync_data.loc[:, 'Time'], np.round(sync_data.loc[:, 'projector_frames']/4)*4)
     # ax.scatter(frame_times_motive_sync, np.ones_like(frame_times_motive_sync))
     #
@@ -743,7 +764,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
     #
     # fig6 = plt.figure()
     # ax = fig6.add_subplot(111)
-    # ax.plot(np.diff(frame_id), marker='o')
+    # ax.plot(np.diff(motive_code), marker='o')
 
     # add the correct time vector from the interpolated traces
     matched_camera['time_vector'] = frame_times_motive_sync
@@ -754,7 +775,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
     matched_camera['sync_frames'] = idx_code
 
     # concatenate both data frames
-    full_dataframe = pd.concat([matched_camera, trimmed_traces.drop(['time_m'], axis=1)], axis=1)
+    full_dataframe = pd.concat([matched_camera, trimmed_traces.drop(['time_m', 'color_factor'], axis=1)], axis=1)
 
     # reset the time vector
     old_time = full_dataframe['time_vector']
@@ -779,6 +800,10 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     sync_data = pd.read_csv(sync_path)
     if sync_data.shape[1] == 3:
         sync_data.columns = ['Time', 'mini_frames', 'camera_frames']
+    elif sync_data.shape[1] == 6:
+        # TODO: only for files from 21.02.2022
+        sync_data.columns = ['Time', 'projector_frames', 'camera_frames',
+                             'sync_trigger', 'mini_frames', 'wheel_frames']
     else:
         sync_data.columns = ['Time', 'projector_frames', 'camera_frames',
                              'sync_trigger', 'mini_frames', 'wheel_frames', 'projector_frames_2']
@@ -790,6 +815,15 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     frame_idx_mini_sync = np.argwhere(np.diff(np.round(sync_data.loc[:, 'mini_frames'])) > 0).squeeze() + 1
     # interpolate missing triggers (based on experience)
     frame_idx_mini_sync = interpolate_frame_triggers(frame_idx_mini_sync)
+    # correct for the calcium starting before and/or ending after the behavior
+    if frame_idx_mini_sync[0] < frame_idx_camera_sync[0]:
+        start_idx = np.argwhere(frame_idx_mini_sync > frame_idx_camera_sync[0])[0][0]
+        frame_idx_mini_sync = frame_idx_mini_sync[start_idx:]
+        calcium_data = calcium_data[start_idx:, :]
+    if frame_idx_mini_sync[-1] > frame_idx_camera_sync[-1]:
+        end_idx = np.argwhere(frame_idx_mini_sync < frame_idx_camera_sync[-1])[-1][0] + 1
+        frame_idx_mini_sync = frame_idx_mini_sync[:end_idx]
+        calcium_data = calcium_data[:end_idx, :]
     # get the delta frames with the calcium
     delta_frames = frame_idx_mini_sync.shape[0] - calcium_data.shape[0]
     # remove extra detections coming from terminating the calcium mid frame (I think)
@@ -815,8 +849,8 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
 
         # repair the trial_num column
         matched_bonsai.loc[:, 'trial_num'] = np.round(matched_bonsai.loc[:, 'trial_num'])
-        # remove the color factor
-        matched_bonsai = matched_bonsai.drop(columns=['color_factor'])
+        # # remove the color factor
+        # matched_bonsai = matched_bonsai.drop(columns=['color_factor'])
 
         # now that the trials are reassigned, add the trial data
         matched_bonsai = assign_trial_parameters(matched_bonsai, trials)

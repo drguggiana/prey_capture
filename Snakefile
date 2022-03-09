@@ -74,8 +74,8 @@ def day_animal_calcium_file(wildcards):
     python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
     animal = python_dict['mouse']
     day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
-    rig = python_dict['rig']
-    return os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumday.hdf5')))
+    # rig = python_dict['rig']
+    return os.path.join(paths.analysis_path, '_'.join((day, animal, 'calciumday.hdf5')))
 
 
 rule calcium_extract:
@@ -112,16 +112,16 @@ def matched_input(wildcards):
     name_parts = wildcards.file.split('_')
     # day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
     animal = '_'.join([name_parts[0].upper()] + name_parts[1:3])
-    rig = name_parts[3]
+    # rig = name_parts[3]
 
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
     # leave only the files with calcium data
     available_dates = np.unique([el['slug'][:10] for el in info_list
                                  if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
-                                 (animal in el['mouse']) & (rig in el['rig'])])
+                                 (animal in el['mouse'])])
 
     # assemble the paths to the calciumday files
-    animal_routes = ['_'.join((el, animal, rig, 'calciumday.hdf5')) for el in available_dates]
+    animal_routes = ['_'.join((el, animal, 'calciumday.hdf5')) for el in available_dates]
     animal_routes = [os.path.join(paths.analysis_path, el) for el in animal_routes]
     # wildcards.day_routes = day_routes
     return animal_routes
@@ -145,8 +145,8 @@ def match_selector(wildcards):
         # return rules.calcium_extraction.output
         python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
         animal = python_dict['mouse']
-        rig = python_dict['rig']
-        return os.path.join(paths.analysis_path,'_'.join((animal, rig, 'cellMatch.hdf5')))
+        # rig = python_dict['rig']
+        return os.path.join(paths.analysis_path,'_'.join((animal, 'cellMatch.hdf5')))
     else:
         return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
 

@@ -31,7 +31,6 @@ if 'track_path' in files.keys():
 else:
     motive_path = []
 
-
 calcium_path = files['avi_path'][:-4] + '_calcium.hdf5'
 match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], files['rig'], 'cellMatch.hdf5')))
 # assemble the save paths
@@ -41,6 +40,20 @@ match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], files['
 
 
 # generate demo dlc and calcium data based on the given raw data files
+# TODO: make this compatible with all versions
+if len(motive_path) > 0:
+    # load the sync file
+    sync_data = pd.read_csv(sync_path, names=['Time', 'projector_frames', 'camera_frames',
+                                              'sync_trigger', 'mini_frames', 'wheel_frames'], index_col=False)
+    # get the start and end triggers
+    sync_start = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 1)[0][0]
+    sync_end = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 2)[0][0]
+
+    # trim the sync data to the experiment
+    sync_data = sync_data.iloc[sync_start:sync_end, :].reset_index(drop=True)
+else:
+    sync_data = pd.read_csv(sync_path, names=['Time', 'mini_frames', 'camera_frames'], index_col=False)
+
 
 # count the video frames
 cap = cv2.VideoCapture(raw_path)
@@ -78,20 +91,6 @@ if len(motive_path) > 0:
         motive_data = motive_data.iloc[np.argwhere(motive_data.loc[:, ['trial_num']].to_numpy() == 0)[0][0]:, :]
     motive_count = motive_data.shape[0]
     print(f'Motive frames in the motive file: {motive_count}')
-
-# TODO: make this compatible with all versions
-if len(motive_path) > 0:
-    # load the sync file
-    sync_data = pd.read_csv(sync_path, names=['Time', 'projector_frames', 'camera_frames',
-                                              'sync_trigger', 'mini_frames', 'wheel_frames'], index_col=False)
-    # get the start and end triggers
-    sync_start = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 1)[0][0]
-    sync_end = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 2)[0][0]
-
-    # trim the sync data to the experiment
-    sync_data = sync_data.iloc[sync_start:sync_end, :].reset_index(drop=True)
-else:
-    sync_data = pd.read_csv(sync_path, names=['Time', 'mini_frames', 'camera_frames'], index_col=False)
 
 # count the respective frames
 

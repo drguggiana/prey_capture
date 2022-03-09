@@ -76,9 +76,13 @@ for files in calcium_path:
         date_list.append(os.path.basename(files)[:10])
         # frame_lists.append(np.array(f['frame_list']))
 
-# run the matching software
-spatial_union, assignments, matchings = register_multisession(
-    A=footprint_list, dims=size_list[0], templates=template_list, thresh_cost=0.9)
+try:
+    # run the matching software
+    spatial_union, assignments, matchings = register_multisession(
+        A=footprint_list, dims=size_list[0], templates=template_list, thresh_cost=0.9)
+except Exception:
+    # generate an empty array for saving
+    assignments = np.ones((len(date_list), 1))
 
 # fplot.plot_image([spatial_union[:, 0].reshape((630, 630))])
 # save the matching results

@@ -281,6 +281,9 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
 
         # trim the trace at the first mouse main body not nan
         cutoff_frame = np.argwhere(~np.isnan(filtered_traces['mouse_x'].to_numpy()))
+        # TODO: get rid of this line once the DLC networks are in place
+        filtered_traces[np.isnan(filtered_traces)] = 0
+
         # if no cutoff is found, don't cutoff anything
         if cutoff_frame.shape[0] > 0:
             cutoff_frame = cutoff_frame[0][0]
@@ -309,6 +312,9 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
 
         # put the values back in the main df
         filtered_traces.loc[:, column_list] = mouse_data
+        # get rid of the first row since it's usually an artifact
+        filtered_traces = filtered_traces.iloc[1:, :].reset_index(drop=True)
+        frame_bounds['start'] += 1
 
     if file_info['result'] != 'habi':
         # interpolate the position of the cricket assuming stationarity
@@ -321,6 +327,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
     # parse the path
     parsed_path = parse_path(file_path_ref)
     # add the mouse and the date
+    # TODO: should eventually multi-index this
     filtered_traces['mouse'] = parsed_path['animal']
     filtered_traces['datetime'] = parsed_path['datetime']
 

@@ -140,12 +140,19 @@ def kinematic_calculations(data):
 
     # check if there are nans. if so, return a badFile dataframe
     coordinate_columns = [el for el in data.columns if ('_x' in el) | ('_y' in el)]
-    if np.any(np.isnan(data[coordinate_columns])):
-        real_crickets = 0
-        vr_crickets = 0
-        kine_data = pd.DataFrame(['badFile'], columns=['badFile'])
 
-        return kine_data, real_crickets, vr_crickets
+    # TODO: remove this gate once DLC networks are in place
+    if 'trial_num' not in data.columns:
+        if np.any(np.isnan(data[coordinate_columns])):
+            real_crickets = 0
+            vr_crickets = 0
+            kine_data = pd.DataFrame(['badFile'], columns=['badFile'])
+
+            return kine_data, real_crickets, vr_crickets
+
+    # keep the mouse, datetime and syncframes columns (and trial_num if there)
+    meta_columns = [el for el in ['mouse', 'datetime', 'sync_frames', 'trial_num', 'grating_phase']
+                    if el in data.columns]
 
     # define which coordinates to use depending on the available data
     if 'mouse_x_m' in data.columns:
@@ -170,8 +177,6 @@ def kinematic_calculations(data):
 
     # get the time
     time_vector = data.time_vector.to_numpy()
-    # get the sync frames
-    sync_frames = data.sync_frames.to_numpy()
 
     mouse_speed = np.concatenate(
         ([0], distance_calculation(mouse_coord_hd[1:, :], mouse_coord_hd[:-1, :]) /
@@ -179,13 +184,15 @@ def kinematic_calculations(data):
     mouse_acceleration = np.concatenate(([0], np.diff(mouse_speed)))
 
     # save the traces to a variable
-    angle_traces = np.vstack((mouse_heading, mouse_speed, mouse_acceleration, time_vector, sync_frames)).T
+    angle_traces = np.vstack((mouse_heading, mouse_speed, mouse_acceleration, time_vector)).T
     # replace infinity values with NaNs (in the kinematic traces)
     angle_traces[np.isinf(angle_traces)] = np.nan
 
     # create a dataframe with the results
     kine_data = pd.DataFrame(angle_traces, columns=['mouse_heading', 'mouse_speed', 'mouse_acceleration',
-                                                    'time_vector', 'sync_frames'])
+                                                    'time_vector'])
+    # add the meta columns
+    kine_data = pd.concat([kine_data, data.loc[:, meta_columns]], axis=1)
 
     # if the motive flag is on, also calculate head direction
     if 'mouse_x_m' in data.columns:

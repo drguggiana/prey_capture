@@ -949,30 +949,31 @@ def trim_to_movement(result, data_in, ref_corners, corners, nan_threshold=150, s
         trim_frames[0] = 0
     # trim the trace
     data_out = data_in.iloc[trim_frames[0]:, :].reset_index(drop=True)
+    # TODO: is this legit? should the succ trials not be trimmed?
+    # # if it's a success, skip
+    # if result == 'succ':
+    #
+    #     # find the last spot in the speed trace where the speed goes below threshold
+    #     # slow_frames = np.array([el[0] for el in np.argwhere(medfilt(temp_speed, kernel_size=11) < speed_threshold)])
+    #     slow_segments, slow_num = label(medfilt(temp_speed, kernel_size=11) < speed_threshold)
+    #     # get the beginning of the last one
+    #
+    #     # get the lengths
+    #     slow_lengths = np.array([np.sum(slow_segments == el) for el in np.arange(1, slow_num + 1)])
+    #     # get the starts
+    #     slow_starts = [np.argwhere(np.diff((slow_segments == el).astype(int)) == 1) for el in np.arange(1, slow_num + 1)]
+    #     slow_starts = np.array([el[0][0] if el.shape[0] > 0 else np.nan for el in slow_starts])
+    #     # remove the lengths with nan as the start
+    #     nan_vector = ~np.isnan(slow_starts)
+    #     slow_lengths = slow_lengths[nan_vector]
+    #     slow_starts = slow_starts[nan_vector].astype(int)
+    #     try:
+    #         trim_frames[1] = slow_starts[np.argwhere((slow_lengths > 1) & (slow_starts > trim_frames[0]))[-1][0]]
+    #         # trim the trace
+    #         data_out = data_out.iloc[:trim_frames[1] - trim_frames[0] - 1, :].reset_index(drop=True)
+    #     except IndexError:
+    #         print('End not trimmed for file')
 
-    # if it's a success, skip
-    if result == 'succ':
-
-        # find the last spot in the speed trace where the speed goes below threshold
-        # slow_frames = np.array([el[0] for el in np.argwhere(medfilt(temp_speed, kernel_size=11) < speed_threshold)])
-        slow_segments, slow_num = label(medfilt(temp_speed, kernel_size=11) < speed_threshold)
-        # get the beginning of the last one
-
-        # get the lengths
-        slow_lengths = np.array([np.sum(slow_segments == el) for el in np.arange(1, slow_num + 1)])
-        # get the starts
-        slow_starts = [np.argwhere(np.diff((slow_segments == el).astype(int)) == 1) for el in np.arange(1, slow_num + 1)]
-        slow_starts = np.array([el[0][0] if el.shape[0] > 0 else np.nan for el in slow_starts])
-        # remove the lengths with nan as the start
-        nan_vector = ~np.isnan(slow_starts)
-        slow_lengths = slow_lengths[nan_vector]
-        slow_starts = slow_starts[nan_vector].astype(int)
-        try:
-            trim_frames[1] = slow_starts[np.argwhere((slow_lengths > 1) & (slow_starts > trim_frames[0]))[-1][0]]
-            # trim the trace
-            data_out = data_out.iloc[:trim_frames[1] - trim_frames[0] - 1, :].reset_index(drop=True)
-        except IndexError:
-            print('End not trimmed for file')
     # format the frame bounds as a dataframe
     trim_frames = pd.DataFrame(np.array(trim_frames).reshape([1, 3]), columns=['start', 'end', 'original_length'])
     # reset the time variable
