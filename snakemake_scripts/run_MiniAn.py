@@ -7,8 +7,6 @@ import holoviews as hv
 import numpy as np
 import xarray as xr
 from dask.distributed import Client, LocalCluster
-# from holoviews.operation.datashader import datashade, regrid
-# from holoviews.util import Dynamic
 
 
 def minian_main():
@@ -18,12 +16,12 @@ def minian_main():
     dpath = paths.temp_path
     minian_ds_path = os.path.join(dpath, "minian")
     intpath = paths.temp_minian
+    noise_freq = 0.1
     subset = dict(frame=slice(0, None))
     subset_mc = None
     interactive = True
     output_size = 100
-    # n_workers = int(os.getenv("MINIAN_NWORKERS", 4))
-    n_workers = 8
+    n_workers = int(os.getenv("MINIAN_NWORKERS", 4))
     param_save_minian = {
         "dpath": minian_ds_path,
         "meta_dict": dict(session=-1, animal=-2),
@@ -32,59 +30,56 @@ def minian_main():
 
     # Pre-processing Parameters#
     param_load_videos = {
+        #     "pattern": "msCam[0-9]+\.avi$",
         "pattern": ".tif$",
         "dtype": np.uint8,
         "downsample": dict(frame=1, height=1, width=1),
         "downsample_strategy": "subset",
     }
-    param_denoise = {"method": "median", "ksize": 9}
+    param_denoise = {"method": "median", "ksize": 7}
     param_background_removal = {"method": "tophat", "wnd": 15}
 
     # Motion Correction Parameters#
     subset_mc = None
-    param_estimate_motion = {
-        "dim": "frame",
-        "npart": 2}
+    param_estimate_motion = {"dim": "frame"}
 
     # Initialization Parameters#
     param_seeds_init = {
-        "wnd_size": 100,
+        "wnd_size": 1000,
         "method": "rolling",
-        "stp_size": 50,
-        "max_wnd": 25,
-        "diff_thres": 4,
+        "stp_size": 500,
+        "max_wnd": 15,
+        "diff_thres": 3,
     }
-    param_pnr_refine = {"noise_freq": 0.06, "thres": 1}
+    param_pnr_refine = {"noise_freq": noise_freq, "thres": 1}
     param_ks_refine = {"sig": 0.05}
-    param_seeds_merge = {"thres_dist": 5, "thres_corr": 0.8, "noise_freq": 0.06}
-    param_initialize = {"thres_corr": 0.8, "wnd": 10, "noise_freq": 0.06}
+    param_seeds_merge = {"thres_dist": 10, "thres_corr": 0.8, "noise_freq": noise_freq}
+    param_initialize = {"thres_corr": 0.8, "wnd": 10, "noise_freq": noise_freq}
     param_init_merge = {"thres_corr": 0.8}
 
     # CNMF Parameters#
-    param_get_noise = {"noise_range": (0.06, 0.5)}
+    param_get_noise = {"noise_range": (noise_freq, 0.5)}
     param_first_spatial = {
-        "dl_wnd": 5,
+        "dl_wnd": 10,
         "sparse_penal": 0.01,
-        "update_background": True,
         "size_thres": (25, None),
     }
     param_first_temporal = {
-        "noise_freq": 0.06,
-        "sparse_penal": 1,
+        "noise_freq": noise_freq,
+        "sparse_penal": 0.5,
         "p": 1,
         "add_lag": 20,
         "jac_thres": 0.2,
     }
     param_first_merge = {"thres_corr": 0.8}
     param_second_spatial = {
-        "dl_wnd": 5,
+        "dl_wnd": 10,
         "sparse_penal": 0.01,
-        "update_background": True,
         "size_thres": (25, None),
     }
     param_second_temporal = {
-        "noise_freq": 0.06,
-        "sparse_penal": 1,
+        "noise_freq": noise_freq,
+        "sparse_penal": 0.5,
         "p": 1,
         "add_lag": 20,
         "jac_thres": 0.4,
@@ -105,11 +100,11 @@ def minian_main():
         unit_merge,
         update_spatial,
         update_temporal,
+        update_background,
     )
     from minian.initialization import (
         gmm_refine,
         initA,
-        initbf,
         initC,
         intensity_refine,
         ks_refine,
@@ -126,18 +121,18 @@ def minian_main():
         open_minian,
         save_minian,
     )
-    # from minian.visualization import (
-        # CNMFViewer,
-        # VArrayViewer,
-        # generate_videos,
-        # visualize_gmm_fit,
-        # visualize_motion,
-        # visualize_preprocess,
-        # visualize_seeds,
-        # visualize_spatial_update,
-        # visualize_temporal_update,
-        # write_video,
-    # )
+    from minian.visualization import (
+        CNMFViewer,
+        VArrayViewer,
+        generate_videos,
+        visualize_gmm_fit,
+        visualize_motion,
+        visualize_preprocess,
+        visualize_seeds,
+        visualize_spatial_update,
+        visualize_temporal_update,
+        write_video,
+    )
 
     # get the path
     dpath = os.path.abspath(dpath)
@@ -145,7 +140,7 @@ def minian_main():
     # start the cluster
     cluster = LocalCluster(
         n_workers=n_workers,
-        memory_limit="5GB",
+        memory_limit="10GB",
         resources={"MEM": 1},
         threads_per_worker=2,
         dashboard_address=":8787",
@@ -157,7 +152,7 @@ def minian_main():
     # load the videos and the chk parameter
     varr = load_videos(dpath, **param_load_videos)
     chk, _ = get_optimal_chk(varr, dtype=float)
-    print(chk)
+    print(f'Current chunk size: {chk}')
 
     # intermediate save
     varr = save_minian(
@@ -251,7 +246,7 @@ def minian_main():
     )
 
     # initialize background terms
-    b, f = initbf(Y_fm_chk, A, C_chk)
+    b, f = update_background(Y_fm_chk, A, C_chk)
     f = save_minian(f.rename("f"), intpath, overwrite=True)
     b = save_minian(b.rename("b"), intpath, overwrite=True)
 
@@ -262,9 +257,17 @@ def minian_main():
     sn_spatial = save_minian(sn_spatial.rename("sn_spatial"), intpath, overwrite=True)
 
     # spatial update 1
-    A_new, b_new, f_new, mask = update_spatial(
-        Y_hw_chk, A, b, C, f, sn_spatial, **param_first_spatial
+    A_new, mask, norm_fac = update_spatial(
+        Y_hw_chk, A, C, sn_spatial, **param_first_spatial
     )
+    C_new = save_minian(
+        (C.sel(unit_id=mask) * norm_fac).rename("C_new"), intpath, overwrite=True
+    )
+    C_chk_new = save_minian(
+        (C_chk.sel(unit_id=mask) * norm_fac).rename("C_chk_new"), intpath, overwrite=True
+    )
+    # update background
+    b_new, f_new = update_background(Y_fm_chk, A_new, C_chk_new)
 
     # save spatial results
     A = save_minian(
@@ -277,8 +280,8 @@ def minian_main():
     f = save_minian(
         f_new.chunk({"frame": chk["frame"]}).rename("f"), intpath, overwrite=True
     )
-    C = C.sel(unit_id=A.coords["unit_id"].values)
-    C_chk = C_chk.sel(unit_id=A.coords["unit_id"].values)
+    C = save_minian(C_new.rename("C"), intpath, overwrite=True)
+    C_chk = save_minian(C_chk_new.rename("C_chk"), intpath, overwrite=True)
 
     # save raw signal for temporal update
     YrA = save_minian(
@@ -329,9 +332,18 @@ def minian_main():
     sig = save_minian(sig_mrg.rename("sig_mrg"), intpath, overwrite=True)
 
     # second spatial update
-    A_new, b_new, f_new, mask = update_spatial(
-        Y_hw_chk, A, b, sig, f, sn_spatial, **param_second_spatial
+    A_new, mask, norm_fac = update_spatial(
+        Y_hw_chk, A, C, sn_spatial, **param_second_spatial
     )
+    C_new = save_minian(
+        (C.sel(unit_id=mask) * norm_fac).rename("C_new"), intpath, overwrite=True
+    )
+    C_chk_new = save_minian(
+        (C_chk.sel(unit_id=mask) * norm_fac).rename("C_chk_new"), intpath, overwrite=True
+    )
+
+    # update background
+    b_new, f_new = update_background(Y_fm_chk, A_new, C_chk_new)
 
     # save second spatial results
     A = save_minian(
@@ -344,8 +356,8 @@ def minian_main():
     f = save_minian(
         f_new.chunk({"frame": chk["frame"]}).rename("f"), intpath, overwrite=True
     )
-    C = C.sel(unit_id=A.coords["unit_id"].values)
-    C_chk = C_chk.sel(unit_id=A.coords["unit_id"].values)
+    C = save_minian(C_new.rename("C"), intpath, overwrite=True)
+    C_chk = save_minian(C_chk_new.rename("C_chk"), intpath, overwrite=True)
 
     # save second raw for temporal
     YrA = save_minian(

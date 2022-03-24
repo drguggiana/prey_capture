@@ -814,7 +814,7 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     # get the miniscope frame indexes from the sync file
     frame_idx_mini_sync = np.argwhere(np.diff(np.round(sync_data.loc[:, 'mini_frames'])) > 0).squeeze() + 1
     # interpolate missing triggers (based on experience)
-    frame_idx_mini_sync = interpolate_frame_triggers(frame_idx_mini_sync)
+    frame_idx_mini_sync = np.round(interpolate_frame_triggers(frame_idx_mini_sync))
     # correct for the calcium starting before and/or ending after the behavior
     if frame_idx_mini_sync[0] < frame_idx_camera_sync[0]:
         start_idx = np.argwhere(frame_idx_mini_sync > frame_idx_camera_sync[0])[0][0]
@@ -849,24 +849,23 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
 
         # repair the trial_num column
         matched_bonsai.loc[:, 'trial_num'] = np.round(matched_bonsai.loc[:, 'trial_num'])
-        # # remove the color factor
-        # matched_bonsai = matched_bonsai.drop(columns=['color_factor'])
 
         # now that the trials are reassigned, add the trial data
         matched_bonsai = assign_trial_parameters(matched_bonsai, trials)
 
     else:
-        # # interpolate the bonsai traces to match the mini frames
-        # matched_bonsai = kinematics_data.drop(['time_vector', 'sync_frames', 'mouse', 'datetime'],
-        #                                       axis=1).apply(interp_trace, raw=False, args=(frame_times_camera_sync,
-        #                                                                                    frame_times_mini_sync))
         # round the quadrant vector as it should be discrete
         quadrant_columns = [el for el in matched_bonsai.columns if ('_quadrant' in el)]
         for el in quadrant_columns:
             matched_bonsai[el] = np.round(matched_bonsai[el])
+        # same for the hunt trace
+        if 'hunt_trace' in matched_bonsai.columns:
+            matched_bonsai.loc[:, 'hunt_trace'] = np.round(matched_bonsai.loc[:, 'hunt_trace'])
 
-    # add the correct time vector from the interpolated traces
+    # add the correct time vector from the interpolated traces, plus mouse and datetime
     matched_bonsai['time_vector'] = frame_times_mini_sync
+    matched_bonsai['mouse'] = kinematics_data.loc[0, 'mouse']
+    matched_bonsai['datetime'] = kinematics_data.loc[0, 'datetime']
 
     # print a single dataframe with the calcium matched positions and timestamps
     calcium_dataframe = pd.DataFrame(calcium_data,
@@ -916,7 +915,7 @@ def match_dlc(filtered_traces, file_info, file_date):
 
     # choose the timestamp mode depending on the date
     # (this is here mostly just in case, should be able to handle files before the sync file)
-    if file_date <= datetime.datetime(year=2019, month=11, day=10):
+    if file_date <= datetime.datetime(year=2019, month=11, day=11, hour=20):
         # parse the bonsai file for the time stamps
         timestamp = []
 
@@ -928,7 +927,7 @@ def match_dlc(filtered_traces, file_info, file_date):
 
         # add the time stamps to the main dataframe
         time = np.array([datetime.datetime.strptime(el[:-7], '%Y-%m-%dT%H:%M:%S.%f') for el in timestamp])
-        time = (time - time[0]).total_seconds()
+        time = np.array([el.total_seconds() for el in (time - time[0])])
         cam_idx = np.ones_like(time) * np.nan
 
     elif (file_date <= datetime.datetime(year=2021, month=12, day=14)) & \

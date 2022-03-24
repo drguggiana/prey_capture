@@ -20,7 +20,7 @@ datasets_folder = "Data"  # @param {type:"string"}
 output_path = r"D:\DeepWonder_test\Results"  # @param {type:"string"}
 
 # @markdown ###The number of image for testing:
-test_datasize = 2000  # @param {type:"number"}
+test_datasize = 1000000  # @param {type:"number"}
 
 # @markdown ###The index of GPU:
 GPU = 0  # @param {type:"number"}

@@ -95,7 +95,7 @@ attr_dict = {
             'major_tick_line_cap': 'round',
         },
         'Legend': {
-            'label_text_font_size': '7pt',
+            'label_text_font_size': '14pt',
         }
     }
 }

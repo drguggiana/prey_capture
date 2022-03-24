@@ -114,6 +114,7 @@ for idx, target_entries in enumerate(full_queries):
                               # '--verbose',  # make the output more verbose for debugging
                               # '--debug-dag',  # show the file selection operation, also for debugging
                               # '--dryrun',  # generates the DAG and everything, but doesn't process
+                              # '--reason',  # print the reason for executing each job
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
                              stdout=sp.PIPE)
@@ -124,6 +125,6 @@ for idx, target_entries in enumerate(full_queries):
     # assemble the output path
     if ((parsed_search['analysis_type'] == 'full_run') or (parsed_search['analysis_type'] == 'combinedanalysis')) and \
             os.path.isfile(os.path.join(paths.analysis_path, 'full_run.txt')):
-        # delete the just_preprocess file (specify de novo to no run risks)
+        # delete the just_preprocess file (specify de novo to not run risks)
         os.remove(os.path.join(paths.analysis_path, 'full_run.txt'))
 print('yay')

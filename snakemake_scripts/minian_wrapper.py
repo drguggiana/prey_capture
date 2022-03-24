@@ -44,7 +44,8 @@ if __name__ == "__main__":
         animal = processing_parameters.animal
         day = processing_parameters.day
         rig = processing_parameters.rig
-        search_string = 'rig:%s, imaging:doric, mouse:%s, slug:%s' % (rig, animal, day)
+        # search_string = 'rig:%s, imaging:doric, mouse:%s, slug:%s' % (rig, animal, day)
+        search_string = 'imaging:doric, mouse:%s, slug:%s' % (animal, day)
         # query the database for data to plot
         data_all = bd.query_database('video_experiment', search_string)
         # video_data = data_all[0]
@@ -53,7 +54,7 @@ if __name__ == "__main__":
         # overwrite data_all with just the urls
         data_all = {os.path.basename(el['bonsai_path'])[:-4]: el['url'] for el in data_all}
         # assemble the output path
-        out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumday.hdf5')))
+        out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, 'calciumday.hdf5')))
 
     # delete the folder contents
     fi.delete_contents(paths.temp_path)

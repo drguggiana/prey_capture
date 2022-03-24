@@ -56,7 +56,6 @@ except NameError:
 
 # get the regressed variables and their names
 variable_list = processing_parameters.variable_list
-variable_title = processing_parameters.variable_title
 
 # open the regression file
 with h5py.File(target_path, 'r') as input_file, h5py.File(out_path, 'w') as output_file:
@@ -73,28 +72,38 @@ with h5py.File(target_path, 'r') as input_file, h5py.File(out_path, 'w') as outp
         # get the index of the corresponding file in the list
         file_start = frame_list[frame_list[:, 0] == timestamp, 1][0]
         file_end = frame_list[frame_list[:, 0] == timestamp, 2][0]
-        # for shuffle and non shuffle
-        for shuffler in np.arange(2):
-            if shuffler == 1:
-                suffix = 'shuffle'
-            else:
-                suffix = ''
-            # for all the variables
-            for idx in variable_title:
-                # generate the names of the fields
-                coeff_name = '_'.join(['coefficients', idx, suffix])
-                prediction_name = '_'.join(['prediction', idx, suffix])
-                r2_name = '_'.join(['r2', idx, suffix])
-                # get the data
-                coefficients = np.array(input_file[coeff_name])
-                prediction = np.array(input_file[prediction_name])
-                r2 = np.array(input_file[r2_name])
-                # get the relevant portion of prediction
-                prediction = prediction[file_start:file_end, :]
-                # save in the output file
-                output_file.create_dataset('regression/' + coeff_name, data=coefficients)
-                output_file.create_dataset('regression/' + prediction_name, data=prediction)
-                output_file.create_dataset('regression/' + r2_name, data=r2)
+
+        # get the time shifts
+        time_shifts = processing_parameters.time_shifts
+
+        # for all the time shifts
+        for time_shift in time_shifts:
+            # for shuffle and non shuffle
+            for shuffler in np.arange(processing_parameters.regression_shuffles+1):
+                if shuffler > 0:
+                    suffix = 'shuffle'+str(shuffler)
+                else:
+                    suffix = 'real'
+                # add the shift to the suffix
+                suffix += '_shift'+str(time_shift)
+                # for all the variables
+                for idx in variable_list:
+                    # generate the names of the fields
+                    coeff_name = '_'.join(['coefficients', idx, suffix])
+                    prediction_name = '_'.join(['prediction', idx, suffix])
+                    cc_name = '_'.join(['cc', idx, suffix])
+                    # check if the key is there, if not, skip
+                    if coeff_name in input_file.keys():
+                        # get the data
+                        coefficients = np.array(input_file[coeff_name])
+                        prediction = np.array(input_file[prediction_name])
+                        cc = np.array(input_file[cc_name])
+                        # get the relevant portion of prediction
+                        prediction = prediction[file_start:file_end]
+                        # save in the output file
+                        output_file.create_dataset('regression/' + coeff_name, data=coefficients)
+                        output_file.create_dataset('regression/' + prediction_name, data=prediction)
+                        output_file.create_dataset('regression/' + cc_name, data=cc)
 
 # # save the file
 # with h5py.File(out_path, 'w') as f:

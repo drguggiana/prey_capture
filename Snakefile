@@ -233,6 +233,9 @@ def files_to_day(wildcards):
     day_routes = [el['avi_path'].replace('.avi', '_preproc.hdf5').replace('VideoExperiment', 'AnalyzedData')
                   for el in info_list if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]]
                   and el['mouse']==animal and el['date'][:10]==day)]
+    # day_routes = [el['avi_path'].replace('.avi', '_preproc.hdf5').replace('VideoExperiment', 'AnalyzedData')
+    #               for el in info_list if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]]
+    #               and animal in el['slug'] and el['date'][:10]==day)]
     wildcards.day_routes = day_routes
     return day_routes
 
@@ -307,13 +310,22 @@ rule tc_consolidate:
         all_days,
     output:
         os.path.join(paths.analysis_path,"{file}_tcconsolidate.hdf5"),
-    params:
-        file_info=expand("{info}", info=config["file_info"].values()),
     script:
         "snakemake_scripts/tc_consolidate.py"
 
 
-
+rule beh_consolidate:
+    input:
+        # days_to_file,
+        # animal_to_file,
+        # expand(os.path.join(paths.analysis_path,"{file}_tcday.hdf5"), file=config['files'])
+        expand(os.path.join(paths.analysis_path,"{file}_preproc.hdf5"),file=config['files'])
+    output:
+        os.path.join(paths.analysis_path,"{file}_behconsolidate.hdf5"),
+    params:
+        info=expand("{info}", info=config["file_info"].values()),
+    script:
+        "snakemake_scripts/beh_consolidate.py"
 
 # rule visualize_aggregates:
 #     input:
@@ -334,7 +346,7 @@ rule tc_consolidate:
 
 rule full_run:
     input:
-          expand(os.path.join(paths.analysis_path,"{file}"+processing_parameters.full_run_file),file=config['files']),
+          expand(os.path.join(paths.analysis_path,"{file}"+processing_parameters.full_run_file), file=config['files']),
     output:
           os.path.join(paths.analysis_path, "full_run.txt")
     params:
