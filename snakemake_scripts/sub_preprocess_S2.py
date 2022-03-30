@@ -3,6 +3,8 @@ from functions_kinematic import *
 import functions_preprocessing as fp
 import pandas as pd
 import scipy as sc
+import processing_parameters
+from scipy.ndimage.measurements import label
 
 
 def cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_data, vr=False, cricket_name='cricket_0'):
@@ -135,6 +137,46 @@ def cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_dat
     return cricket_data
 
 
+def label_hunt(data, cricket):
+    """Label the whole trial trace based on state of the hunt"""
+
+    # get the mouse speed
+    mouse_speed = data.loc[:, 'mouse_speed'].to_numpy()
+    # get the approaches (according to Hoy et al.)
+    speed_criterion = mouse_speed > processing_parameters.speed_threshold
+    angle_criterion = (cricket.loc[:, 'cricket_0_delta_heading'] < processing_parameters.angle_threshold / 2) & \
+                      (cricket.loc[:, 'cricket_0_delta_heading'] > - processing_parameters.angle_threshold / 2)
+    range_rate = np.diff(cricket.loc[:, 'cricket_0_mouse_distance']) / np.diff(data.loc[:, 'time_vector'])
+    range_criterion = np.hstack((np.zeros((1,)), range_rate)) < processing_parameters.range_threshold
+    approach_vector = speed_criterion & angle_criterion & range_criterion
+    # eliminate gaps that are too small
+    [gap_vector, gap_num] = label(~approach_vector)
+    # for all the gaps
+    for gap in np.arange(1, gap_num):
+        # check the gap length, if too short, eliminate it
+        if data.loc[gap_vector == gap, 'time_vector'].sum() > processing_parameters.approach_break_threshold:
+            approach_vector[gap_vector == gap] = 1
+
+    # get the contact vector
+    encounter_vector = (cricket.loc[:, 'cricket_0_mouse_distance'] < processing_parameters.encounter_threshold)
+    # eliminate gaps that are too small (based on same threshold as approaches)
+    [gap_vector, gap_num] = label(~encounter_vector)
+    # for all the gaps
+    for gap in np.arange(1, gap_num):
+        # check the gap length, if too short, eliminate it
+        if data.loc[gap_vector == gap, 'time_vector'].sum() > processing_parameters.approach_break_threshold:
+            encounter_vector[gap_vector == gap] = 1
+
+    # allocate the labeled vector
+    labeled_hunt = np.zeros_like(mouse_speed)
+    # fill it up
+    labeled_hunt[approach_vector == 1] = 1
+    labeled_hunt[encounter_vector == 1] = 2
+    # turn into series
+    labeled_hunt = pd.DataFrame(labeled_hunt, columns=['hunt_trace'])
+    return labeled_hunt
+
+
 def kinematic_calculations(data):
     """Calculate basic kinematic parameters of mouse and cricket"""
 
@@ -232,8 +274,10 @@ def kinematic_calculations(data):
         cricket_head = data[['cricket_0_head_x', 'cricket_0_head_y']]
         # process the cricket related data
         cricket_data = cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_data)
+        # get the hunt trace
+        hunt_trace = label_hunt(kine_data, cricket_data)
         # concatenate the cricket data
-        kine_data = pd.concat([kine_data, cricket_data, cricket_head], axis=1)
+        kine_data = pd.concat([kine_data, cricket_data, cricket_head, hunt_trace], axis=1)
         # set the cricket number
         real_crickets = 1
     else:

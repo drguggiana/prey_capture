@@ -329,7 +329,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
     # add the mouse and the date
     # TODO: should eventually multi-index this
     filtered_traces['mouse'] = parsed_path['animal']
-    filtered_traces['datetime'] = parsed_path['datetime']
+    filtered_traces['datetime'] = str(parsed_path['datetime'])
 
     coordinate_columns = [el for el in filtered_traces.columns if 'mouse_' in el]
     coordinate_columns += [el for el in filtered_traces.columns if 'cricket_' in el]
