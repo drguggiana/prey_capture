@@ -118,15 +118,15 @@ def parse_features(data):
     return feature_raw_trials, calcium_trials
 
 
-def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, cell_number):
+def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variables, cell_number, percentile=99):
     """Extract the tuning curves (full and half) and their responsivity index"""
 
     # get the number of pairs
-    pair_number = len(target_pairs)
+    var_number = len(target_variables)
     # define the number of calcium shuffles
     shuffle_number = 100
-    # define the confidence interval cutoff
-    percentile = 99
+    # # define the confidence interval cutoff
+    # percentile = 90
     # define the number of bins for the TCs
     bin_number = 10
 
@@ -136,14 +136,14 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
     tc_resp = {}
     tc_counts = {}
     # for all the features
-    for pair_idx in np.arange(pair_number):
+    for var_idx in np.arange(var_number):
         # get the current feature
-        feature_name = target_pairs[pair_idx]
-        feature_names = feature_name.split('__')
+        feature_name = target_variables[var_idx]
+        # feature_names = feature_name.split('__')
         # skip the pair and save an empty if the feature is not present
         try:
-            current_feature_0 = feature_raw_trials.loc[:, feature_names[0]].to_numpy()
-            current_feature_1 = feature_raw_trials.loc[:, feature_names[1]].to_numpy()
+            current_feature_0 = feature_raw_trials.loc[:, feature_name].to_numpy()
+            # current_feature_1 = feature_raw_trials.loc[:, feature_names[1]].to_numpy()
         except KeyError:
             tc_half[feature_name] = []
             tc_full[feature_name] = []
@@ -154,7 +154,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
         try:
             bin_ranges = processing_parameters.tc_params[feature_name]
             # calculate the bin edges based on the ranges
-            bins = [np.linspace(el[0], el[1], num=bin_number + 1) for el in bin_ranges]
+            bins = np.linspace(bin_ranges[0], bin_ranges[1], num=bin_number + 1)
         except KeyError:
             # if not in the parameters, go for default and report
             print(f'Feature {feature_name} not found, default to 10 bins ad hoc')
@@ -162,12 +162,15 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
         # allocate a list for the 2 halves
         tc_half_temp = []
         # exclude nan values
-        keep_vector_full = (~np.isnan(current_feature_0)) & (~np.isnan(current_feature_1))
+        # keep_vector_full = (~np.isnan(current_feature_0)) & (~np.isnan(current_feature_1))
+        keep_vector_full = ~np.isnan(current_feature_0)
         counts_feature_0 = current_feature_0[keep_vector_full]
-        counts_feature_1 = current_feature_1[keep_vector_full]
+        # counts_feature_1 = current_feature_1[keep_vector_full]
         # get the counts
-        feature_counts_raw = stat.binned_statistic_2d(counts_feature_0, counts_feature_1, counts_feature_0,
-                                                      statistic='count', bins=bins)[0]
+        # feature_counts_raw = stat.binned_statistic_2d(counts_feature_0, counts_feature_1, counts_feature_0,
+        #                                               statistic='count', bins=bins)[0]
+
+        feature_counts_raw = stat.binned_statistic(counts_feature_0, counts_feature_0, statistic='count', bins=bins)[0]
         feature_counts = feature_counts_raw.copy()
 
         # zero the positions with less than 3 counts
@@ -178,11 +181,12 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
             half_bound = int(np.floor(current_feature_0.shape[0] / 2))
             half_vector = np.arange(half_bound) + half_bound * half
             half_feature_0 = current_feature_0[half_vector]
-            half_feature_1 = current_feature_1[half_vector]
+            # half_feature_1 = current_feature_1[half_vector]
             # exclude nan values
-            keep_vector = (~np.isnan(half_feature_0)) & (~np.isnan(half_feature_1))
+            # keep_vector = (~np.isnan(half_feature_0)) & (~np.isnan(half_feature_1))
+            keep_vector = ~np.isnan(half_feature_0)
             keep_feature_0 = half_feature_0[keep_vector]
-            keep_feature_1 = half_feature_1[keep_vector]
+            # keep_feature_1 = half_feature_1[keep_vector]
 
             # allocate a list for the cells
             tc_cell = []
@@ -193,8 +197,11 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
                 keep_cell = half_cell[keep_vector]
 
                 # calculate the TC
-                current_tc = stat.binned_statistic_2d(keep_feature_0, keep_feature_1, keep_cell,
-                                                      statistic='sum', bins=bins)[0]
+                # current_tc = stat.binned_statistic_2d(keep_feature_0, keep_feature_1, keep_cell,
+                #                                       statistic='sum', bins=bins)[0]
+                current_tc = \
+                    stat.binned_statistic(keep_feature_0, keep_cell, statistic='sum', bins=bins)[0]
+
                 # normalize the TC
                 norm_tc = current_tc / feature_counts
                 # remove nans and infs
@@ -210,24 +217,28 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
         # calculate the full TC
         for cell in np.arange(cell_number):
             keep_cell = calcium_trials[keep_vector_full, cell]
-            tc_cell = stat.binned_statistic_2d(counts_feature_0, counts_feature_1,
-                                               keep_cell, statistic='sum', bins=bins)[0]
+            # tc_cell = stat.binned_statistic_2d(counts_feature_0, counts_feature_1,
+            #                                    keep_cell, statistic='sum', bins=bins)[0]
+            tc_cell = \
+                stat.binned_statistic(counts_feature_0, keep_cell, statistic='sum', bins=bins)[0]
             tc_cell = tc_cell / feature_counts
             tc_cell[np.isnan(tc_cell)] = 0
             tc_cell[np.isinf(tc_cell)] = 0
             # allocate memory for the shuffles
-            shuffle_array = np.zeros((shuffle_number, bin_number, bin_number))
+            shuffle_array = np.zeros((shuffle_number, bin_number))
             # generate the shuffles
             for shuffle in np.arange(shuffle_number):
                 # randomize the calcium activity
                 random_cell = keep_cell.copy()
-                np.random.shuffle(random_cell)
-                tc_random = stat.binned_statistic_2d(counts_feature_0, counts_feature_1,
-                                                     random_cell, statistic='sum', bins=bins)[0]
+                random_cell = np.random.choice(random_cell, keep_cell.shape[0])
+                # tc_random = stat.binned_statistic_2d(counts_feature_0, counts_feature_1,
+                #                                      random_cell, statistic='sum', bins=bins)[0]
+                tc_random = \
+                    stat.binned_statistic(counts_feature_0, random_cell, statistic='sum', bins=bins)[0]
                 tc_random = tc_random / feature_counts
                 tc_random[np.isnan(tc_random)] = 0
                 tc_random[np.isinf(tc_random)] = 0
-                shuffle_array[shuffle, :, :] = tc_random
+                shuffle_array[shuffle, :] = tc_random
             # get the threshold
             resp_threshold = np.percentile(np.abs(shuffle_array.flatten()), percentile)
             # fill up the responsivity matrix
@@ -244,24 +255,24 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_pairs, c
     return tc_half, tc_full, tc_resp, tc_counts
 
 
-def extract_consistency(tc_half, target_pairs, cell_number):
+def extract_consistency(tc_half, target_variables, cell_number, percentile=95):
     """Calculate TC consistency"""
 
     # define the number of shuffles
     shuffle_number = 100
-    # define the percentile
-    percentile = 95
+    # # define the percentile
+    # percentile = 95
 
     # get the number of pairs
-    pair_number = len(target_pairs)
+    var_number = len(target_variables)
 
     # allocate memory for the trial TCs
     tc_cons = {}
     # for all the features
-    for pair_idx in np.arange(pair_number):
+    for var_idx in np.arange(var_number):
 
         # get the name
-        feature_name = target_pairs[pair_idx]
+        feature_name = target_variables[var_idx]
         # allocate an array for the correlations and tests
         tc_half_temp = np.zeros([cell_number, 2])
         # get the two halves
@@ -284,7 +295,7 @@ def extract_consistency(tc_half, target_pairs, cell_number):
             # calculate the confidence interval
             for shuffle in np.arange(shuffle_number):
                 random_second = current_second.copy().flatten()
-                np.random.shuffle(random_second)
+                random_second = np.random.choice(random_second, random_second.shape[0])
                 shuffle_array[shuffle] = np.corrcoef(current_first, random_second)[1][0]
             # turn nans into 0
             shuffle_array[np.isnan(shuffle_array)] = 0
@@ -413,14 +424,14 @@ if __name__ == '__main__':
         calcium = np.concatenate(calcium)
 
         # define the pairs to quantify
-        variable_pairs = list(processing_parameters.tc_params.keys())
+        variable_names = list(processing_parameters.tc_params.keys())
         # get the number of cells
         cell_num = calcium.shape[1]
 
         # get the TCs and their responsivity
-        tcs_half, tcs_full, tcs_resp, tc_counts = extract_tcs_responsivity(features, calcium, variable_pairs, cell_num)
+        tcs_half, tcs_full, tcs_resp, tc_counts = extract_tcs_responsivity(features, calcium, variable_names, cell_num)
         # get the TC consistency
-        tcs_cons = extract_consistency(tcs_half, variable_pairs, cell_num)
+        tcs_cons = extract_consistency(tcs_half, variable_names, cell_num)
 
         # convert the outputs into a dataframe
         tcs_dict = convert_to_dataframe(tcs_half, tcs_full, tc_counts, tcs_resp, tcs_cons, day, animal, rig)

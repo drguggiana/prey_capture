@@ -27,6 +27,9 @@ if 'miniscope' in input_path[0]:
 else:
     rig = 'VR'
 
+# set a flag for an empty file
+empty_flag = True
+
 # get a list of the features
 feature_list = processing_parameters.tc_params.keys()
 # for all the features
@@ -38,6 +41,8 @@ for feature in feature_list:
         try:
             # read in the data and store
             file_list.append(pd.read_hdf(files, feature))
+            # set the empty flag to false
+            empty_flag = False
         except KeyError:
             print(f'feature:{feature} file: {files}')
             continue
@@ -45,6 +50,11 @@ for feature in feature_list:
         # store the concatenated dataframe in the output file
         joint_df = pd.concat(file_list, axis=0).reset_index(drop=True)
         joint_df.to_hdf(out_path, feature)
+
+# if there were no tcs, save a no-ROIs file
+if empty_flag:
+    empty = pd.DataFrame([])
+    empty.to_hdf(out_path, 'no_ROIs')
 
 # generate database entry
 # assemble the entry data
