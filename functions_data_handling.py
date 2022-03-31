@@ -53,8 +53,8 @@ def parse_search_string(string_in):
         'date': '',
         'gtdate': '',
         'ltdate': '',
-        'analysis_type': '',
         'mouse': '',
+        'analysis_type': '',
     }
     # for all the keys, find the matching terms and fill in the required entries
     for key in string_dict.keys():
@@ -108,7 +108,7 @@ def save_create_snake(data_in, paths_in, file_name, hdf5_key, parsed_query, acti
     # check which actions to perform based on the kwarg
     if action in ['save', 'both']:
         # save as dataframe
-        data_in.to_hdf(file_name, key=hdf5_key, mode=mode, format='table')
+        data_in.to_hdf(file_name, key=hdf5_key, mode=mode, format='fixed')
 
     if action in ['create', 'both']:
         # generate an entry

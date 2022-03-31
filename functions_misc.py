@@ -119,7 +119,7 @@ def interp_trace(y_known, x_known, x_target):
     # also remove any NaN frames
     x_known = x_known[notnan]
     # create the interpolant
-    interpolant = interp1d(x_known, y_known, kind='linear', bounds_error=False, fill_value=np.nanmean(y_known, axis=axis))
+    interpolant = interp1d(x_known, y_known, kind='linear', bounds_error=False, fill_value='extrapolate')
     return interpolant(x_target).T
 
 
