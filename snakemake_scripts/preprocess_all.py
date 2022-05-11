@@ -65,7 +65,8 @@ except NameError:
     files = bd.query_database(target_model, search_string)[0]
     raw_path = files['avi_path']
     calcium_path = files['avi_path'][:-4] + '_calcium.hdf5'
-    match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], files['rig'], 'cellMatch.hdf5')))
+    # match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], files['rig'], 'cellMatch.hdf5')))
+    match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], 'cellMatch.hdf5')))
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
                              os.path.basename(files['avi_path'][:-4]))+'_rawcoord.hdf5'
@@ -100,11 +101,12 @@ if files['rig'] == 'miniscope':
     if files['imaging'] == 'doric':
 
         # get a dataframe with the calcium data matched to the bonsai data
-        matched_calcium = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data)
+        matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data)
 
         # if there is a calcium output, write to the file
         if matched_calcium is not None:
             matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
+            roi_info.to_hdf(save_path, key='roi_info', mode='a', format='fixed')
             # also get the cell matching if it exists
             cell_matches = fm.match_cells(match_path)
             cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')

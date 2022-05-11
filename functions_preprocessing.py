@@ -166,11 +166,11 @@ def median_discontinuities(files, tar_columns, kernel_size):
     # allocate memory for the output
     filtered_traces = files.copy()
     # for the mouse and the cricket columns
-    for animal in tar_columns:
+    for column in tar_columns:
         # # for the x or y coordinate
         # for col in animal:
         #     filtered_traces[:, col] = medfilt(files[:, col], kernel_size=kernel_size)
-        filtered_traces[animal] = medfilt(files[animal], kernel_size=kernel_size)
+        filtered_traces[column] = medfilt(files[column], kernel_size=kernel_size)
 
     return filtered_traces
 

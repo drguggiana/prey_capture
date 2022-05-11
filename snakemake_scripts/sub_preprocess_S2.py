@@ -124,6 +124,7 @@ def cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_dat
                               axis=1)
         # filter the list by the quadrant (if not visible, discard)
         visual_angle[fov_quadrant == 3] = 0
+
         # visual_angle = np.apply_along_axis(sc.spatial.distance.pdist, 1, np.expand_dims(angle_list.T, axis=2))
         # # get the angles of these coordinates, including an offset to wrap
         # head_angle = heading_calculation(head_vector,
@@ -134,6 +135,19 @@ def cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_dat
         # visual_angle = head_angle - tail_angle
         # save the coordinates in the dataframe
         cricket_data[cricket_name+'_visual_angle'] = visual_angle
+
+        # get the delta time
+        delta_time = np.concatenate(([1], np.diff(kine_data.time_vector.to_numpy())), axis=0)
+        # calculate the derivatives of the distance, heading and visual angle
+        cricket_direction = np.concatenate(([0], np.diff(delta_head+180)), axis=0)
+        # wrap cricket direction
+        cricket_direction[cricket_direction < -180] += 180
+        cricket_direction[cricket_direction > 180] -= 180
+        cricket_data[cricket_name + '_direction'] = cricket_direction/delta_time
+        cricket_data[cricket_name + '_loom'] = np.concatenate(([0], np.diff(mouse_cricket_distance)), axis=0) / \
+            delta_time
+        cricket_data[cricket_name + '_delta_visual'] = np.concatenate(([0], np.diff(visual_angle)), axis=0) / \
+            delta_time
     return cricket_data
 
 
@@ -177,7 +191,7 @@ def label_hunt(data, cricket):
     return labeled_hunt
 
 
-def kinematic_calculations(data):
+def kinematic_calculations(data, kernel_size=11):
     """Calculate basic kinematic parameters of mouse and cricket"""
 
     # check if there are nans. if so, return a badFile dataframe
@@ -215,8 +229,6 @@ def kinematic_calculations(data):
     # zero the NaNs
     mouse_heading[np.isnan(mouse_heading)] = 0
 
-    # calculate the heading to the cricket
-
     # get the time
     time_vector = data.time_vector.to_numpy()
 
@@ -225,14 +237,22 @@ def kinematic_calculations(data):
          (time_vector[1:] - time_vector[:-1])))
     mouse_acceleration = np.concatenate(([0], np.diff(mouse_speed)))
 
+    # calculate the angular speed
+    head_angular_speed = np.concatenate(([0], np.diff(mouse_heading + 180)), axis=0)
+    delta_time = np.concatenate(([1], np.diff(time_vector)), axis=0)
+    # wrap the angular speed
+    head_angular_speed[head_angular_speed > 180] -= 360
+    head_angular_speed[head_angular_speed < -180] += 360
+    angular_speed = head_angular_speed/delta_time
+
     # save the traces to a variable
-    angle_traces = np.vstack((mouse_heading, mouse_speed, mouse_acceleration, time_vector)).T
+    angle_traces = np.vstack((mouse_heading, angular_speed, mouse_speed, mouse_acceleration, time_vector)).T
     # replace infinity values with NaNs (in the kinematic traces)
     angle_traces[np.isinf(angle_traces)] = np.nan
 
     # create a dataframe with the results
-    kine_data = pd.DataFrame(angle_traces, columns=['mouse_heading', 'mouse_speed', 'mouse_acceleration',
-                                                    'time_vector'])
+    kine_data = pd.DataFrame(angle_traces, columns=['mouse_heading', 'mouse_angular_speed', 'mouse_speed',
+                                                    'mouse_acceleration', 'time_vector'])
     # add the meta columns
     kine_data = pd.concat([kine_data, data.loc[:, meta_columns]], axis=1)
 
@@ -261,10 +281,18 @@ def kinematic_calculations(data):
         # get the head angle with respect to body
         head_direction = heading_calculation(data[['mouse_head_x', 'mouse_head_y']].to_numpy(),
                                              data[['mouse_x', 'mouse_y']].to_numpy())
+
+        # # calculate the angular speed
+        # head_angular_speed = np.concatenate(([0], np.diff(head_direction+180)), axis=0)
+        # delta_time = np.concatenate(([1], np.diff(kine_data.loc[:, 'time_vector'].to_numpy())), axis=0)
+        # # wrap the angular speed
+        # head_angular_speed[head_angular_speed > 180] -= 360
+        # head_angular_speed[head_angular_speed < -180] += 360
         # save in the dataframe
         kine_data['head_direction'] = head_direction
+        # kine_data['angular_speed'] = head_angular_speed/delta_time
 
-    # add the raw tracks from DLC
+    # add the raw tracks from DLC (already filtered in S1)
     track_list = [el for el in list(data.columns) if 'mouse_' in el]
     kine_data = pd.concat([data.loc[:, track_list], kine_data], axis=1)
 
@@ -314,6 +342,12 @@ def kinematic_calculations(data):
         vr_crickets = len(vr_cricket_list)
     else:
         vr_crickets = 0
+
+    # define the columns the median
+    target_columns = [el for el in kine_data.columns if el not in
+                      ['time_vector', 'mouse', 'datetime', 'sync_frames', 'cricket_0_size', 'hunt_trace'] + track_list]
+    # median filter the traces
+    kine_data = fp.median_discontinuities(kine_data, target_columns, kernel_size)
 
     # return the dataframe
     return kine_data, real_crickets, vr_crickets
