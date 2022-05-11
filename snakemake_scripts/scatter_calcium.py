@@ -31,7 +31,7 @@ except NameError:
     search_string = processing_parameters.search_string
 
     # query the database for data to plot
-    data_all = bd.query_database('video_experiment', search_string)
+    data_all = bd.query_database('vr_experiment', search_string)
     video_data = data_all[0]
 
     # get the parts to assemble the input file path

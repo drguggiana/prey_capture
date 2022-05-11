@@ -120,7 +120,7 @@ elif files['rig'] in ['VTuning']:
     filtered_traces, px_corners, frame_bounds = preprocess_selector(files['avi_path'], files)
 
     # define the dimensions of the arena
-    manual_coordinates = paths.arena_coordinates['VR_manual']
+    manual_coordinates = paths.arena_coordinates['VTuning']
 
     # get the motive tracking data
     motive_traces, reference_coordinates, obstacle_coordinates = \
@@ -128,7 +128,7 @@ elif files['rig'] in ['VTuning']:
 
     # scale the traces accordingly
     filtered_traces, corners = \
-        fp.rescale_pixels(filtered_traces, files, reference_coordinates, manual_coordinates=manual_coordinates)
+        fp.rescale_pixels(filtered_traces, files, manual_coordinates, px_corners.to_numpy().T)
 
     # align them temporally based on the sync file
     filtered_traces = fm.match_motive_2(motive_traces, files['sync_path'], filtered_traces)
@@ -151,6 +151,7 @@ elif files['rig'] in ['VTuning']:
             # also get the cell matching if it exists
             cell_matches = fm.match_cells(match_path)
             cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
+
 elif files['rig'] in ['VWheel']:
     # load the data for the trial structure and parameters
     trials = read_hdf(files['screen_path'], key='trial_set')
@@ -159,9 +160,8 @@ elif files['rig'] in ['VWheel']:
     # run the first stage of preprocessing
     filtered_traces, corners, frame_bounds = preprocess_selector(files['avi_path'], files)
 
-    # TODO: program this once there's an eye tracking network
     # compute the eye metrics
-    filtered_traces = fm.match_eye(files, filtered_traces)
+    filtered_traces = fm.match_eye(filtered_traces)
 
     # get the wheel info
     filtered_traces = fm.match_wheel(files, filtered_traces)

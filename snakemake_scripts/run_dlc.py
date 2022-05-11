@@ -1,14 +1,14 @@
 # imports
 import os
 import sys
-sys.path.insert(0, os.path.abspath(r'D:\Code Repos\prey_capture'))
+import paths
+sys.path.insert(0, os.path.abspath(paths.prey_capture_repo_directory))
 os.environ["DLClight"] = "True"
 
 import os
 import sys
 import shutil
 import deeplabcut as dlc
-import paths
 import functions_bondjango as bd
 import functions_io as fi
 import functions_misc as fm
@@ -50,12 +50,12 @@ if video_data['rig'] == 'miniscope':
     dlc.analyze_videos(paths.config_vame_path, [temp_video_path], destfolder=paths.temp_path)
     target_model = 'video_experiment'
 else:
-    # dlc.analyze_videos(paths.config_path, [temp_video_path], destfolder=paths.temp_path)
-    # uncomment when the vr network is trained
-    # dlc.analyze_videos(paths.config_path_vr, [temp_video_path], destfolder=paths.temp_path)
-    # TODO: replace by correct DLC network, will probs have to add a case for vwheel too
-    dlc.analyze_videos(paths.config_vame_path, [temp_video_path], destfolder=paths.temp_path)
     target_model = 'vr_experiment'
+    if video_data['rig'] == 'VWheel':
+        # Use dynamic cropping for eye tracking to speed up analysis.
+        dlc.analyze_videos(paths.config_path_VWheel, [temp_video_path], destfolder=paths.temp_path, dynamic=(True, .1, 100))
+    else:
+        dlc.analyze_videos(paths.config_vame_path, [temp_video_path], destfolder=paths.temp_path)
 
 # filter the data
 # dlc.filterpredictions(config_path, [temp_video_path], filtertype='median',

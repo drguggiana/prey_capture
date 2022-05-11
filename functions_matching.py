@@ -115,7 +115,7 @@ def affine(from_data, to_data, target_data):
     # calculate an approximate affine
     affine_matrix, inliers = cv2.estimateAffine2D(from_data, to_data, ransacReprojThreshold=3,
                                                   maxIters=20000, refineIters=0, method=cv2.LMEDS)
-    print('Percentage inliers used:' + str(np.sum(inliers)*100/from_data.shape[0]))
+    print('Percentage inliers used:' + str(np.sum(inliers) * 100 / from_data.shape[0]))
     # make the transformed data homogeneous for multiplication with the affine
     transformed_data = np.squeeze(cv2.convertPointsToHomogeneous(target_data))
     # apply the affine matrix
@@ -144,12 +144,12 @@ def match_traces(data_3d, data_2d, frame_time_list, coordinate_list, cricket):
     # allocate memory for the aligned traces
     aligned_traces = []
     # allocate memory for the cricket traces
-    aligned_cricket =[]
+    aligned_cricket = []
     # initialize the first shift very high in case there's an error finding the actual shift
     first_shift_idx = 1000
     # for all the coordinate sets (i.e. dimensions)
     for count, sets in enumerate(coordinate_list):
-        shift_idx, ya, yb, cr, h, t = align_traces_motive(data_3d, data_2d, sets, frame_time_list, cricket, 1-count)
+        shift_idx, ya, yb, cr, h, t = align_traces_motive(data_3d, data_2d, sets, frame_time_list, cricket, 1 - count)
         if count == 0:
             first_shift_idx = shift_idx
         # print('Temporal shift:' + str(shift_idx))
@@ -240,7 +240,7 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds, rig=No
         # n_frames_bonsai_file = frame_times_bonsai_sync.shape[0]
         # kinematics_data = kinematics_data[:n_frames_bonsai_file]
 
-        kinematics_data = kinematics_data[:-(delta_sync-1)]
+        kinematics_data = kinematics_data[:-(delta_sync - 1)]
         # frame_times_bonsai_sync = \
         #     frame_times_bonsai_sync[-(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'start']):
         #                             -(frame_bounds.loc[0, 'original_length']-frame_bounds.loc[0, 'end']+1)-delta_sync]
@@ -255,7 +255,7 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds, rig=No
 
     # determine the indexes to trim frame_times_bonsai_sync to match the trimming of the data
     trim_start = frame_bounds.loc[0, 'start']
-    trim_end = frame_bounds.loc[0, 'end']-1
+    trim_end = frame_bounds.loc[0, 'end'] - 1
     # trim the sync frames to match the data from both ends (due to preprocessing here)
     frame_times_bonsai_sync = frame_times_bonsai_sync[trim_start:trim_end]
 
@@ -266,9 +266,10 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds, rig=No
     if trials is not None:
         # interpolate the bonsai traces to match the mini frames
         matched_bonsai = kinematics_data.drop(['time_vector'] + list(trials.columns), axis=1).apply(interp_trace,
-                                                                                                 raw=False,
-                                                                             args=(frame_times_bonsai_sync,
-                                                                                   frame_times_mini_sync))
+                                                                                                    raw=False,
+                                                                                                    args=(
+                                                                                                        frame_times_bonsai_sync,
+                                                                                                        frame_times_mini_sync))
         # deal with trial numbers
         # first reset the inter-stim intervals
         trial_nums = matched_bonsai.trial_num.to_numpy()
@@ -280,7 +281,7 @@ def match_calcium(calcium_path, sync_path, kinematics_data, frame_bounds, rig=No
         split_trials = np.array_split(trials, breaks)
 
         for trial_num, idxs in enumerate(split_trials):
-            trial_nums[idxs] = trial_num + 1    # Compensate for zero indexing
+            trial_nums[idxs] = trial_num + 1  # Compensate for zero indexing
 
         matched_bonsai.trial_num = trial_nums
 
@@ -374,16 +375,16 @@ def match_motive(motive_traces, sync_path, kinematics_data):
     # # get the number of frames in motive (assuming the extras in sync are at the end and therefore will be cropped)
     # n_frames_motive_sync = trimmed_traces.shape[0]
     # also trim the frame times (assuming frame 1 in both is the same)
-    frame_times_motive_sync = frame_times_motive_sync[first_frame:n_frames_motive_sync+first_frame]
+    frame_times_motive_sync = frame_times_motive_sync[first_frame:n_frames_motive_sync + first_frame]
     # plot_2d([[sync_data['projector_frames']]], dpi=100)
     # plot_2d([[sync_data['projector_frames'], sync_data['bonsai_frames']]], dpi=100)
     # get the frame times for bonsai
     frame_times_bonsai_sync = sync_data.loc[
-                                  np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0,
-                                  'Time'].to_numpy() # [-n_frames_bonsai_file:]
+        np.concatenate(([0], np.diff(sync_data.bonsai_frames) > 0)) > 0,
+        'Time'].to_numpy()  # [-n_frames_bonsai_file:]
 
     # trim the frame times to start the same time as motive
-    bonsai_start = np.argmin(np.abs(frame_times_motive_sync[0]-frame_times_bonsai_sync))
+    bonsai_start = np.argmin(np.abs(frame_times_motive_sync[0] - frame_times_bonsai_sync))
     frame_times_bonsai_sync = frame_times_bonsai_sync[bonsai_start:]
     # get the number of frames from bonsai
     n_frames_bonsai_file = frame_times_bonsai_sync.shape[0]
@@ -397,7 +398,7 @@ def match_motive(motive_traces, sync_path, kinematics_data):
     # interpolate the bonsai traces to match the mini frames
     matched_bonsai = kinematics_data.drop(['time_vector', 'mouse', 'datetime'],
                                           axis=1).apply(interp_trace, raw=False, args=(frame_times_bonsai_sync,
-                                                        frame_times_motive_sync))
+                                                                                       frame_times_motive_sync))
 
     # add the correct time vector from the interpolated traces
     matched_bonsai['time_vector'] = frame_times_motive_sync
@@ -434,7 +435,7 @@ def assign_trial_parameters(motive_traces, trial_list):
 
 
 def consecutive(data, stepsize=1):
-    return np.split(data, np.where(np.diff(data) != stepsize)[0]+1)
+    return np.split(data, np.where(np.diff(data) != stepsize)[0] + 1)
 
 
 def align_nonaffine(input_traces):
@@ -464,7 +465,7 @@ def align_nonaffine(input_traces):
     camMtx = np.array([[1.0078195e+00, 0.0000000e+00, 9.8388788e-05],
                        [0.0000000e+00, 1.0078195e+00, 7.5000345e-05],
                        [0.0000000e+00, 0.0000000e+00, 1.0000000e+00]])
-    distCoeffs = np.array([0.00000000e+00,  0.00000000e+00, -6.54237602e-06, -9.86002297e-06, 0.00000000e+00])
+    distCoeffs = np.array([0.00000000e+00, 0.00000000e+00, -6.54237602e-06, -9.86002297e-06, 0.00000000e+00])
     # filt_bp_udist = np.squeeze(cv2.undistortPoints(np.expand_dims(filt_bp, 1), camMtx, distCoeffs))
     # fig = plot_2d([[filt_mp, filt_bp_udist+shift]], rows=1, columns=1, dpi=100)
     # fig.suptitle('Undistort + manual shift')
@@ -518,8 +519,6 @@ def align_nonaffine(input_traces):
     #
     # fig = plot_2d([[filt_mp, filt_bp_affine]], rows=1, columns=1, dpi=100)
     # plt.show()
-
-
 
     # # Try undistort
     # filt_mp3 = np.zeros((filt_mp.shape[0], filt_mp.shape[1]+1))
@@ -592,7 +591,7 @@ def align_spatial(input_traces):
     camMtx = np.array([[1.0078195e+00, 0.0000000e+00, 9.8388788e-05],
                        [0.0000000e+00, 1.0078195e+00, 7.5000345e-05],
                        [0.0000000e+00, 0.0000000e+00, 1.0000000e+00]])
-    distCoeffs = np.array([0.00000000e+00,  0.00000000e+00, -6.54237602e-06, -9.86002297e-06, 0.00000000e+00])
+    distCoeffs = np.array([0.00000000e+00, 0.00000000e+00, -6.54237602e-06, -9.86002297e-06, 0.00000000e+00])
     # filt_bp_udist = np.squeeze(cv2.undistortPoints(np.expand_dims(filt_bp, 1), camMtx, distCoeffs))
     # fig = plot_2d([[filt_mp, filt_bp_udist+shift]], rows=1, columns=1, dpi=100)
     # fig.suptitle('Undistort + manual shift')
@@ -627,15 +626,15 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
     # find the first motive frame
     first_motive = np.argwhere(motive_traces.loc[:, 'trial_num'].to_numpy() == 0)[0][0]
     # exclude the last frame if it managed to include a single frame of 0
-    last_motive = -1 if motive_traces.loc[motive_traces.shape[0]-1, 'trial_num'] == 0 else motive_traces.shape[0]
+    last_motive = -1 if motive_traces.loc[motive_traces.shape[0] - 1, 'trial_num'] == 0 else motive_traces.shape[0]
     # trim the motive frames to the start and end of the experiment
     trimmed_traces = motive_traces.iloc[first_motive:last_motive, :].reset_index(drop=True)
     # TODO: remove this for regular trials, only here for 21.2.2022 ones
     if np.max(trimmed_traces.loc[:, 'color_factor']) > 81:
-        trimmed_traces.loc[:, 'color_factor'] = trimmed_traces.loc[:, 'color_factor']/255
+        trimmed_traces.loc[:, 'color_factor'] = trimmed_traces.loc[:, 'color_factor'] / 255
     # normalize the number to 0 1 2 3 range
-    trimmed_traces.loc[:, 'color_factor'] = np.array([int('0b'+format(int(el)-1, '#09b')[2] +
-                                                          format(int(el)-1, '#09b')[4], 2)
+    trimmed_traces.loc[:, 'color_factor'] = np.array([int('0b' + format(int(el) - 1, '#09b')[2] +
+                                                          format(int(el) - 1, '#09b')[4], 2)
                                                       if el > 0 else 0 for el in trimmed_traces.loc[:, 'color_factor']])
 
     # load the sync data
@@ -656,7 +655,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
     # TODO: probs remove this later, since all trials should be on the new rig with the 2bit frame encoding
     if np.any(np.isnan(sync_data['projector_frames_2'])):
         # get the frame indexes
-        idx_code = np.argwhere(np.abs(np.diff(np.round(sync_data.loc[:, 'projector_frames']/4))) > 0).squeeze() + 1
+        idx_code = np.argwhere(np.abs(np.diff(np.round(sync_data.loc[:, 'projector_frames'] / 4))) > 0).squeeze() + 1
         # get the frame times
         frame_times_motive_sync = sync_data.loc[idx_code, 'Time'].to_numpy()
         # if the number of frames doesn't match, trim from the end
@@ -667,7 +666,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
 
     else:
         # binarize both frame streams
-        frames_0 = np.round(sync_data.loc[:, 'projector_frames'] / 4).astype(int)*2
+        frames_0 = np.round(sync_data.loc[:, 'projector_frames'] / 4).astype(int) * 2
         frames_1 = np.round(sync_data.loc[:, 'projector_frames_2'] / 4).astype(int)
         # assemble the actual sequence
         frame_code = (frames_0 | frames_1).to_numpy()
@@ -677,18 +676,18 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
         for idx, frame in enumerate(frame_code[1:-1]):
             idx += 1
             # if it's the same number as before, skip
-            if frame == fixed_code[idx-1]:
+            if frame == fixed_code[idx - 1]:
                 continue
             # if the numbers before and after are equal
-            if fixed_code[idx-1] == frame_code[idx+1]:
+            if fixed_code[idx - 1] == frame_code[idx + 1]:
                 # replace this position by the repeated number cause it's likely a mistake
-                fixed_code[idx] = frame_code[idx-1]
+                fixed_code[idx] = frame_code[idx - 1]
                 continue
             # if not, start filtering
             # first check for 0-2, cause 3 is a special case
-            if fixed_code[idx-1] in [0, 1, 2]:
-                if frame != fixed_code[idx-1] + 1:
-                    fixed_code[idx] = fixed_code[idx-1] + 1
+            if fixed_code[idx - 1] in [0, 1, 2]:
+                if frame != fixed_code[idx - 1] + 1:
+                    fixed_code[idx] = fixed_code[idx - 1] + 1
                     continue
             else:
                 if frame != 0:
@@ -699,17 +698,17 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
         idx_code = np.argwhere(np.abs(np.diff(fixed_code)) > 0).squeeze() + 1
         motive_code = fixed_code[idx_code]
         # if the frame numbers don't match, find the first motive color number and match that
-        last_number = trimmed_traces.loc[trimmed_traces.shape[0]-1, 'color_factor']
+        last_number = trimmed_traces.loc[trimmed_traces.shape[0] - 1, 'color_factor']
         # trim the idx based on the last appearance of the last_number in motive_code
-        trim_idx = np.argwhere(motive_code == last_number)[-1][0]+1
-        idx_code = idx_code[-(trimmed_traces.shape[0]+1):trim_idx]
+        trim_idx = np.argwhere(motive_code == last_number)[-1][0] + 1
+        idx_code = idx_code[-(trimmed_traces.shape[0] + 1):trim_idx]
         # if idx_code.shape[0] < trimmed_traces.shape[0]:
         #
         #     # get the difference in frames
         #     delta_frames = trimmed_traces.shape[0] - idx_code.shape[0]
         #     # get trimmed traces trimmed
         #     idx_code = idx_code[delta_frames:]
-            # display_code = fixed_code[idx_code]
+        # display_code = fixed_code[idx_code]
         # get the frame times
         frame_times_motive_sync = sync_data.loc[idx_code, 'Time'].to_numpy()
         # trim the motive frames to be contained within the camera frames
@@ -731,7 +730,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
     # interpolate the camera traces to match the unity frames
     matched_camera = kinematics_data.drop(['time_vector', 'mouse', 'datetime', 'sync_frames'],
                                           axis=1).apply(interp_trace, raw=False, args=(frame_times_cam_sync,
-                                                        frame_times_motive_sync))
+                                                                                       frame_times_motive_sync))
 
     # fig = plt.figure()
     # ax = fig.add_subplot(211)
@@ -894,11 +893,11 @@ def match_wheel(file_info, filtered_traces, wheel_diameter=16):
     # get the wheel trace
     wheel_position = sync_data.loc[filtered_traces['sync_frames'], 'wheel_frames']
     # convert the position to radians
-    wheel_position = (wheel_position - wheel_position.min())/(wheel_position.max() - wheel_position.min())*2*np.pi
+    wheel_position = (wheel_position - wheel_position.min()) / (wheel_position.max() - wheel_position.min()) * 2 * np.pi
     # unwrap
     wheel_position = np.unwrap(wheel_position)
     # get the speed of the wheel
-    wheel_speed = np.diff(wheel_position*np.pi*(wheel_diameter-1)/360)
+    wheel_speed = np.diff(wheel_position * np.pi * (wheel_diameter - 1) / 360)
     # get the wheel acceleration
     wheel_acceleration = np.diff(wheel_speed)
     # save in the output frame
@@ -910,8 +909,63 @@ def match_wheel(file_info, filtered_traces, wheel_diameter=16):
     return filtered_traces
 
 
-def match_eye(file_info, filtered_traces):
+def match_eye(filtered_traces, eye_model='sakatani+isa'):
     """Extract and process the eye tracking data"""
+
+    # --- Blink detection --- #
+    # create vectors between the eye nasal eye corner and eyelid top and bottom
+    eyelid_top_vec = filtered_traces.loc[:, ['eyelid_top_x', 'eyelid_top_y']].to_numpy() - \
+                     filtered_traces.loc[:, ['eye_corner_nasal_x', 'eye_corner_nasal_y']].to_numpy()
+    eyelid_bottom_vec = filtered_traces.loc[:, ['eyelid_bottom_x', 'eyelid_bottom_y']].to_numpy() - \
+                        filtered_traces.loc[:, ['eye_corner_nasal_x', 'eye_corner_nasal_y']].to_numpy()
+    eyelid_top_vec_u = eyelid_top_vec / np.linalg.norm(eyelid_top_vec, axis=1)[:, np.newaxis]
+    eyelid_bottom_vec_u = eyelid_bottom_vec / np.linalg.norm(eyelid_bottom_vec, axis=1)[:, np.newaxis]
+    eyelid_angle = np.rad2deg(np.arccos(np.sum(eyelid_top_vec_u * eyelid_bottom_vec_u, axis=1)))
+    filtered_traces['eyelid_angle'] = eyelid_angle
+
+    # --- Pupil tracking --- #
+    pupil_columns = ['pupil_top', 'pupil_top_right', 'pupil_top_left',
+                     'pupil_bottom', 'pupil_bottom_right', 'pupil_bottom_left',
+                     'pupil_right', 'pupil_left']
+
+    # Need to extract in y, x order because OpenCV defaults to row, column format
+    pupil_points_yx = [np.column_stack(filtered_traces.loc[:, [point + '_y', point + '_x']].to_numpy().T) for point in
+                       pupil_columns]
+
+    # Gets the array so rows (first dimension) are points for each frame
+    pupil_points_yx = np.array(pupil_points_yx).transpose((1, 0, 2))
+
+    # Fit ellipse to pupil points - conversion to float needed for cv2
+    ellipses = [cv2.fitEllipse(pupil_points_yx[row, :].astype(np.float32)) for
+                row in np.arange(pupil_points_yx.shape[0])]
+
+    # calculate diameter and center - take major axis to be pupil diameter
+    # note the reversing of the first fit output because of reversed cv2 convention
+    fit_columns = ['fit_pupil_center_x', 'fit_pupil_center_y', 'pupil_diameter', 'minor_axis', 'pupil_rotation']
+    pupil_fit = pd.DataFrame([[*reversed(fit[0]), *fit[1], fit[-1]] for fit in ellipses], columns=fit_columns)
+    filtered_traces = pd.concat([pupil_fit, filtered_traces], axis=1)
+
+    # --- Gaze angle --- #
+    # Get horizontal eye axis
+    eye_horizontal_vector = filtered_traces.loc[:, ['eye_corner_nasal_x', 'eye_corner_nasal_y']].to_numpy() - \
+                            filtered_traces.loc[:, ['eye_corner_temporal_x', 'eye_corner_temporal_y']].to_numpy()
+
+    # horizontal midpoint becomes origin of eye coordinate system
+    eye_axis_midpoint = filtered_traces.loc[:,
+                        ['eye_corner_temporal_x', 'eye_corner_temporal_y']].to_numpy() + eye_horizontal_vector / 2
+
+    # compute pupil position relative to origin of eye coordinate system
+    pupiL_coord_ref = filtered_traces.loc[:, ['fit_pupil_center_x', 'fit_pupil_center_y']].to_numpy() - \
+                      eye_axis_midpoint
+
+    center_ref_cols = ['eye_horizontal_vector_x', 'eye_horizontal_vector_y', 'eye_midpoint_x', 'eye_midpoint_y',
+                       'pupil_center_ref_x', 'pupil_center_ref_y']
+    center_ref_pupil = pd.DataFrame(np.column_stack((eye_horizontal_vector, eye_axis_midpoint, pupiL_coord_ref)),
+                                    columns=center_ref_cols)
+    filtered_traces = pd.concat([center_ref_pupil, filtered_traces], axis=1)
+
+    # TODO actually calculate gaze angle if needed
+
     return filtered_traces
 
 
@@ -936,7 +990,7 @@ def match_dlc(filtered_traces, file_info, file_date):
         cam_idx = np.ones_like(time) * np.nan
 
     elif (file_date <= datetime.datetime(year=2021, month=12, day=14)) & \
-         (file_date > datetime.datetime(year=2019, month=11, day=10)):
+            (file_date > datetime.datetime(year=2019, month=11, day=10)):
 
         # load the sync file
         sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'mini_frames', 'camera_frames'], index_col=False)
@@ -988,14 +1042,14 @@ def interpolate_frame_triggers(triggers_in, threshold=1.5):
     # get the median interval
     median_interval = np.median(intervals)
     # get the indexes of the intervals that violate threshold times the median or more (since they are continuous)
-    long_interval_idx = np.argwhere(intervals > threshold*median_interval).flatten()
+    long_interval_idx = np.argwhere(intervals > threshold * median_interval).flatten()
     # cycle through the intervals
     for idx in long_interval_idx:
         # determine the number of frames to interpolate
-        frame_number = int(np.round(intervals[idx]/median_interval) - 1)
+        frame_number = int(np.round(intervals[idx] / median_interval) - 1)
         # generate and add them to the list
         for idx2 in np.arange(frame_number):
-            triggers_out.append(triggers_out[idx] + median_interval*(idx2+1))
+            triggers_out.append(triggers_out[idx] + median_interval * (idx2 + 1))
     # sort the list and output
     triggers_out = np.sort(np.array(triggers_out))
     return triggers_out
