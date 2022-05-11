@@ -149,6 +149,7 @@ elif files['rig'] in ['VTuning']:
             # also get the cell matching if it exists
             cell_matches = fm.match_cells(match_path)
             cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
+
 elif files['rig'] in ['VWheel']:
     # load the data for the trial structure and parameters
     trials = read_hdf(files['screen_path'], key='trial_set')
@@ -157,7 +158,6 @@ elif files['rig'] in ['VWheel']:
     # run the first stage of preprocessing
     filtered_traces, corners, frame_bounds = preprocess_selector(files['avi_path'], files)
 
-    # TODO: program this once there's an eye tracking network
     # compute the eye metrics
     filtered_traces = fm.match_eye(files, filtered_traces)
 

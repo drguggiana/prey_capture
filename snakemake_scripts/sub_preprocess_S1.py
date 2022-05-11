@@ -195,25 +195,73 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
 
     except IndexError:
         # DLC in VR arena
-        filtered_traces = pd.DataFrame(raw_h5[[
-            [el for el in column_names if ('head' in el) and ('x' in el)][0],
-            [el for el in column_names if ('head' in el) and ('y' in el)][0],
-            [el for el in column_names if ('body_center' in el) and ('x' in el)][0],
-            [el for el in column_names if ('body_center' in el) and ('y' in el)][0],
-            [el for el in column_names if ('tail_base' in el) and ('x' in el)][0],
-            [el for el in column_names if ('tail_base' in el) and ('y' in el)][0],
-            [el for el in column_names if ('cricket' in el) and ('x' in el)][0],
-            [el for el in column_names if ('cricket' in el) and ('y' in el)][0],
-        ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
-                                'cricket_0_x', 'cricket_0_y'])
+        if file_info['rig'] == 'VTuning':
+            # Running in glass box
+            filtered_traces = pd.DataFrame(raw_h5[[
+                [el for el in column_names if ('mouseSnout' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseSnout' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBarL' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBarL' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBarR' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBarR' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody1' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody1' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody2' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody2' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody3' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody3' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBase' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBase' in el) and ('y' in el)][0],
+                [el for el in column_names if ('miniscope' in el) and ('x' in el)][0],
+                [el for el in column_names if ('miniscope' in el) and ('y' in el)][0],
+            ]].to_numpy(), columns=['mouse_snout_x', 'mouse_snout_y', 'mouse_barl_x', 'mouse_barl_y',
+                                    'mouse_barr_x', 'mouse_barr_y',
+                                    'mouse_x', 'mouse_y', 'mouse_body2_x', 'mouse_body2_y',
+                                    'mouse_body3_x', 'mouse_body3_y', 'mouse_base_x', 'mouse_base_y',
+                                    'miniscope_x', 'miniscope_y'])
 
-        # get the likelihoods
-        likelihood_frame = pd.DataFrame(raw_h5[[
-            [el for el in column_names if ('head' in el) and ('likelihood' in el)][0],
-            [el for el in column_names if ('body_center' in el) and ('likelihood' in el)][0],
-            [el for el in column_names if ('tail_base' in el) and ('likelihood' in el)][0],
-            [el for el in column_names if ('cricket' in el) and ('likelihood' in el)][0],
-        ]].to_numpy(), columns=['mouse_head', 'mouse', 'mouse_base', 'cricket_0'])
+            # get the likelihoods
+            likelihood_frame = pd.DataFrame(raw_h5[[
+                [el for el in column_names if ('mouseSnout' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseSnout' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBarL' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBarL' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBarR' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBarR' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody1' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody1' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody2' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody2' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody3' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody3' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBase' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBase' in el) and ('y' in el)][0],
+                [el for el in column_names if ('miniscope' in el) and ('x' in el)][0],
+                [el for el in column_names if ('miniscope' in el) and ('y' in el)][0],
+            ]].to_numpy(), columns=['mouse_snout', 'mouse_barl', 'mouse_barr', 'mouse', 'mouse_body2', 'mouse_body3',
+                                    'mouse_base', 'miniscope'])
+
+        else:
+            # Running in full VR arena
+            filtered_traces = pd.DataFrame(raw_h5[[
+                [el for el in column_names if ('head' in el) and ('x' in el)][0],
+                [el for el in column_names if ('head' in el) and ('y' in el)][0],
+                [el for el in column_names if ('body_center' in el) and ('x' in el)][0],
+                [el for el in column_names if ('body_center' in el) and ('y' in el)][0],
+                [el for el in column_names if ('tail_base' in el) and ('x' in el)][0],
+                [el for el in column_names if ('tail_base' in el) and ('y' in el)][0],
+                [el for el in column_names if ('cricket' in el) and ('x' in el)][0],
+                [el for el in column_names if ('cricket' in el) and ('y' in el)][0],
+            ]].to_numpy(), columns=['mouse_head_x', 'mouse_head_y', 'mouse_x', 'mouse_y', 'mouse_base_x', 'mouse_base_y',
+                                    'cricket_0_x', 'cricket_0_y'])
+
+            # get the likelihoods
+            likelihood_frame = pd.DataFrame(raw_h5[[
+                [el for el in column_names if ('head' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('body_center' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('tail_base' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('cricket' in el) and ('likelihood' in el)][0],
+            ]].to_numpy(), columns=['mouse_head', 'mouse', 'mouse_base', 'cricket_0'])
 
         # nan the trace where the likelihood is too low
         # for all the columns
@@ -243,18 +291,19 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
                                     'corner_BR_x', 'corner_BR_y', 'corner_UR_x', 'corner_UR_y'])
 
             # Flip the DLC y and get the corners
-            corner_info = fp.flip_DLC_y(corner_info)
+            # corner_info = fp.flip_DLC_y(corner_info)
             corner_points = fp.process_corners(corner_info)
 
         except IndexError:
             # output an empty for the corners
             corner_points = []
 
-    # eliminate the cricket if there is no real cricket or this is a VScreen experiment
+    # eliminate the cricket if there is no real cricket or this is a VScreen or VTuning experiment
     if ('nocricket' in file_info['notes'] and 'VR' in file_info['rig']) or \
             ('nocricket' in file_info['notes'] and 'miniscope' in file_info['rig']) or \
             ('test' in file_info['result'] and 'VPrey' in file_info['rig']) or \
             ('VScreen' in file_info['rig']) or \
+            ('VTuning' in file_info['rig']) or \
             (file_info['result'] == 'habi'):
         # for all the columns
         for column in filtered_traces.columns:
@@ -450,25 +499,59 @@ def extract_motive(file_path_motive, rig, trials=None):
 
 def run_preprocess_eye(file_path_ref, file_path_dlc, file_info, kernel_size=5):
     """Extract the coordinates of the tracked eye"""
-    # TODO: placeholder code, needs to be replaced by the correct code with the proper parsing of eye network files
 
     # load the bonsai info
     raw_h5 = pd.read_hdf(file_path_dlc)
     # get the column names
     column_names = raw_h5.columns
 
-    # DLC in small arena
+    # DLC eye tracking
     filtered_traces = pd.DataFrame(raw_h5[[
-        [el for el in column_names if ('mouseSnout' in el) and ('x' in el)][0],
-        [el for el in column_names if ('mouseSnout' in el) and ('y' in el)][0],
-        [el for el in column_names if ('mouseBarL' in el) and ('x' in el)][0],
-        [el for el in column_names if ('mouseBarL' in el) and ('y' in el)][0],
-        [el for el in column_names if ('mouseBarR' in el) and ('x' in el)][0],
-        [el for el in column_names if ('mouseBarR' in el) and ('y' in el)][0],
-        [el for el in column_names if ('mouseHead' in el) and ('x' in el)][0],
-        [el for el in column_names if ('mouseHead' in el) and ('y' in el)][0],
-    ]].to_numpy(), columns=['eye_a_x', 'eye_a_y', 'eye_b_x', 'eye_b_y',
-                            'eye_c_x', 'eye_c_y', 'eye_d_x', 'eye_d_y'])
+        [el for el in column_names if ('pupilCenter' in el) and ('x' in el)][0],
+        [el for el in column_names if ('pupilCenter' in el) and ('y' in el)][0],
+        [el for el in column_names if ('pupilTopLeft' in el) and ('x' in el)][0],
+        [el for el in column_names if ('pupilTopLeft' in el) and ('y' in el)][0],
+        [el for el in column_names if ('pupilTop' in el) and ('x' in el)][0],
+        [el for el in column_names if ('pupilTop' in el) and ('y' in el)][0],
+        [el for el in column_names if ('pupilTopRight' in el) and ('x' in el)][0],
+        [el for el in column_names if ('pupilTopRight' in el) and ('y' in el)][0],
+        [el for el in column_names if ('pupilRight' in el) and ('x' in el)][0],
+        [el for el in column_names if ('pupilRight' in el) and ('y' in el)][0],
+        [el for el in column_names if ('pupilBottomRight' in el) and ('x' in el)][0],
+        [el for el in column_names if ('pupilBottomRight' in el) and ('y' in el)][0],
+        [el for el in column_names if ('pupilBottom' in el) and ('x' in el)][0],
+        [el for el in column_names if ('pupilBottom' in el) and ('y' in el)][0],
+        [el for el in column_names if ('pupilBottomLeft' in el) and ('x' in el)][0],
+        [el for el in column_names if ('pupilBottomLeft' in el) and ('y' in el)][0],
+        [el for el in column_names if ('pupilLeft' in el) and ('x' in el)][0],
+        [el for el in column_names if ('pupilLeft' in el) and ('y' in el)][0],
+        [el for el in column_names if ('eyeCornerNasal' in el) and ('x' in el)][0],
+        [el for el in column_names if ('eyeCornerNasal' in el) and ('y' in el)][0],
+        [el for el in column_names if ('eyeCornerTemporal' in el) and ('x' in el)][0],
+        [el for el in column_names if ('eyeCornerTemporal' in el) and ('y' in el)][0],
+        [el for el in column_names if ('eyelidTop' in el) and ('x' in el)][0],
+        [el for el in column_names if ('eyelidTop' in el) and ('y' in el)][0],
+        [el for el in column_names if ('eyelidBottom' in el) and ('x' in el)][0],
+        [el for el in column_names if ('eyelidBottom' in el) and ('y' in el)][0],
+        [el for el in column_names if ('LED' in el) and ('x' in el)][0],
+        [el for el in column_names if ('LED' in el) and ('y' in el)][0],
+    ]].to_numpy(), columns=['pupil_center_x', 'pupil_center_y',
+                            'pupil_top_left_x', 'pupil_top_left_y',
+                            'pupil_top_x', 'pupil_top_y',
+                            'pupil_top_right_x', 'pupil_top_right_y',
+                            'pupil_right_x', 'pupil_right_y',
+                            'pupil_bottom_right_x', 'pupil_bottom_right_y',
+                            'pupil_bottom_x', 'pupil_bottom_y',
+                            'pupil_bottom_left_x', 'pupil_bottom_left_y',
+                            'pupil_left_x', 'pupil_left_y',
+                            'eye_corner_nasal_x', 'eye_corner_nasal_y',
+                            'eye_corner_temporal_x', 'eye_corner_temporal_y',
+                            'eye_corner_nasal_x', 'eye_corner_nasal_y',
+                            'eye_corner_temporal_x', 'eye_corner_temporal_y',
+                            'eyelid_top_x', 'eyelid_top_y',
+                            'eyelid_bottom_x', 'eyelid_bottom_y',
+                            'led_x', 'led_y',
+                            ])
 
     # get the file date
     file_date = datetime.datetime.strptime(file_info['date'], '%Y-%m-%dT%H:%M:%SZ')
