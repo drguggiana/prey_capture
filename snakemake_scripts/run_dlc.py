@@ -1,14 +1,14 @@
 # imports
 import os
 import sys
-sys.path.insert(0, os.path.abspath(r'D:\Code Repos\prey_capture'))
+import paths
+sys.path.insert(0, os.path.abspath(paths.prey_capture_repo_directory))
 os.environ["DLClight"] = "True"
 
 import os
 import sys
 import shutil
 import deeplabcut as dlc
-import paths
 import functions_bondjango as bd
 import functions_io as fi
 import functions_misc as fm
@@ -52,7 +52,8 @@ if video_data['rig'] == 'miniscope':
 else:
     target_model = 'vr_experiment'
     if video_data['rig'] == 'VWheel':
-        dlc.analyze_videos(paths.config_path_VWheel, [temp_video_path], destfolder=paths.temp_path)
+        # Use dynamic cropping for eye tracking to speed up analysis.
+        dlc.analyze_videos(paths.config_path_VWheel, [temp_video_path], destfolder=paths.temp_path, dynamic=(True, .1, 100))
     else:
         dlc.analyze_videos(paths.config_vame_path, [temp_video_path], destfolder=paths.temp_path)
 

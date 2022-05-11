@@ -196,7 +196,8 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
     except IndexError:
         # DLC in VR arena
         if file_info['rig'] == 'VTuning':
-            # Running in glass box
+            # Similar to small arena, but no cricket
+            # Make miniscope the mouse head in this case.
             filtered_traces = pd.DataFrame(raw_h5[[
                 [el for el in column_names if ('mouseSnout' in el) and ('x' in el)][0],
                 [el for el in column_names if ('mouseSnout' in el) and ('y' in el)][0],
@@ -218,7 +219,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
                                     'mouse_barr_x', 'mouse_barr_y',
                                     'mouse_x', 'mouse_y', 'mouse_body2_x', 'mouse_body2_y',
                                     'mouse_body3_x', 'mouse_body3_y', 'mouse_base_x', 'mouse_base_y',
-                                    'miniscope_x', 'miniscope_y'])
+                                    'mouse_head_x', 'mouse_head_y'])
 
             # get the likelihoods
             likelihood_frame = pd.DataFrame(raw_h5[[
@@ -239,7 +240,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
                 [el for el in column_names if ('miniscope' in el) and ('x' in el)][0],
                 [el for el in column_names if ('miniscope' in el) and ('y' in el)][0],
             ]].to_numpy(), columns=['mouse_snout', 'mouse_barl', 'mouse_barr', 'mouse', 'mouse_body2', 'mouse_body3',
-                                    'mouse_base', 'miniscope'])
+                                    'mouse_base', 'mouse_head'])
 
         else:
             # Running in full VR arena
@@ -263,6 +264,10 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
                 [el for el in column_names if ('cricket' in el) and ('likelihood' in el)][0],
             ]].to_numpy(), columns=['mouse_head', 'mouse', 'mouse_base', 'cricket_0'])
 
+            # The camera that records video in the VR arena flips the video about the
+            # horizontal axis when saving. To correct, flip the y coordinates from DLC
+            filtered_traces = fp.flip_DLC_y(filtered_traces)
+
         # nan the trace where the likelihood is too low
         # for all the columns
         for col in likelihood_frame.columns:
@@ -271,10 +276,6 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
             # nan the points
             filtered_traces.loc[nan_vector, col + '_x'] = np.nan
             filtered_traces.loc[nan_vector, col + '_y'] = np.nan
-
-        # The camera that records video in the VR arena flips the video about the
-        # horizontal axis when saving. To correct, flip the y coordinates from DLC
-        filtered_traces = fp.flip_DLC_y(filtered_traces)
 
         # Process DLC-labeled corners, if present
         try:
@@ -365,10 +366,11 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
         filtered_traces = filtered_traces.iloc[1:, :].reset_index(drop=True)
         frame_bounds['start'] += 1
 
-    if file_info['result'] != 'habi':
-        # interpolate the position of the cricket assuming stationarity
-        filtered_traces = fp.interpolate_animals(filtered_traces, np.nan,
-                                                 paths.arena_coordinates[file_info['rig']], corner_points, untrimmed)
+    if file_info['rig'] != 'VTuning':
+        if file_info['result'] != 'habi':
+            # interpolate the position of the cricket assuming stationarity
+            filtered_traces = fp.interpolate_animals(filtered_traces, np.nan,
+                                                     paths.arena_coordinates[file_info['rig']], corner_points, untrimmed)
 
     # median filter the traces
     filtered_traces = fp.median_discontinuities(filtered_traces, filtered_traces.columns, kernel_size)
