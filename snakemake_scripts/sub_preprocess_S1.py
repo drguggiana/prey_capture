@@ -223,22 +223,14 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
 
             # get the likelihoods
             likelihood_frame = pd.DataFrame(raw_h5[[
-                [el for el in column_names if ('mouseSnout' in el) and ('x' in el)][0],
-                [el for el in column_names if ('mouseSnout' in el) and ('y' in el)][0],
-                [el for el in column_names if ('mouseBarL' in el) and ('x' in el)][0],
-                [el for el in column_names if ('mouseBarL' in el) and ('y' in el)][0],
-                [el for el in column_names if ('mouseBarR' in el) and ('x' in el)][0],
-                [el for el in column_names if ('mouseBarR' in el) and ('y' in el)][0],
-                [el for el in column_names if ('mouseBody1' in el) and ('x' in el)][0],
-                [el for el in column_names if ('mouseBody1' in el) and ('y' in el)][0],
-                [el for el in column_names if ('mouseBody2' in el) and ('x' in el)][0],
-                [el for el in column_names if ('mouseBody2' in el) and ('y' in el)][0],
-                [el for el in column_names if ('mouseBody3' in el) and ('x' in el)][0],
-                [el for el in column_names if ('mouseBody3' in el) and ('y' in el)][0],
-                [el for el in column_names if ('mouseBase' in el) and ('x' in el)][0],
-                [el for el in column_names if ('mouseBase' in el) and ('y' in el)][0],
-                [el for el in column_names if ('miniscope' in el) and ('x' in el)][0],
-                [el for el in column_names if ('miniscope' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseSnout' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBarL' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBarR' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBody1' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBody2' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBody3' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBase' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('miniscope' in el) and ('likelihood' in el)][0],
             ]].to_numpy(), columns=['mouse_snout', 'mouse_barl', 'mouse_barr', 'mouse', 'mouse_body2', 'mouse_body3',
                                     'mouse_base', 'mouse_head'])
 
