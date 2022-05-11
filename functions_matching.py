@@ -789,14 +789,15 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
         calcium_data = np.array(f['calcium_data']).T
         # if there are no ROIs, skip
         if (type(calcium_data) == np.ndarray) and (calcium_data == 'no_ROIs'):
-            return
+            return None, None
+        roi_info = np.array(f['roi_info'])
     # check if there are nans in the columns, if so, also skip
     if kinematics_data.columns[0] == 'badFile':
         print(f'File {os.path.basename(calcium_path)} not matched due to NaNs')
-        return
+        return None, None
 
     # load the sync data
-    sync_data = pd.read_csv(sync_path)
+    sync_data = pd.read_csv(sync_path, header=None)
     if sync_data.shape[1] == 3:
         sync_data.columns = ['Time', 'mini_frames', 'camera_frames']
     elif sync_data.shape[1] == 6:
@@ -876,7 +877,11 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     old_time = full_dataframe['time_vector']
     full_dataframe.loc[:, 'time_vector'] = np.array([el - old_time[0] for el in old_time])
 
-    return full_dataframe
+    # turn the roi info into a dataframe
+    roi_info = pd.DataFrame(roi_info, columns=['centroid_x', 'centroid_y',
+                                               'bbox_left', 'bbox_top', 'bbox_width', 'bbox_height', 'area'])
+
+    return full_dataframe, roi_info
 
 
 def match_wheel(file_info, filtered_traces, wheel_diameter=16):

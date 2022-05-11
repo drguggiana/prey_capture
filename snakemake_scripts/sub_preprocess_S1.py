@@ -372,8 +372,10 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
             filtered_traces = fp.interpolate_animals(filtered_traces, np.nan,
                                                      paths.arena_coordinates[file_info['rig']], corner_points, untrimmed)
 
+    # define the columns to median
+    target_columns = [el for el in filtered_traces.columns if el not in ['time_vector', 'sync_frames']]
     # median filter the traces
-    filtered_traces = fp.median_discontinuities(filtered_traces, filtered_traces.columns, kernel_size)
+    filtered_traces = fp.median_discontinuities(filtered_traces, target_columns, kernel_size)
 
     # parse the path
     parsed_path = parse_path(file_path_ref)
@@ -390,11 +392,8 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
     # check for nans
     if np.any(np.isnan(filtered_traces[coordinate_columns].to_numpy())):
 
-        print(f'NaN value found in file {file_info["slug"]}')
+        print(f'NaN value found in file {file_info["slug"]} during run_dlc_preprocess')
         return filtered_traces, corner_frame, frame_bounds
-        # coords = filtered_traces[coordinate_columns]
-        # coords[np.isnan(filtered_traces[coordinate_columns].to_numpy())] = 0
-        # filtered_traces[coordinate_columns] = coords
 
     return filtered_traces, corner_frame, frame_bounds
 

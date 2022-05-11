@@ -233,9 +233,7 @@ def files_to_day(wildcards):
     day_routes = [el['avi_path'].replace('.avi', '_preproc.hdf5').replace('VideoExperiment', 'AnalyzedData')
                   for el in info_list if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]]
                   and el['mouse']==animal and el['date'][:10]==day)]
-    # day_routes = [el['avi_path'].replace('.avi', '_preproc.hdf5').replace('VideoExperiment', 'AnalyzedData')
-    #               for el in info_list if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]]
-    #               and animal in el['slug'] and el['date'][:10]==day)]
+
     wildcards.day_routes = day_routes
     return day_routes
 
@@ -275,8 +273,8 @@ rule gather_regression:
         files_to_day,
     output:
         os.path.join(paths.analysis_path,'{file}_regressionday.hdf5'),
-    # params:
-    #     info = lambda wildcards: config["file_info"][wildcards.file],
+    params:
+        file_info = config["file_info"],
     script:
         "snakemake_scripts/classify_batch.py"
 
@@ -297,8 +295,8 @@ rule tc_day:
         files_to_day,
     output:
         os.path.join(paths.analysis_path,'{file}_tcday.hdf5'),
-    # params:
-    #     file_info = lambda wildcards: config["file_info"][wildcards.file],
+    params:
+        file_info = config["file_info"],
     script:
         "snakemake_scripts/tc_calculate.py"
 
@@ -343,12 +341,23 @@ rule beh_consolidate:
 #     elif config['analysis_type'] == 'full_run':
 #         return expand(os.path.join(paths.analysis_path,"{file}"+processing_parameters.full_run_file),file=config['files'])
 
+rule combinedanalysis_run:
+    input:
+          expand(os.path.join(paths.analysis_path,"{file}"+'_combinedanalysis.hdf5'), file=config['files']),
+    output:
+          os.path.join(paths.analysis_path, "combinedanalysis_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"
+
 
 rule full_run:
     input:
-          expand(os.path.join(paths.analysis_path,"{file}"+processing_parameters.full_run_file), file=config['files']),
+          expand(os.path.join(paths.analysis_path,"{file}"+'_preproc.hdf5'), file=config['files']),
     output:
-          os.path.join(paths.analysis_path, "full_run.txt")
+          os.path.join(paths.analysis_path, "preprocessing_run.txt")
     params:
           file_info=expand("{info}", info=config["file_info"].values()),
           output_info=config["output_info"]

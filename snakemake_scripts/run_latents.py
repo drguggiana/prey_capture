@@ -65,8 +65,9 @@ else:
     # column_list = [el for el in column_list_all if (('x' in el) or ('y' in el)) & ('mouse' in el)]
     column_list = [el for el in column_list_all if (('_x' in el) or ('_y' in el))]
     # define the extra columns
-    extra_columns = ['mouse_speed']
-    column_list += extra_columns
+    # extra_columns = ['mouse_speed']
+    extra_columns = None
+    # column_list += extra_columns
 
     # get the config info
     config_file = os.path.join(paths.vame_path, paths.vame_current_model_name, 'config.yaml')
@@ -103,7 +104,8 @@ else:
         kmeans_object.cluster_centers_ = cluster_centers
 
         # get the trajectories for latents
-        column_idx = [True if 'mouse' in el else False for el in column_list]
+        # column_idx = [True if 'mouse' in el else False for el in column_list]
+        column_idx = [True for el in column_list]
         vame_trajectories = aligned_traj[column_idx, :]
 
         # run the pose segmentation

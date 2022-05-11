@@ -4,6 +4,7 @@ import os
 import paths
 import pandas as pd
 import functions_misc as fm
+import numpy as np
 
 try:
     # get the input
@@ -31,25 +32,51 @@ else:
 empty_flag = True
 
 # get a list of the features
-feature_list = processing_parameters.tc_params.keys()
+feature_list = processing_parameters.variable_list
+
+# allocate the metadata list
+meta_list = []
+
 # for all the features
-for feature in feature_list:
+for idx, feature in enumerate(feature_list):
     # allocate a list for the individual dataframes
     file_list = []
+    counts_list = []
+    # add a file counter
+    file_counter = 0
     # cycle through the files
     for files in input_path:
         try:
             # read in the data and store
             file_list.append(pd.read_hdf(files, feature))
+            counts_list.append(pd.read_hdf(files, feature+'_counts'))
+            # only save the ID for the first feature
+            if idx == 0:
+                meta_list.append(pd.read_hdf(files, 'meta_data'))
+            # add the trial id to the trial TCs
+            # TODO: using only first trial, need to find better way so trial info is not lost
+            file_list[-1]['id'] = meta_list[file_counter].loc[0, 'id']
+
+            # add a cell_id column
+            cell_id = np.arange(file_list[-1].shape[0])
+            file_list[-1]['cell_id'] = cell_id
+            # print(feature, file_list[-1].shape, files)
             # set the empty flag to false
             empty_flag = False
+            # update the file counter
+            file_counter += 1
         except KeyError:
-            print(f'feature:{feature} file: {files}')
+            print(f'feature:{feature} is not present in file: {os.path.basename(files)}')
             continue
     if len(file_list) > 0:
         # store the concatenated dataframe in the output file
         joint_df = pd.concat(file_list, axis=0).reset_index(drop=True)
         joint_df.to_hdf(out_path, feature)
+        joint_counts = pd.concat(counts_list, axis=0).reset_index(drop=True)
+        joint_counts.to_hdf(out_path, feature+'_counts')
+        if idx == 0:
+            meta_data = pd.concat(meta_list, axis=0).reset_index(drop=True)
+            meta_data.to_hdf(out_path, 'meta_data')
 
 # if there were no tcs, save a no-ROIs file
 if empty_flag:

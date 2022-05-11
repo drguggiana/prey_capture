@@ -6,6 +6,7 @@ import paths
 import numpy as np
 import datetime
 import processing_parameters
+import cv2
 
 try:
 
@@ -44,7 +45,7 @@ except NameError:
     out_path = video_data['tif_path'].replace('.tif', '_calcium.hdf5')
 
     # get the input file path
-    calcium_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumday.hdf5')))
+    calcium_path = os.path.join(paths.analysis_path, '_'.join((day, animal, 'calciumday.hdf5')))
 
 # get the model of origin
 if rig == 'miniscope':
@@ -56,15 +57,14 @@ else:
 try:
     # load the contents of the ca file
     with h5py.File(calcium_path, 'r') as f:
-        # calcium_data = np.array((f['sigfn'])).T
-        # calcium_data = np.array(f['estimates/C'])
-        # calcium_data = np.array(f['C'])
+
         frame_list = np.array(f['frame_list'])
         # if there are no ROIs, raise to generate an empty file
         if frame_list == 'no_ROIs':
             raise ValueError('empty file')
         calcium_data = np.array(f['S'])
         # calcium_data = np.array(f['C'])
+        footprints = np.array(f['A'])
 
     # get the trials in the file
     trials_list = [str(el)[2:-1] for el in frame_list[:, 0]]
@@ -77,15 +77,33 @@ try:
     frame_end = int(frame_start + frame_numbers[trial_idx])
     # extract the frames
     current_calcium = calcium_data[:, frame_start:frame_end]
+
+    # allocate memory for the centroids
+    roi_info = []
+    # get the centroid coordinates of each roi
+    for roi in footprints:
+        # binarize the image
+        bin_roi = (roi > 0).astype(np.int8)
+        # define the connectivity
+        connectivity = 8
+        # Perform the operation
+        output = cv2.connectedComponentsWithStats(bin_roi, connectivity, cv2.CV_32S)
+        # store the centroid x and y, the l, t, w, h of the bounding box and the area
+        roi_info.append(np.hstack((output[3][1, :], output[2][1, :])))
+
+    # concatenate the centroids
+    roi_info = np.vstack(roi_info)
     # save the data as an h5py
     with h5py.File(out_path, 'w') as file:
         file.create_dataset('calcium_data', data=current_calcium)
+        file.create_dataset('roi_info', data=roi_info)
 
 except (KeyError, ValueError):
     print('This file did not contain any ROIs: ' + calcium_path)
     # create a dummy empty file
     with h5py.File(out_path, 'w') as file:
         file.create_dataset('calcium_data', data='no_ROIs')
+        file.create_dataset('centroids', data='no_ROIs')
 
 # update the bondjango entry (need to sort out some fields)
 ori_data = video_data.copy()

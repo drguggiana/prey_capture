@@ -8,6 +8,7 @@ import scipy.signal as ss
 import scipy.stats as stat
 import processing_parameters
 import functions_misc as fm
+import yaml
 
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -55,15 +56,15 @@ def clip_calcium(pre_data):
     return data
 
 
-def parse_features(data):
+def parse_features(data, feature_list):
     """set up the feature and calcium matrices"""
 
-    # define the design matrix
-    feature_list = ['mouse_speed', 'cricket_0_speed', 'mouse_x', 'mouse_y', 'cricket_0_x', 'cricket_0_y',
-                    'cricket_0_delta_heading', 'cricket_0_mouse_distance', 'cricket_0_visual_angle',
-                    'mouse_heading', 'cricket_0_delta_head', 'cricket_0_heading', 'head_direction',
-                    'latent_0', 'latent_1', 'latent_2', 'latent_3', 'latent_4',
-                    'latent_5', 'latent_6', 'latent_7', 'latent_8', 'latent_9']
+    # # define the design matrix
+    # feature_list = ['mouse_speed', 'cricket_0_speed', 'mouse_x', 'mouse_y', 'cricket_0_x', 'cricket_0_y',
+    #                 'cricket_0_delta_heading', 'cricket_0_mouse_distance', 'cricket_0_visual_angle',
+    #                 'mouse_heading', 'cricket_0_delta_head', 'cricket_0_heading', 'head_direction',
+    #                 'latent_0', 'latent_1', 'latent_2', 'latent_3', 'latent_4',
+    #                 'latent_5', 'latent_6', 'latent_7', 'latent_8', 'latent_9']
 
     # allocate memory for a data frame without the encoding model features
     feature_raw_trials = []
@@ -83,25 +84,29 @@ def parse_features(data):
         # turn the radial variables into linear ones
         # for all the columns
         for label in original_columns:
-            # calculate head speed
-            if label == 'head_direction':
-                # get the head direction
-                head = target_features[label].copy().to_numpy()
-                # get the angular speed and acceleration of the head
-                speed = np.concatenate(([0], np.diff(ss.medfilt(head, 21))), axis=0)
-                acceleration = np.concatenate(([0], np.diff(head)), axis=0)
-                # add to the features
-                target_features['head_speed'] = speed
-                target_features['head_acceleration'] = acceleration
-
-            # check if the label is a speed and calculate acceleration
-            if 'speed' in label:
-                # get the speed
-                speed = target_features[label].copy().to_numpy()
-                # calculate the acceleration with the smoothed speed
-                acceleration = np.concatenate(([0], np.diff(ss.medfilt(speed, 21))), axis=0)
-                # add to the features
-                target_features[label.replace('speed', 'acceleration')] = acceleration
+            # skip if latent or motif
+            if ('latent' in label) | (label == 'motifs'):
+                target_features[label] = target_features[label]
+                continue
+            # # calculate head speed
+            # if label == 'head_direction':
+            #     # get the head direction
+            #     head = target_features[label].copy().to_numpy()
+            #     # get the angular speed and acceleration of the head
+            #     speed = np.concatenate(([0], np.diff(ss.medfilt(head, 21))), axis=0)
+            #     acceleration = np.concatenate(([0], np.diff(head)), axis=0)
+            #     # add to the features
+            #     target_features['head_speed'] = speed
+            #     target_features['head_acceleration'] = acceleration
+            #
+            # # check if the label is a speed and calculate acceleration
+            # if 'speed' in label:
+            #     # get the speed
+            #     speed = target_features[label].copy().to_numpy()
+            #     # calculate the acceleration with the smoothed speed
+            #     acceleration = np.concatenate(([0], np.diff(ss.medfilt(speed, 21))), axis=0)
+            #     # add to the features
+            #     target_features[label.replace('speed', 'acceleration')] = acceleration
             # smooth the feature
             target_features[label] = ss.medfilt(target_features[label], 21)
 
@@ -118,7 +123,8 @@ def parse_features(data):
     return feature_raw_trials, calcium_trials
 
 
-def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variables, cell_number, percentile=99):
+def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variables, cell_number,
+                             percentile=99, bin_number=10):
     """Extract the tuning curves (full and half) and their responsivity index"""
 
     # get the number of pairs
@@ -128,13 +134,15 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
     # # define the confidence interval cutoff
     # percentile = 90
     # define the number of bins for the TCs
-    bin_number = 10
+    # bin_number = 10
 
     # allocate memory for the trial TCs
     tc_half = {}
     tc_full = {}
     tc_resp = {}
     tc_counts = {}
+    # initialize the template_idx
+    template_idx = -1
     # for all the features
     for var_idx in np.arange(var_number):
         # get the current feature
@@ -143,6 +151,8 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
         # skip the pair and save an empty if the feature is not present
         try:
             current_feature_0 = feature_raw_trials.loc[:, feature_name].to_numpy()
+            # save the index of the feature
+            template_idx = var_idx
             # current_feature_1 = feature_raw_trials.loc[:, feature_names[1]].to_numpy()
         except KeyError:
             tc_half[feature_name] = []
@@ -154,11 +164,17 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
         try:
             bin_ranges = processing_parameters.tc_params[feature_name]
             # calculate the bin edges based on the ranges
-            bins = np.linspace(bin_ranges[0], bin_ranges[1], num=bin_number + 1)
+            if len(bin_ranges) == 1:
+                bins = np.arange(np.array(bin_ranges) + 1) - 0.5
+                working_bin_number = bins.shape[0] - 1
+            else:
+                bins = np.linspace(bin_ranges[0], bin_ranges[1], num=bin_number + 1)
+                working_bin_number = bin_number
         except KeyError:
             # if not in the parameters, go for default and report
             print(f'Feature {feature_name} not found, default to 10 bins ad hoc')
             bins = 10
+            working_bin_number = 10
         # allocate a list for the 2 halves
         tc_half_temp = []
         # exclude nan values
@@ -225,7 +241,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
             tc_cell[np.isnan(tc_cell)] = 0
             tc_cell[np.isinf(tc_cell)] = 0
             # allocate memory for the shuffles
-            shuffle_array = np.zeros((shuffle_number, bin_number))
+            shuffle_array = np.zeros((shuffle_number, working_bin_number))
             # generate the shuffles
             for shuffle in np.arange(shuffle_number):
                 # randomize the calcium activity
@@ -251,6 +267,16 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
         tc_full[feature_name] = tc_cell_full
         tc_resp[feature_name] = tc_cell_resp
         tc_counts[feature_name] = feature_counts_raw
+    # run through the features and fill up the non-populated ones with nan
+    for feat in tc_half.keys():
+        if len(tc_half[feat]) == 0:
+            tc_half[feat] = tc_half[target_variables[template_idx]]
+            tc_half[feat][0] = [el * np.nan for el in tc_half[feat][0]]
+            tc_half[feat][1] = [el * np.nan for el in tc_half[feat][1]]
+            tc_full[feat] = tc_full[target_variables[template_idx]]
+            tc_full[feat] = [el * np.nan for el in tc_full[feat]]
+            tc_resp[feat] = tc_resp[target_variables[template_idx]] * np.nan
+            tc_counts[feat] = tc_counts[target_variables[template_idx]] * np.nan
 
     return tc_half, tc_full, tc_resp, tc_counts
 
@@ -316,6 +342,8 @@ def convert_to_dataframe(half_in, full_in, counts_in, resp_in, cons_in, date, mo
     """Convert the TCs and their metrics into dataframe format"""
     # allocate an output dict
     out_dict = {}
+    # also one for the counts
+    count_dict = {}
     # cycle through features
     for feat in half_in.keys():
         # get all the components
@@ -338,35 +366,42 @@ def convert_to_dataframe(half_in, full_in, counts_in, resp_in, cons_in, date, mo
         flat_full = np.array([el.flatten() for el in c_full])
         labels_full = ['bin_'+str(el) for el in np.arange(flat_full.shape[1])]
 
-        flat_count = np.array([el.flatten() for el in c_count])
+        flat_count = np.array([el.flatten() for el in c_count]).T
         labels_count = ['count_' + str(el) for el in np.arange(flat_count.shape[1])]
 
         # turn everything into dataframes
         df_half = pd.DataFrame(np.hstack(flat_half), columns=np.hstack(labels_half), dtype=np.float32)
         df_full = pd.DataFrame(flat_full, columns=labels_full, dtype=np.float32)
-        df_count = pd.DataFrame(flat_count, columns=labels_count, dtype=np.float32)
         df_resp = pd.DataFrame(c_resp, columns=['Resp_index', 'Resp_test'], dtype=np.float32)
         df_cons = pd.DataFrame(c_cons, columns=['Cons_index', 'Cons_test'], dtype=np.float32)
-
         # concatenate
-        df_concat = pd.concat((df_half, df_full, df_count, df_resp, df_cons), axis=1)
+        df_concat = pd.concat((df_half, df_full, df_resp, df_cons), axis=1)
         # generate columns for date and animal
         df_concat['day'] = date
         df_concat['animal'] = mouse
         df_concat['rig'] = setup
         # store
         out_dict[feat] = df_concat
+        # store the counts
+        df_count = pd.DataFrame(flat_count, columns=labels_count, dtype=np.float32)
+        df_count['day'] = date
+        df_count['animal'] = mouse
+        df_count['rig'] = setup
 
-    return out_dict
+        count_dict[feat] = df_count
+    return out_dict, count_dict
 
 
 if __name__ == '__main__':
     # get the data paths
     try:
         input_path = snakemake.input
+        # get the slugs
+        slug_list = [os.path.basename(el).replace('_preproc.hdf5', '') for el in input_path]
         # read the output path and the input file urls
         out_path = snakemake.output[0]
-        # data_all = snakemake.params.file_info
+        data_all = snakemake.params.file_info
+        data_all = [yaml.load((data_all[el]), Loader=yaml.FullLoader) for el in slug_list]
         # get the parts for the file naming
         name_parts = os.path.basename(out_path).split('_')
         day = '_'.join(name_parts[:3])
@@ -378,12 +413,13 @@ if __name__ == '__main__':
         search_string = processing_parameters.search_string
 
         # get the paths from the database
-        all_path = bd.query_database('analyzed_data', search_string)
-        input_path = [el['analysis_path'] for el in all_path if '_preproc' in el['slug']]
+        data_all = bd.query_database('analyzed_data', search_string)
+        data_all = [el for el in data_all if '_preproc' in el['slug']]
+        input_path = [el['analysis_path'] for el in data_all if '_preproc' in el['slug']]
         # get the day, animal and rig
-        day = '_'.join(all_path[0]['slug'].split('_')[0:3])
-        rig = all_path[0]['rig']
-        animal = all_path[0]['slug'].split('_')[3:6]
+        day = '_'.join(data_all[0]['slug'].split('_')[0:3])
+        rig = data_all[0]['rig']
+        animal = data_all[0]['slug'].split('_')[7:10]
         animal = '_'.join([animal[0].upper()] + animal[1:])
 
         # assemble the output path
@@ -391,20 +427,44 @@ if __name__ == '__main__':
 
     # allocate memory for the data
     raw_data = []
-    # allocate memory for excluded trials
-    excluded_trials = []
+    # allocate memory for the meta data
+    meta_list = []
     # for all the files
-    for files in input_path:
+    for idx0, files in enumerate(input_path):
+
+        # get the metadata
+        meta_list.append([data_all[idx0][el1] for el1 in processing_parameters.meta_fields])
+
         # load the data
         with pd.HDFStore(files, mode='r') as h:
-            if ('/matched_calcium' in h.keys()) & ('/latents' in h.keys()):
+            if '/matched_calcium' in h.keys():
 
                 # concatenate the latents
-                dataframe = pd.concat([h['matched_calcium'], h['latents']], axis=1)
+                dataframe = h['matched_calcium']
+
+                # check for latents
+                if '/latents' in h.keys():
+                    # get the latents and motifs
+                    latents = h['latents']
+                    motifs = h['motifs']
+                    egocentric_coords = h['egocentric_coord']
+                    egocentric_coords = egocentric_coords.loc[:, ['cricket_0_x', 'cricket_0_y']]
+                    egocentric_coords = egocentric_coords.rename(columns={'cricket_0_x': 'ego_cricket_x',
+                                                                          'cricket_0_y': 'ego_cricket_y'})
+                    # determine the delta size for padding
+                    delta_frames = dataframe.shape[0] - latents.shape[0]
+                    # pad latents due to the VAME calculation window
+                    latent_padding = pd.DataFrame(np.zeros((int(delta_frames/2), len(latents.columns))) * np.nan,
+                                                  columns=latents.columns)
+                    motif_padding = pd.DataFrame(np.zeros((int(delta_frames/2), len(motifs.columns))) * np.nan,
+                                                 columns=motifs.columns)
+                    # pad them with nan at the edges (due to VAME excluding the edges
+                    latents = pd.concat([latent_padding, latents, latent_padding], axis=0).reset_index(drop=True)
+                    motifs = pd.concat([motif_padding, motifs, motif_padding], axis=0).reset_index(drop=True)
+                    # concatenate with the main data
+                    dataframe = pd.concat([dataframe, egocentric_coords, latents, motifs], axis=1)
                 # store
                 raw_data.append((files, dataframe))
-            else:
-                excluded_trials.append(files)
 
     # skip processing if the file is empty
     if len(raw_data) == 0:
@@ -413,35 +473,39 @@ if __name__ == '__main__':
         empty.to_hdf(out_path, 'no_ROIs')
     else:
 
+        # define the pairs to quantify
+        variable_names = processing_parameters.variable_list
+
         # clip the calcium traces
         clipped_data = clip_calcium(raw_data)
 
         # parse the features
-        features, calcium = parse_features(clipped_data)
+        features, calcium = parse_features(clipped_data, variable_names)
 
         # concatenate all the trials
         features = pd.concat(features)
         calcium = np.concatenate(calcium)
 
-        # define the pairs to quantify
-        variable_names = list(processing_parameters.tc_params.keys())
         # get the number of cells
         cell_num = calcium.shape[1]
 
         # get the TCs and their responsivity
-        tcs_half, tcs_full, tcs_resp, tc_counts = extract_tcs_responsivity(features, calcium, variable_names, cell_num)
+        tcs_half, tcs_full, tcs_resp, tc_counts = extract_tcs_responsivity(features, calcium, variable_names, cell_num,
+                                                                           percentile=80, bin_number=20)
         # get the TC consistency
-        tcs_cons = extract_consistency(tcs_half, variable_names, cell_num)
+        tcs_cons = extract_consistency(tcs_half, variable_names, cell_num, percentile=80)
 
         # convert the outputs into a dataframe
-        tcs_dict = convert_to_dataframe(tcs_half, tcs_full, tc_counts, tcs_resp, tcs_cons, day, animal, rig)
+        tcs_dict, tcs_counts_dict = convert_to_dataframe(tcs_half, tcs_full, tc_counts, tcs_resp,
+                                                         tcs_cons, day, animal, rig)
 
         # for all the features
         for feature in tcs_dict.keys():
             tcs_dict[feature].to_hdf(out_path, feature)
-        # # save the excluded trials if any
-        # if len(excluded_trials)
-
+            tcs_counts_dict[feature].to_hdf(out_path, feature+'_counts')
+        # save the meta data
+        meta_data = pd.DataFrame(np.vstack(meta_list), columns=processing_parameters.meta_fields)
+        meta_data.to_hdf(out_path, 'meta_data')
         # save as a new entry to the data base
         # assemble the entry data
         entry_data = {
