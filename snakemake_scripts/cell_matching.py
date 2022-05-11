@@ -48,7 +48,8 @@ except IndexError:
     # # for testing, filter calcium path
     # calcium_path = [el for el in calcium_path if ('03_24' in el) or ('03_23' in el) or ('03_29' in el)]
     # assemble the output path
-    out_path = os.path.join(paths.analysis_path, '_'.join((animal, rig, 'cellMatch.hdf5')))
+    # out_path = os.path.join(paths.analysis_path, '_'.join((animal, rig, 'cellMatch.hdf5')))
+    out_path = os.path.join(paths.analysis_path, '_'.join((animal, 'cellMatch.hdf5')))
 
 # load the data for the matching
 footprint_list = []

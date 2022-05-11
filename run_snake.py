@@ -94,16 +94,14 @@ for idx, target_entries in enumerate(full_queries):
         target_file = yaml.dump(config_dict, f)
 
     # assemble the output path
-    if (parsed_search['analysis_type'] == 'full_run') or (parsed_search['analysis_type'] == 'combinedanalysis'):
+    if parsed_search['analysis_type'] == 'preprocessing_run':
         # feed the generic txt file for preprocessing
-        out_path = os.path.join(paths.analysis_path, 'full_run.txt')
-    # elif parsed_search['analysis_type'] == 'combinedanalysis':
-    #     out_path = os.path.join(paths.analysis_path, 'combinedanalysis.hdf5')
+        out_path = os.path.join(paths.analysis_path, 'preprocessing_run.txt')
+    elif parsed_search['analysis_type'] == 'combinedanalysis_run':
+        out_path = os.path.join(paths.analysis_path, 'combinedanalysis_run.txt')
     else:
         # feed the aggregation path
         out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
-
-    # out_path = os.path.join(paths.figures_path, '_'.join(('averages', *parsed_search.values())) + '.html')
 
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
@@ -113,7 +111,7 @@ for idx, target_entries in enumerate(full_queries):
                               # '--rerun-incomplete',
                               # '--verbose',  # make the output more verbose for debugging
                               # '--debug-dag',  # show the file selection operation, also for debugging
-                              # '--dryrun',  # generates the DAG and everything, but doesn't process
+                              '--dryrun',  # generates the DAG and everything, but doesn't process
                               # '--reason',  # print the reason for executing each job
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
@@ -123,8 +121,13 @@ for idx, target_entries in enumerate(full_queries):
     print(stdout.decode())
 
     # assemble the output path
-    if ((parsed_search['analysis_type'] == 'full_run') or (parsed_search['analysis_type'] == 'combinedanalysis')) and \
-            os.path.isfile(os.path.join(paths.analysis_path, 'full_run.txt')):
-        # delete the just_preprocess file (specify de novo to not run risks)
-        os.remove(os.path.join(paths.analysis_path, 'full_run.txt'))
+    if (parsed_search['analysis_type'] == 'preprocessing_run') &  \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'preprocessing_run.txt'))):
+        # delete the txt file (specify de novo to not run risks)
+        os.remove(os.path.join(paths.analysis_path, 'preprocessing_run.txt'))
+    elif (parsed_search['analysis_type'] == 'combinedanalysis_run') &  \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'combinedanalysis_run.txt'))):
+        # delete the txt file (specify de novo to not run risks)
+        os.remove(os.path.join(paths.analysis_path, 'combinedanalysis_run.txt'))
+
 print('yay')
