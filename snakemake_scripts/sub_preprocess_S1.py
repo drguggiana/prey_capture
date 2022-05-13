@@ -539,8 +539,6 @@ def run_preprocess_eye(file_path_ref, file_path_dlc, file_info, kernel_size=5):
                             'pupil_left_x', 'pupil_left_y',
                             'eye_corner_nasal_x', 'eye_corner_nasal_y',
                             'eye_corner_temporal_x', 'eye_corner_temporal_y',
-                            'eye_corner_nasal_x', 'eye_corner_nasal_y',
-                            'eye_corner_temporal_x', 'eye_corner_temporal_y',
                             'eyelid_top_x', 'eyelid_top_y',
                             'eyelid_bottom_x', 'eyelid_bottom_y',
                             'led_x', 'led_y',
