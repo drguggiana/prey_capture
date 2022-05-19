@@ -44,7 +44,7 @@ except IndexError:
     # query the database for data to plot
     data_all = bd.query_database('analyzed_data', search_string)
     # get the paths to the files
-    calcium_path = [el['analysis_path'] for el in data_all]
+    calcium_path = [el['analysis_path'] for el in data_all if 'miniscope' not in el['slug']]
     # # for testing, filter calcium path
     # calcium_path = [el for el in calcium_path if ('03_24' in el) or ('03_23' in el) or ('03_29' in el)]
     # assemble the output path
@@ -70,6 +70,12 @@ for files in calcium_path:
         # if there are no ROIs, skip
         if (type(calcium_data) == np.ndarray) and (calcium_data == 'no_ROIs'):
             continue
+        # clear the rois that don't pass the size criteria
+        areas = fm.get_roi_stats(calcium_data)[:, -1]
+        keep_vector = (areas > processing_parameters.roi_parameters['area_min']) & \
+                      (areas < processing_parameters.roi_parameters['area_max'])
+        calcium_data = calcium_data[keep_vector, :, :]
+        # format and masks and store for matching
         footprint_list.append(np.moveaxis(calcium_data, 0, -1).reshape((-1, calcium_data.shape[0])))
         size_list.append(calcium_data.shape[1:])
         template_list.append(np.zeros(size_list[0]))

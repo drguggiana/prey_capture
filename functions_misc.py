@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.linear_model import LinearRegression as ols
 from tkinter import Tk
 from scipy.interpolate import interp1d
+import cv2
 
 # for slugify function
 non_url_safe = ['"', '#', '$', '%', '&', '+',
@@ -132,3 +133,22 @@ def slugify(string_in):
 
 def flatten_list(list_of_lists):
     return [item for sublist in list_of_lists for item in sublist]
+
+
+def get_roi_stats(footprints):
+    """Use opencv to extract the centroid, area and bounding box of an array of masks"""
+
+    # allocate the output
+    roi_info = []
+    # for all the masks
+    for roi in footprints:
+        # binarize the image
+        bin_roi = (roi > 0).astype(np.int8)
+        # define the connectivity
+        connectivity = 8
+        # Perform the operation
+        output = cv2.connectedComponentsWithStats(bin_roi, connectivity, cv2.CV_32S)
+        # store the centroid x and y, the l, t, w, h of the bounding box and the area
+        roi_info.append(np.hstack((output[3][1, :], output[2][1, :])))
+
+    return np.vstack(roi_info)

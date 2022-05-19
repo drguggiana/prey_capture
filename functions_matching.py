@@ -868,8 +868,8 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     matched_bonsai['datetime'] = kinematics_data.loc[0, 'datetime']
 
     # print a single dataframe with the calcium matched positions and timestamps
-    calcium_dataframe = pd.DataFrame(calcium_data,
-                                     columns=['_'.join(('cell', str(el))) for el in range(calcium_data.shape[1])])
+    cell_column_names = ['_'.join(('cell', f'{el:04d}')) for el in range(calcium_data.shape[1])]
+    calcium_dataframe = pd.DataFrame(calcium_data, columns=cell_column_names)
     # concatenate both data frames
     full_dataframe = pd.concat([matched_bonsai, calcium_dataframe], axis=1)
 
