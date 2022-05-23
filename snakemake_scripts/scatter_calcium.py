@@ -2,11 +2,12 @@ import yaml
 import os
 import h5py
 import functions_bondjango as bd
+import functions_misc as fm
 import paths
 import numpy as np
 import datetime
 import processing_parameters
-import cv2
+
 
 try:
 
@@ -78,21 +79,17 @@ try:
     # extract the frames
     current_calcium = calcium_data[:, frame_start:frame_end]
 
-    # allocate memory for the centroids
-    roi_info = []
-    # get the centroid coordinates of each roi
-    for roi in footprints:
-        # binarize the image
-        bin_roi = (roi > 0).astype(np.int8)
-        # define the connectivity
-        connectivity = 8
-        # Perform the operation
-        output = cv2.connectedComponentsWithStats(bin_roi, connectivity, cv2.CV_32S)
-        # store the centroid x and y, the l, t, w, h of the bounding box and the area
-        roi_info.append(np.hstack((output[3][1, :], output[2][1, :])))
+    # get the areas
+    roi_info = fm.get_roi_stats(footprints)
+    areas = roi_info[:, -1]
+    # filter out ROIs outside a size range
+    keep_vector = (areas > processing_parameters.roi_parameters['area_min']) & \
+                  (areas < processing_parameters.roi_parameters['area_max'])
 
-    # concatenate the centroids
-    roi_info = np.vstack(roi_info)
+    # remove from the calcium
+    current_calcium = current_calcium[keep_vector, :]
+    roi_info = roi_info[keep_vector, :]
+
     # save the data as an h5py
     with h5py.File(out_path, 'w') as file:
         file.create_dataset('calcium_data', data=current_calcium)

@@ -13,7 +13,6 @@ try:
     # get the path to the file, parse and turn into a dictionary
     target_path = snakemake.input[0]
     video_data = yaml.load(snakemake.params.file_info, Loader=yaml.FullLoader)
-    # video_data = yaml.load(snakemake.params.file_info
     # get the save paths
     out_path = snakemake.output[0]
 
@@ -26,10 +25,7 @@ try:
         animal = '_'.join(os.path.basename(video_data['bonsai_path']).split('_')[6:9])
     trial_date = datetime.datetime.strptime(video_data['date'], '%Y-%m-%dT%H:%M:%SZ')
     day = trial_date.strftime('%m_%d_%Y')
-    # time = trial_date.strftime('%H_%M_%S')
 
-    # print('scatter calcium:'+calcium_path)
-    # print('scatter out:'+out_path)
 except NameError:
 
     # define the target file
@@ -78,37 +74,40 @@ with h5py.File(target_path, 'r') as input_file, h5py.File(out_path, 'w') as outp
 
         # for all the time shifts
         for time_shift in time_shifts:
-            # for shuffle and non shuffle
-            for shuffler in np.arange(processing_parameters.regression_shuffles+1):
-                if shuffler > 0:
-                    suffix = 'shuffle'+str(shuffler)
+            # for the real and shuffle
+            for realvshuffle in np.arange(2):
+                if realvshuffle == 1:
+                    suffix = 'shuffle'
                 else:
                     suffix = 'real'
                 # add the shift to the suffix
-                suffix += '_shift'+str(time_shift)
-                # for all the variables
-                for idx in variable_list:
-                    # generate the names of the fields
-                    coeff_name = '_'.join(['coefficients', idx, suffix])
-                    prediction_name = '_'.join(['prediction', idx, suffix])
-                    cc_name = '_'.join(['cc', idx, suffix])
-                    # check if the key is there, if not, skip
-                    if coeff_name in input_file.keys():
-                        # get the data
-                        coefficients = np.array(input_file[coeff_name])
-                        prediction = np.array(input_file[prediction_name])
-                        cc = np.array(input_file[cc_name])
-                        # get the relevant portion of prediction
-                        prediction = prediction[file_start:file_end]
-                        # save in the output file
-                        output_file.create_dataset('regression/' + coeff_name, data=coefficients)
-                        output_file.create_dataset('regression/' + prediction_name, data=prediction)
-                        output_file.create_dataset('regression/' + cc_name, data=cc)
+                suffix += '_shift' + str(time_shift)
 
-# # save the file
-# with h5py.File(out_path, 'w') as f:
-#     # save an empty
-#     f.create_dataset('regression_data', data=results_dict)
+                # for all the variables
+                for feature in variable_list:
+                    # for average and std
+                    for averagevstd in np.arange(2):
+                        if averagevstd == 0:
+                            suffix2 = ''
+                        else:
+                            suffix2 = '_std'
+
+                        # generate the names of the fields
+                        coeff_name = '_'.join(['coefficients', feature, suffix + suffix2])
+                        prediction_name = '_'.join(['prediction', feature, suffix + suffix2])
+                        cc_name = '_'.join(['cc', feature, suffix + suffix2])
+                        # check if the key is there, if not, skip
+                        if coeff_name in input_file.keys():
+                            # get the averages
+                            coefficients = np.array(input_file[coeff_name])
+                            prediction = np.array(input_file[prediction_name])
+                            cc = np.array(input_file[cc_name])
+                            # get the relevant portion of prediction
+                            prediction = prediction[file_start:file_end]
+                            # save in the output file
+                            output_file.create_dataset('regression/' + coeff_name, data=coefficients)
+                            output_file.create_dataset('regression/' + prediction_name, data=prediction)
+                            output_file.create_dataset('regression/' + cc_name, data=cc)
 
 if skip_entry == 0:
     # save as a new entry to the data base
