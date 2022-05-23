@@ -942,7 +942,8 @@ def match_eye(filtered_traces, eye_model='sakatani+isa'):
     # calculate diameter and center - take major axis to be pupil diameter
     # note the reversing of the first fit output because of reversed cv2 convention
     fit_columns = ['fit_pupil_center_x', 'fit_pupil_center_y', 'pupil_diameter', 'minor_axis', 'pupil_rotation']
-    pupil_fit = pd.DataFrame([[*reversed(fit[0]), *fit[1], fit[-1]] for fit in ellipses], columns=fit_columns)
+    pupil_fit = pd.DataFrame([[*reversed(fit[0]), *fit[1], fit[-1]] for fit in ellipses],
+                             columns=fit_columns, index=filtered_traces.index.copy())
     filtered_traces = pd.concat([pupil_fit, filtered_traces], axis=1)
 
     # --- Gaze angle --- #
@@ -961,7 +962,7 @@ def match_eye(filtered_traces, eye_model='sakatani+isa'):
     center_ref_cols = ['eye_horizontal_vector_x', 'eye_horizontal_vector_y', 'eye_midpoint_x', 'eye_midpoint_y',
                        'pupil_center_ref_x', 'pupil_center_ref_y']
     center_ref_pupil = pd.DataFrame(np.column_stack((eye_horizontal_vector, eye_axis_midpoint, pupiL_coord_ref)),
-                                    columns=center_ref_cols)
+                                    columns=center_ref_cols, index=filtered_traces.index.copy())
     filtered_traces = pd.concat([center_ref_pupil, filtered_traces], axis=1)
 
     # TODO actually calculate gaze angle if needed
@@ -1027,7 +1028,7 @@ def match_dlc(filtered_traces, file_info, file_date):
             cam_idx = cam_idx[delta_frame:]
 
     # make a copy of filtered traces to bypass SettingWithCopyWarning, and return that
-    filtered_traces_copy = filtered_traces.reset_index(drop=True).copy()
+    filtered_traces_copy = filtered_traces.copy()
 
     # save the time and the frames
     filtered_traces_copy['time_vector'] = [el - time[0] for el in time]
