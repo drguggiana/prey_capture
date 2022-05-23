@@ -891,7 +891,7 @@ def match_wheel(file_info, filtered_traces, wheel_diameter=16):
                                                            'sync_trigger', 'mini_frames', 'wheel_frames'],
                             index_col=False)
     # get the wheel trace
-    wheel_position = sync_data.loc[filtered_traces['sync_frames'].fillna(0), ['wheel_frames']]
+    wheel_position = sync_data.loc[filtered_traces['sync_frames'], ['wheel_frames']]
     # convert the position to radians
     wheel_position = (wheel_position - wheel_position.min()) / (wheel_position.max() - wheel_position.min()) * 2 * np.pi
     # unwrap
