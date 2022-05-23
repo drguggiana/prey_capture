@@ -891,11 +891,11 @@ def match_wheel(file_info, filtered_traces, wheel_diameter=16):
                                                            'sync_trigger', 'mini_frames', 'wheel_frames'],
                             index_col=False)
     # get the wheel trace
-    wheel_position = sync_data.loc[filtered_traces['sync_frames'], 'wheel_frames']
+    wheel_position = sync_data.loc[filtered_traces['sync_frames'].fillna(0), ['wheel_frames']]
     # convert the position to radians
     wheel_position = (wheel_position - wheel_position.min()) / (wheel_position.max() - wheel_position.min()) * 2 * np.pi
     # unwrap
-    wheel_position = np.unwrap(wheel_position)
+    wheel_position = np.unwrap(wheel_position).flatten()
     # get the speed of the wheel
     wheel_speed = np.diff(wheel_position * np.pi * (wheel_diameter - 1) / 360)
     # get the wheel acceleration
@@ -1026,11 +1026,14 @@ def match_dlc(filtered_traces, file_info, file_date):
             time = time[delta_frame:]
             cam_idx = cam_idx[delta_frame:]
 
-    # save the time and the frames
-    filtered_traces['time_vector'] = [el - time[0] for el in time]
-    filtered_traces['sync_frames'] = cam_idx
+    # make a copy of filtered traces to bypass SettingWithCopyWarning, and return that
+    filtered_traces_copy = filtered_traces.reset_index(drop=True).copy()
 
-    return filtered_traces
+    # save the time and the frames
+    filtered_traces_copy['time_vector'] = [el - time[0] for el in time]
+    filtered_traces_copy['sync_frames'] = cam_idx
+
+    return filtered_traces_copy
 
 
 def interpolate_frame_triggers(triggers_in, threshold=1.5):
