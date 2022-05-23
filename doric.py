@@ -60,8 +60,8 @@ def h5getDatasetR(item, leading = ''):
 	return r
 
 
-# Extact Data from a doric file
+# Extract Data from a doric file
 def ExtractDataAcquisition(filename):
 	with h5py.File(filename, 'r') as h:
 		#print(filename)
-		return h5getDatasetR(h['DataAcquisition'],filename)
+		return h5getDatasetR(h['DataAcquisition'], filename)

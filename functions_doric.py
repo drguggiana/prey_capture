@@ -41,7 +41,7 @@ if __name__ == "__main__":
     from glob import glob
     from os.path import isfile
 
-    doric_list = glob(paths.vr_path + '/*.doric')
+    doric_list = glob(r'J:\Drago Guggiana Nilo\Prey_capture\VRExperiment\*.doric')
 
     # load the sample data
     # test_data = extract_doric(paths.doric_sample)
@@ -52,11 +52,12 @@ if __name__ == "__main__":
         # get the output path
         # out_path = paths.doric_sample.replace('.doric', '.tif')
         out_path = doric_file.replace('.doric', '.tif')
-        print("Converting {} to .tif!".format(doric_file))
+        print("Checking if {} is already converted...".format(doric_file))
 
         if not isfile(out_path):
+            print("Converting {} to .tif!".format(doric_file))
             # convert the file if it hasn't been converted already
-            convert_doric_to_tif(paths.doric_sample, out_path)
+            convert_doric_to_tif(doric_file, out_path)
             print("Converted!\n")
 
         else:
