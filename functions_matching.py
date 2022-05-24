@@ -767,8 +767,8 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
 
     # add the correct time vector from the interpolated traces
     matched_camera['time_vector'] = frame_times_motive_sync
-    matched_camera['mouse'] = kinematics_data.loc[0, 'mouse']
-    matched_camera['datetime'] = kinematics_data.loc[0, 'datetime']
+    matched_camera['mouse'] = kinematics_data.loc[kinematics_data.index[0], 'mouse']
+    matched_camera['datetime'] = kinematics_data.loc[kinematics_data.index[0], 'datetime']
     # correct the frame indexes to work with the untrimmed sync file
     idx_code += sync_start
     matched_camera['sync_frames'] = idx_code
@@ -900,11 +900,12 @@ def match_wheel(file_info, filtered_traces, wheel_diameter=16):
     wheel_speed = np.diff(wheel_position * np.pi * (wheel_diameter - 1) / 360)
     # get the wheel acceleration
     wheel_acceleration = np.diff(wheel_speed)
+    # prepend zeros to speed and acceleration arrays
+    wheel_speed = np.insert(wheel_speed, 0, 0, axis=0)
+    wheel_acceleration = np.insert(wheel_acceleration, [0, 0], 0, axis=0)
     # save in the output frame
-    filtered_traces.loc[1:, 'wheel_speed'] = wheel_speed
-    filtered_traces.loc[0, 'wheel_speed'] = 0
-    filtered_traces.loc[2:, 'wheel_acceleration'] = wheel_acceleration
-    filtered_traces.loc[:2, 'wheel_acceleration'] = 0
+    filtered_traces['wheel_speed'] = wheel_speed
+    filtered_traces['wheel_acceleration'] = wheel_acceleration
 
     return filtered_traces
 
@@ -921,7 +922,7 @@ def match_eye(filtered_traces, eye_model='sakatani+isa'):
     eyelid_top_vec_u = eyelid_top_vec / np.linalg.norm(eyelid_top_vec, axis=1)[:, np.newaxis]
     eyelid_bottom_vec_u = eyelid_bottom_vec / np.linalg.norm(eyelid_bottom_vec, axis=1)[:, np.newaxis]
     eyelid_angle = np.rad2deg(np.arccos(np.sum(eyelid_top_vec_u * eyelid_bottom_vec_u, axis=1)))
-    filtered_traces['eyelid_angle'] = eyelid_angle
+    filtered_traces.insert(loc=0, column='eyelid_angle', value=eyelid_angle)
 
     # --- Pupil tracking --- #
     pupil_columns = ['pupil_top', 'pupil_top_right', 'pupil_top_left',
