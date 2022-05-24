@@ -767,8 +767,8 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
 
     # add the correct time vector from the interpolated traces
     matched_camera['time_vector'] = frame_times_motive_sync
-    matched_camera['mouse'] = kinematics_data.loc[0, 'mouse']
-    matched_camera['datetime'] = kinematics_data.loc[0, 'datetime']
+    matched_camera['mouse'] = kinematics_data.loc[kinematics_data.index[0], 'mouse']
+    matched_camera['datetime'] = kinematics_data.loc[kinematics_data.index[0], 'datetime']
     # correct the frame indexes to work with the untrimmed sync file
     idx_code += sync_start
     matched_camera['sync_frames'] = idx_code
@@ -891,20 +891,21 @@ def match_wheel(file_info, filtered_traces, wheel_diameter=16):
                                                            'sync_trigger', 'mini_frames', 'wheel_frames'],
                             index_col=False)
     # get the wheel trace
-    wheel_position = sync_data.loc[filtered_traces['sync_frames'], 'wheel_frames']
+    wheel_position = sync_data.loc[filtered_traces['sync_frames'], ['wheel_frames']]
     # convert the position to radians
     wheel_position = (wheel_position - wheel_position.min()) / (wheel_position.max() - wheel_position.min()) * 2 * np.pi
     # unwrap
-    wheel_position = np.unwrap(wheel_position)
+    wheel_position = np.unwrap(wheel_position).flatten()
     # get the speed of the wheel
     wheel_speed = np.diff(wheel_position * np.pi * (wheel_diameter - 1) / 360)
     # get the wheel acceleration
     wheel_acceleration = np.diff(wheel_speed)
+    # prepend zeros to speed and acceleration arrays
+    wheel_speed = np.insert(wheel_speed, 0, 0, axis=0)
+    wheel_acceleration = np.insert(wheel_acceleration, [0, 0], 0, axis=0)
     # save in the output frame
-    filtered_traces.loc[1:, 'wheel_speed'] = wheel_speed
-    filtered_traces.loc[0, 'wheel_speed'] = 0
-    filtered_traces.loc[2:, 'wheel_acceleration'] = wheel_acceleration
-    filtered_traces.loc[:2, 'wheel_acceleration'] = 0
+    filtered_traces['wheel_speed'] = wheel_speed
+    filtered_traces['wheel_acceleration'] = wheel_acceleration
 
     return filtered_traces
 
@@ -921,7 +922,7 @@ def match_eye(filtered_traces, eye_model='sakatani+isa'):
     eyelid_top_vec_u = eyelid_top_vec / np.linalg.norm(eyelid_top_vec, axis=1)[:, np.newaxis]
     eyelid_bottom_vec_u = eyelid_bottom_vec / np.linalg.norm(eyelid_bottom_vec, axis=1)[:, np.newaxis]
     eyelid_angle = np.rad2deg(np.arccos(np.sum(eyelid_top_vec_u * eyelid_bottom_vec_u, axis=1)))
-    filtered_traces['eyelid_angle'] = eyelid_angle
+    filtered_traces.insert(loc=0, column='eyelid_angle', value=eyelid_angle)
 
     # --- Pupil tracking --- #
     pupil_columns = ['pupil_top', 'pupil_top_right', 'pupil_top_left',
@@ -942,7 +943,8 @@ def match_eye(filtered_traces, eye_model='sakatani+isa'):
     # calculate diameter and center - take major axis to be pupil diameter
     # note the reversing of the first fit output because of reversed cv2 convention
     fit_columns = ['fit_pupil_center_x', 'fit_pupil_center_y', 'pupil_diameter', 'minor_axis', 'pupil_rotation']
-    pupil_fit = pd.DataFrame([[*reversed(fit[0]), *fit[1], fit[-1]] for fit in ellipses], columns=fit_columns)
+    pupil_fit = pd.DataFrame([[*reversed(fit[0]), *fit[1], fit[-1]] for fit in ellipses],
+                             columns=fit_columns, index=filtered_traces.index.copy())
     filtered_traces = pd.concat([pupil_fit, filtered_traces], axis=1)
 
     # --- Gaze angle --- #
@@ -961,7 +963,7 @@ def match_eye(filtered_traces, eye_model='sakatani+isa'):
     center_ref_cols = ['eye_horizontal_vector_x', 'eye_horizontal_vector_y', 'eye_midpoint_x', 'eye_midpoint_y',
                        'pupil_center_ref_x', 'pupil_center_ref_y']
     center_ref_pupil = pd.DataFrame(np.column_stack((eye_horizontal_vector, eye_axis_midpoint, pupiL_coord_ref)),
-                                    columns=center_ref_cols)
+                                    columns=center_ref_cols, index=filtered_traces.index.copy())
     filtered_traces = pd.concat([center_ref_pupil, filtered_traces], axis=1)
 
     # TODO actually calculate gaze angle if needed
@@ -1026,11 +1028,14 @@ def match_dlc(filtered_traces, file_info, file_date):
             time = time[delta_frame:]
             cam_idx = cam_idx[delta_frame:]
 
-    # save the time and the frames
-    filtered_traces['time_vector'] = [el - time[0] for el in time]
-    filtered_traces['sync_frames'] = cam_idx
+    # make a copy of filtered traces to bypass SettingWithCopyWarning, and return that
+    filtered_traces_copy = filtered_traces.copy()
 
-    return filtered_traces
+    # save the time and the frames
+    filtered_traces_copy['time_vector'] = [el - time[0] for el in time]
+    filtered_traces_copy['sync_frames'] = cam_idx
+
+    return filtered_traces_copy
 
 
 def interpolate_frame_triggers(triggers_in, threshold=1.5):

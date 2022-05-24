@@ -144,10 +144,11 @@ elif files['rig'] in ['VTuning']:
     # calculate only if calcium is present
     if files['imaging'] == 'doric':
         # get a dataframe with the calcium data matched to the bonsai data
-        matched_calcium = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
+        matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
         # if there is a calcium output, write to the file
         if matched_calcium is not None:
             matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
+            roi_info.to_hdf(save_path, key='roi_info', mode='a', format='fixed')
             # also get the cell matching if it exists
             cell_matches = fm.match_cells(match_path)
             cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
@@ -180,13 +181,15 @@ elif files['rig'] in ['VWheel']:
     # calculate only if calcium is present
     if files['imaging'] == 'doric':
         # get a dataframe with the calcium data matched to the bonsai data
-        matched_calcium = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
+        matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
         # if there is a calcium output, write to the file
         if matched_calcium is not None:
             matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
+            roi_info.to_hdf(save_path, key='roi_info', mode='a', format='fixed')
             # also get the cell matching if it exists
             cell_matches = fm.match_cells(match_path)
             cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
+
 else:
     # return all empty outputs and print a warning
     # TODO: replace with logging

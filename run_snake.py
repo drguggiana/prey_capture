@@ -106,9 +106,9 @@ for idx, target_entries in enumerate(full_queries):
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
                               # '-F',         # (hard) force rerun everything
-                              # '-f',         # (soft) force rerun last step
+                              '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
-                              # '--rerun-incomplete',
+                              '--rerun-incomplete',
                               # '--verbose',  # make the output more verbose for debugging
                               # '--debug-dag',  # show the file selection operation, also for debugging
                               # '--dryrun',  # generates the DAG and everything, but doesn't process
