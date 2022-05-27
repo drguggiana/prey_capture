@@ -912,6 +912,7 @@ def match_wheel(file_info, filtered_traces, wheel_diameter=16):
 
 def match_eye(filtered_traces, eye_model='sakatani+isa'):
     """Extract and process the eye tracking data"""
+    filtered_traces.reset_index(drop=True, inplace=True)
 
     filtered_traces.reset_index(inplace=True, drop=True)
 
