@@ -48,7 +48,7 @@ def minian_main():
         "wnd_size": 1000,
         "method": "rolling",
         "stp_size": 500,
-        "max_wnd": 15,
+        "max_wnd": 17,
         "diff_thres": 3,
     }
     param_pnr_refine = {"noise_freq": noise_freq, "thres": 1}
