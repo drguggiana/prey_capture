@@ -7,6 +7,7 @@ import itertools as it
 import pandas as pd
 import datetime
 import numpy as np
+import re
 
 
 def generate_entry(in_path, out_path, parsed_search, analysis_t, pic_path=''):
@@ -173,8 +174,10 @@ def fetch_preprocessing(search_query):
         # date_list = [datetime.datetime.strptime(el[m2m_field][0][:10], '%m_%d_%Y') for el in file_path]
         date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in file_path]
 
-        # filter the list for animals
-        animal_list = [el[m2m_field][0][30:41] for el in file_path]
+        # filter the list for animals - the regex searches for animal names in the 
+        # form of initials_YYMMDD_letter
+        # animal_list = [el[m2m_field][0][30:41] for el in file_path]
+        animal_list = [re.search(r"([a-zA-Z]+)\_(\d+)\_([a-zA-Z]+)", el[m2m_field][0])[0] for el in file_path]
     else:
         date_list = []
         animal_list = []
