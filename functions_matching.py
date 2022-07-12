@@ -914,6 +914,8 @@ def match_eye(filtered_traces, eye_model='sakatani+isa'):
     """Extract and process the eye tracking data"""
     filtered_traces.reset_index(drop=True, inplace=True)
 
+    filtered_traces.reset_index(inplace=True, drop=True)
+
     # --- Blink detection --- #
     # create vectors between the eye nasal eye corner and eyelid top and bottom
     eyelid_top_vec = filtered_traces.loc[:, ['eyelid_top_x', 'eyelid_top_y']].to_numpy() - \
