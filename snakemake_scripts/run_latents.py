@@ -65,8 +65,10 @@ else:
     # column_list = [el for el in column_list_all if (('x' in el) or ('y' in el)) & ('mouse' in el)]
     column_list = [el for el in column_list_all if (('_x' in el) or ('_y' in el))]
     # define the extra columns
-    # extra_columns = ['mouse_speed']
-    extra_columns = None
+    extra_columns = ['mouse_speed', 'cricket_0_speed']
+    extra_columns = [el for el in extra_columns if el in column_list_all]
+    # extra_columns = None
+    column_final = column_list + extra_columns if extra_columns is not None else column_list
     # column_list += extra_columns
 
     # get the config info
@@ -105,7 +107,7 @@ else:
 
         # get the trajectories for latents
         # column_idx = [True if 'mouse' in el else False for el in column_list]
-        column_idx = [True for el in column_list]
+        column_idx = [True for el in column_final]
         vame_trajectories = aligned_traj[column_idx, :]
 
         # run the pose segmentation
@@ -116,7 +118,7 @@ else:
             f.create_dataset('egocentric_coord', data=aligned_traj)
             f.create_dataset('latents', data=np.squeeze(latents))
             f.create_dataset('motifs', data=np.squeeze(clusters))
-            f.create_dataset('columns', data=column_list)
+            f.create_dataset('columns', data=column_final)
     except ValueError:
         # save the file and create the bondjango entry
         with h5py.File(save_path, 'w') as f:

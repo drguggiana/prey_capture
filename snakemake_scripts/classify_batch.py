@@ -21,6 +21,17 @@ import functions_loaders as fl
 random.seed(1)
 
 
+def reverse_roll_shuffle(feature, **kwargs):
+    """Shuffle the data by inverting and randomly circshifting"""
+    # flip the array
+    output_array = np.flip(feature)
+    # get the random amount of shifting
+    random_shift = np.random.choice(feature.shape[0], 1)
+    # shift the array
+    output_array = np.roll(output_array, random_shift)
+    return output_array
+
+
 def chunk_shuffle(feature, chunk_size_shuffle=0.05, **kwargs):
     """Shuffle the input array in chunks of a given size"""
     # get the size of the chunks
@@ -120,36 +131,48 @@ def train_test_regressor(parameter_w, calcium_data_w, scaler_fun, regressor_fun,
     # if shuffling is on, shuffle the parameter in time
     if shuffle_f:
         # shuffle using chunks like for partitioning
-        parameter_w = chunk_shuffle(parameter_w, **kwargs)
+        # parameter_w = chunk_shuffle(parameter_w, **kwargs)
+        parameter_w = reverse_roll_shuffle(parameter_w, **kwargs)
     # if the chunk flag it on, perform chunk splitting
     if chunk:
         calcium_train, calcium_test, parameter_train, parameter_test = \
             chunk_split(calcium_data_w, parameter_w, **kwargs)
     # else, perform sequential splitting (not fully random cause calcium)
     else:
+        # remove potential parameters that shouldn't be there
+        remove_params = ['chunk_size', 'chunk_size_shuffle']
+        for el in remove_params:
+            if el in kwargs.keys():
+                del kwargs[el]
         # separate train and test set (without shuffling)
         calcium_train, calcium_test, parameter_train, parameter_test = \
             mod.train_test_split(calcium_data_w, parameter_w, **kwargs)
 
     # scale the calcium data
-    calcium_scaler = scaler_fun().fit(calcium_train)
-    calcium_train = calcium_scaler.transform(calcium_train)
-    calcium_test = calcium_scaler.transform(calcium_test)
-    calcium_data_w = calcium_scaler.transform(calcium_data_w)
+    if scaler_fun is not None:
+        calcium_scaler = scaler_fun().fit(calcium_train)
+        calcium_train = calcium_scaler.transform(calcium_train)
+        calcium_test = calcium_scaler.transform(calcium_test)
+        calcium_data_w = calcium_scaler.transform(calcium_data_w)
     # train the regressor
-    linear_fun = regressor_fun
-    linear_fun.fit(calcium_train, parameter_train)
+    # if type(regressor_fun) == type:
+    regressor_fun.fit(calcium_train, parameter_train)
     # predict the test and the whole data
-    test_pred = linear_fun.predict(calcium_test)
-    linear_pred_out = linear_fun.predict(calcium_data_w)
+    test_pred = regressor_fun.predict(calcium_test)
+    linear_pred_out = regressor_fun.predict(calcium_data_w)
+    # else:
+    #     regressor = regressor_fun(parameter_train, exog=calcium_train, lags=5, missing='drop').fit()
 
     # get the cc score and coefficients
     cc_score_out = performance_fun(parameter_test, test_pred)
     # check if tuple, to use also scipy functions
     if isinstance(cc_score_out, tuple):
         cc_score_out = cc_score_out[0]
-    # get the weights
-    coefficients_out = linear_fun.coef_
+    # get the weights or output nan if nonlinear
+    try:
+        coefficients_out = regressor_fun.coef_
+    except AttributeError:
+        coefficients_out = np.zeros(calcium_data_w.shape[1]) * np.nan
 
     return linear_pred_out, coefficients_out, cc_score_out
 
@@ -292,13 +315,13 @@ if __name__ == '__main__':
                     for shuffler in np.arange(processing_parameters.regression_repeats):
 
                         # create the linear regressor
-                        linear = lin.TweedieRegressor(alpha=0.01, max_iter=5000, fit_intercept=False, power=0)
+                        regressor = lin.TweedieRegressor(alpha=0.01, max_iter=5000, fit_intercept=False, power=0)
 
                         # run the training function
                         linear_pred, coefficients, cc_score = train_test_regressor(parameter_working,
                                                                                    calcium_data_working,
                                                                                    preprocessing.StandardScaler,
-                                                                                   linear,
+                                                                                   regressor,
                                                                                    stat.spearmanr,
                                                                                    time_s=time_shift,
                                                                                    shuffle_f=shuffle_flag,
@@ -309,13 +332,13 @@ if __name__ == '__main__':
                                                                                    chunk_size_shuffle=0.05)
                         # store the reps
                         pred_list.append(linear_pred)
-                        coeff_list.append(coefficients)
+                        coeff_list.append(coefficients/np.sum(coefficients))
                         cc_list.append(cc_score)
                     # add the shift to the suffix
                     suffix += '_shift'+str(time_shift)
 
                     # average/std the lists and store
-                    mean_coefficients = np.mean(coeff_list, axis=0)
+                    mean_coefficients = np.sum(coeff_list, axis=0)
                     mean_linear_pred = np.mean(pred_list, axis=0)
                     mean_cc_score = np.mean(cc_list, axis=0)
                     std_coefficients = np.std(coeff_list, axis=0)
