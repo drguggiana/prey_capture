@@ -10,6 +10,15 @@ def wrap(angles, bound=360):
     return out_angles
 
 
+def wrap_negative(angles, bound=180):
+    """Wrap angles to the range [-180, 180]"""
+    bound_excess_idx = np.argwhere(angles > bound)
+    out_angles = angles.copy()
+    out_angles[bound_excess_idx] = (angles[bound_excess_idx] % bound) - bound
+ 
+    return out_angles
+
+
 def unwrap(angles, discont=3.141592653589793, axis=0):
     """unwrap angles in degrees"""
     return np.rad2deg(np.unwrap(np.deg2rad(angles), discont=discont, axis=axis))

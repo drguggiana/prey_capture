@@ -177,7 +177,7 @@ def fetch_preprocessing(search_query):
         # filter the list for animals - the regex searches for animal names in the 
         # form of initials_YYMMDD_letter
         # animal_list = [el[m2m_field][0][30:41] for el in file_path]
-        animal_list = [re.search(r"([a-zA-Z]+)\_(\d+)\_([a-zA-Z]+)", el[m2m_field][0])[0] for el in file_path]
+        animal_list = [re.search(r"([a-zA-Z]+)_(\d+)_([a-zA-Z])", el[m2m_field][0])[0] for el in file_path]
     else:
         date_list = []
         animal_list = []
