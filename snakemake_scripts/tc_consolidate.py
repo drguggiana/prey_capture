@@ -42,6 +42,7 @@ for idx, feature in enumerate(feature_list):
     # allocate a list for the individual dataframes
     file_list = []
     counts_list = []
+    # edges_list = []
     # add a file counter
     file_counter = 0
     # cycle through the files
@@ -49,7 +50,8 @@ for idx, feature in enumerate(feature_list):
         try:
             # read in the data and store
             file_list.append(pd.read_hdf(files, feature))
-            counts_list.append(pd.read_hdf(files, feature+'_counts'))
+            counts_list.append(pd.read_hdf(files, feature + '_counts'))
+            # edges_list.append(pd.read_hdf(files, feature + '_edges'))
             # only save the ID for the first feature
             if idx == 0:
                 meta_list.append(pd.read_hdf(files, 'meta_data'))
@@ -74,6 +76,8 @@ for idx, feature in enumerate(feature_list):
         joint_df.to_hdf(out_path, feature)
         joint_counts = pd.concat(counts_list, axis=0).reset_index(drop=True)
         joint_counts.to_hdf(out_path, feature+'_counts')
+        # joint_edges = pd.concat(edges_list, axis=0).reset_index(drop=True)
+        # joint_edges.to_hdf(out_path, feature+'_edges')
         if idx == 0:
             meta_data = pd.concat(meta_list, axis=0).reset_index(drop=True)
             meta_data.to_hdf(out_path, 'meta_data')

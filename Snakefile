@@ -246,6 +246,14 @@ def days_to_file(wildcards):
     return os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'regressionday.hdf5')))
 
 
+def days_to_file_neuron_drop(wildcards):
+    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    animal = python_dict['mouse']
+    day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
+    rig = python_dict['rig']
+    return os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'neurondropday.hdf5')))
+
+
 def all_days(wildcards):
     # initialize the keyword list
     keyword_list = []
@@ -279,9 +287,21 @@ rule gather_regression:
         "snakemake_scripts/classify_batch.py"
 
 
+rule gather_neuron_drop:
+    input:
+        files_to_day,
+    output:
+        os.path.join(paths.analysis_path,'{file}_neurondropday.hdf5'),
+    params:
+        file_info = config["file_info"],
+    script:
+        "snakemake_scripts/neuron_drop.py"
+
+
 rule scatter_analysis:
     input:
         days_to_file,
+        # days_to_file_neuron_drop,
         # animal_to_file,
     output:
         os.path.join(paths.analysis_path,"{file}_combinedanalysis.hdf5"),
