@@ -122,3 +122,19 @@ def create_entry(url, data):
     return requests.post(url, data=data, auth=(paths.bondjango_username, paths.bondjango_password))
 
 
+def delete_multiple(target_model, query):
+    """Delete the entries in the query"""
+
+    # get the entries from the query
+    target_entries = query_database(target_model, query)
+
+    # allocate memory for the results
+    delete_results = []
+    # run through the entries deleting them
+    for entry in target_entries:
+        # delete the entry
+        result = requests.delete(entry['url'], auth=(paths.bondjango_username, paths.bondjango_password))
+        # store the result
+        delete_results.append(result)
+
+    return delete_results
