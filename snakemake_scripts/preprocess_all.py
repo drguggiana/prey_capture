@@ -7,7 +7,6 @@ import snakemake_scripts.sub_preprocess_S1 as s1
 import snakemake_scripts.sub_preprocess_S2 as s2
 import datetime
 import functions_bondjango as bd
-import functions_vrtarget as vt
 import os
 import yaml
 import matplotlib.pyplot as plt

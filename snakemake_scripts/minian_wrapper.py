@@ -47,7 +47,8 @@ if __name__ == "__main__":
         # search_string = 'rig:%s, imaging:doric, mouse:%s, slug:%s' % (rig, animal, day)
         search_string = 'imaging:doric, mouse:%s, slug:%s' % (animal, day)
         # query the database for data to plot
-        data_all = bd.query_database('video_experiment', search_string)
+        # data_all = bd.query_database('video_experiment', search_string)
+        data_all = bd.query_database('vr_experiment', processing_parameters.search_string)
         # video_data = data_all[0]
         # video_path = video_data['tif_path']
         video_path = [el['tif_path'] for el in data_all]
