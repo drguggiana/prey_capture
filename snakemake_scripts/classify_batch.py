@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn import preprocessing
 import sklearn.linear_model as lin
+import sklearn.svm as svm
 import sklearn.model_selection as mod
 import h5py
 import functions_misc as fm
@@ -291,74 +292,82 @@ if __name__ == '__main__':
             # get the cell data
             calcium_data = np.array(sub_data[cells].copy())
 
-            # for all the time shifts
-            for time_shift in time_shifts:
-                # copy the calcium and parameter for working
-                parameter_working = parameter.copy()
-                calcium_data_working = calcium_data.copy()
+            # for all the regressors
+            for reg in processing_parameters.regressors:
 
-                # initialize the suffix (so I don't get the warning below)
-                suffix = ''
-                # run the real and shuffle regressions
-                for realvshuffle in np.arange(2):
-                    if realvshuffle == 1:
-                        suffix = 'shuffle'
-                        shuffle_flag = True
-                    else:
-                        suffix = 'real'
-                        shuffle_flag = False
-                    # allocate lists for each rep
-                    pred_list = []
-                    coeff_list = []
-                    cc_list = []
-                    # run the reps
-                    for shuffler in np.arange(processing_parameters.regression_repeats):
+                # for all the time shifts
+                for time_shift in time_shifts:
+                    # copy the calcium and parameter for working
+                    parameter_working = parameter.copy()
+                    calcium_data_working = calcium_data.copy()
 
-                        # create the linear regressor
-                        regressor = lin.TweedieRegressor(alpha=0.01, max_iter=5000, fit_intercept=False, power=0)
+                    # run the real and shuffle regressions
+                    for realvshuffle in np.arange(2):
+                        # initialize the suffix (so I don't get the warning below)
+                        suffix = reg
+                        if realvshuffle == 1:
+                            suffix += '_shuffle'
+                            shuffle_flag = True
+                        else:
+                            suffix += '_real'
+                            shuffle_flag = False
+                        # allocate lists for each rep
+                        pred_list = []
+                        coeff_list = []
+                        cc_list = []
+                        # run the reps
+                        for shuffler in np.arange(processing_parameters.regression_repeats):
 
-                        # run the training function
-                        linear_pred, coefficients, cc_score = train_test_regressor(parameter_working,
-                                                                                   calcium_data_working,
-                                                                                   preprocessing.StandardScaler,
-                                                                                   regressor,
-                                                                                   stat.spearmanr,
-                                                                                   time_s=time_shift,
-                                                                                   shuffle_f=shuffle_flag,
-                                                                                   empty=empty_flag,
-                                                                                   chunk=True,
-                                                                                   test_size=0.3,
-                                                                                   chunk_size=0.05,
-                                                                                   chunk_size_shuffle=0.05)
-                        # store the reps
-                        pred_list.append(linear_pred)
-                        coeff_list.append(coefficients/np.sum(coefficients))
-                        cc_list.append(cc_score)
-                    # add the shift to the suffix
-                    suffix += '_shift'+str(time_shift)
+                            # create the linear regressor
+                            if reg == 'linear':
+                                regressor = lin.TweedieRegressor(alpha=0.01, max_iter=5000, fit_intercept=False, power=0)
+                            elif reg == 'SVR':
+                                regressor = svm.SVR(max_iter=10000, kernel='rbf', C=100)
+                            else:
+                                raise ValueError('Unrecognized regressor option')
 
-                    # average/std the lists and store
-                    mean_coefficients = np.sum(coeff_list, axis=0)
-                    mean_linear_pred = np.mean(pred_list, axis=0)
-                    mean_cc_score = np.mean(cc_list, axis=0)
-                    std_coefficients = np.std(coeff_list, axis=0)
-                    std_linear_pred = np.std(pred_list, axis=0)
-                    std_cc_score = np.std(cc_list, axis=0)
-                    # save the file
-                    with h5py.File(out_path, 'a') as f:
-                        # save the results
-                        f.create_dataset('_'.join(['coefficients', target_behavior, suffix]),
-                                         data=mean_coefficients)
-                        f.create_dataset('_'.join(['prediction', target_behavior, suffix]),
-                                         data=mean_linear_pred)
-                        f.create_dataset('_'.join(['cc', target_behavior, suffix]),
-                                         data=mean_cc_score)
-                        f.create_dataset('_'.join(['coefficients', target_behavior, suffix+'_std']),
-                                         data=std_coefficients)
-                        f.create_dataset('_'.join(['prediction', target_behavior, suffix+'_std']),
-                                         data=std_linear_pred)
-                        f.create_dataset('_'.join(['cc', target_behavior, suffix+'_std']),
-                                         data=std_cc_score)
+                            # run the training function
+                            linear_pred, coefficients, cc_score = train_test_regressor(parameter_working,
+                                                                                       calcium_data_working,
+                                                                                       preprocessing.StandardScaler,
+                                                                                       regressor,
+                                                                                       stat.spearmanr,
+                                                                                       time_s=time_shift,
+                                                                                       shuffle_f=shuffle_flag,
+                                                                                       empty=empty_flag,
+                                                                                       chunk=True,
+                                                                                       test_size=0.3,
+                                                                                       chunk_size=0.05,
+                                                                                       chunk_size_shuffle=0.05)
+                            # store the reps
+                            pred_list.append(linear_pred)
+                            coeff_list.append(coefficients/np.sum(coefficients))
+                            cc_list.append(cc_score)
+                        # add the shift to the suffix
+                        suffix += '_shift'+str(time_shift)
+
+                        # average/std the lists and store
+                        mean_coefficients = np.sum(coeff_list, axis=0)
+                        mean_linear_pred = np.mean(pred_list, axis=0)
+                        mean_cc_score = np.mean(cc_list, axis=0)
+                        std_coefficients = np.std(coeff_list, axis=0)
+                        std_linear_pred = np.std(pred_list, axis=0)
+                        std_cc_score = np.std(cc_list, axis=0)
+                        # save the file
+                        with h5py.File(out_path, 'a') as f:
+                            # save the results
+                            f.create_dataset('_'.join(['coefficients', target_behavior, suffix]),
+                                             data=mean_coefficients)
+                            f.create_dataset('_'.join(['prediction', target_behavior, suffix]),
+                                             data=mean_linear_pred)
+                            f.create_dataset('_'.join(['cc', target_behavior, suffix]),
+                                             data=mean_cc_score)
+                            f.create_dataset('_'.join(['coefficients', target_behavior, suffix+'_std']),
+                                             data=std_coefficients)
+                            f.create_dataset('_'.join(['prediction', target_behavior, suffix+'_std']),
+                                             data=std_linear_pred)
+                            f.create_dataset('_'.join(['cc', target_behavior, suffix+'_std']),
+                                             data=std_cc_score)
 
         # assemble the metadata frame
         dt = h5py.special_dtype(vlen=str)

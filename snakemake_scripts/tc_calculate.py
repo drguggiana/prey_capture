@@ -40,10 +40,10 @@ def clip_calcium(pre_data):
     # define the clipping threshold in percentile of baseline
     clip_threshold = 8
     # for all the trials
-    for idx, el in enumerate(pre_data):
+    for idx, trial in enumerate(pre_data):
 
         # get the current df
-        current_df = el[1]
+        current_df = trial
         labels = list(current_df.columns)
         cells = [el for el in labels if 'cell' in el]
         not_cells = [el for el in labels if 'cell' not in el]
@@ -161,8 +161,36 @@ def extract_half_tc(current_feature_0, cell_number, calcium_trials, feature_coun
     return tc_half_temp
 
 
+def calculate_quality_index(counts_feature_0, keep_cell, tt_split, bins):
+    """Calculate the quality index with the given traces and train/test split"""
+    # split in train and test
+    split_point = int(np.round(tt_split * keep_cell.shape[0]))
+    train_behavior = counts_feature_0[:split_point]
+    train_calcium = keep_cell[:split_point]
+    test_behavior = counts_feature_0[split_point:]
+    test_calcium = keep_cell[split_point:]
+
+    # calculate the tuning curve with the train data
+    tc_train, train_bins, _ = \
+        stat.binned_statistic(train_behavior, train_calcium, statistic='mean', bins=bins)
+    # print(train_bins, test_behavior, test_calcium)
+    _, _, test_idx = stat.binned_statistic(test_behavior, test_calcium, statistic='count', bins=train_bins)
+
+    # tc_train = tc_train / feature_counts
+    tc_train[np.isnan(tc_train)] = 0
+    tc_train[np.isinf(tc_train)] = 0
+
+    # use the tc_idx to regenerate the activity
+    # predicted_calcium = tc_cell[tc_idx-2]
+    predicted_calcium = tc_train[test_idx-2]
+    # get the correlation with the real calcium
+    # tc_quality = stat.spearmanr(keep_cell, predicted_calcium, nan_policy='omit')[0]
+    tc_quality = stat.spearmanr(test_calcium, predicted_calcium, nan_policy='omit')[0]
+    return tc_quality
+
+
 def extract_full_tc(counts_feature_0, feature_counts, cell_number,
-                    calcium_trials, bins, keep_vector_full, shuffle_number, working_bin_number, percentile):
+                    calcium_trials, bins, keep_vector_full, shuffle_number, tt_split, percentile):
     """Get the full tc"""
     # allocate memory for the full tc per cell
     tc_cell_full = []
@@ -175,19 +203,39 @@ def extract_full_tc(counts_feature_0, feature_counts, cell_number,
         tc_cell, _, tc_idx = \
             stat.binned_statistic(counts_feature_0, keep_cell, statistic='sum', bins=bins)
         # get the information
-        information_content = calculate_information(feature_counts, tc_cell, np.mean(keep_cell))
+        # information_content = calculate_information(feature_counts, tc_cell, np.mean(keep_cell))
         # process the TC
         tc_cell = tc_cell / feature_counts
         tc_cell[np.isnan(tc_cell)] = 0
         tc_cell[np.isinf(tc_cell)] = 0
 
-        # use the tc_idx to regenerate the activity
-        predicted_calcium = tc_cell[tc_idx-2]
-        # get the correlation with the real calcium
-        tc_quality = stat.spearmanr(keep_cell, predicted_calcium, nan_policy='omit')[0]
+        # calculate quality
+        tc_quality = calculate_quality_index(counts_feature_0, keep_cell, tt_split, bins)
+        # # split in train and test
+        # split_point = int(np.round(tt_split*keep_cell.shape[0]))
+        # train_behavior = counts_feature_0[:split_point]
+        # train_calcium = keep_cell[:split_point]
+        # test_behavior = counts_feature_0[split_point:]
+        # test_calcium = keep_cell[split_point:]
+        #
+        # # calculate the tuning curve with the train data
+        # tc_train, train_bins, _ = \
+        #     stat.binned_statistic(train_behavior, train_calcium, statistic='mean', bins=bins)
+        # _, _, test_idx = stat.binned_statistic(test_behavior, test_calcium, statistic='count', bins=train_bins)
+        #
+        # # tc_train = tc_train / feature_counts
+        # tc_train[np.isnan(tc_train)] = 0
+        # tc_train[np.isinf(tc_train)] = 0
+        #
+        # # use the tc_idx to regenerate the activity
+        # # predicted_calcium = tc_cell[tc_idx-2]
+        # predicted_calcium = tc_train[test_idx]
+        # # get the correlation with the real calcium
+        # # tc_quality = stat.spearmanr(keep_cell, predicted_calcium, nan_policy='omit')[0]
+        # tc_quality = stat.spearmanr(test_calcium, predicted_calcium, nan_policy='omit')[0]
         # allocate memory for the shuffles
         # shuffle_array = np.zeros((shuffle_number, working_bin_number))
-        shuffle_array = np.zeros((shuffle_number, 1))
+        # shuffle_array = np.zeros((shuffle_number, 1))
         shuffle_prediction = np.zeros((shuffle_number, 1))
         # generate the shuffles
         for shuffle in np.arange(shuffle_number):
@@ -195,30 +243,34 @@ def extract_full_tc(counts_feature_0, feature_counts, cell_number,
             random_cell = keep_cell.copy()
             random_cell = np.random.choice(random_cell, keep_cell.shape[0])
 
-            tc_random = \
-                stat.binned_statistic(counts_feature_0, random_cell, statistic='sum', bins=bins)[0]
-
-            # get the information
-            shuffle_array[shuffle] = calculate_information(feature_counts, tc_random, np.mean(random_cell))
-            # process the TC
-            tc_random = tc_random / feature_counts
-            tc_random[np.isnan(tc_random)] = 0
-            tc_random[np.isinf(tc_random)] = 0
-            # shuffle_array[shuffle, :] = tc_random
-            # use the tc_idx to regenerate the activity
-            predicted_calcium = tc_random[tc_idx-2]
-            # get the correlation with the real calcium
-            random_quality = stat.spearmanr(random_cell, predicted_calcium, nan_policy='omit')[0]
+            # calculate the random quality
+            random_quality = calculate_quality_index(counts_feature_0, random_cell, tt_split, bins)
+            # tc_random = \
+            #     stat.binned_statistic(counts_feature_0, random_cell, statistic='sum', bins=bins)[0]
+            #
+            # # get the information
+            # # shuffle_array[shuffle] = calculate_information(feature_counts, tc_random, np.mean(random_cell))
+            # # process the TC
+            # tc_random = tc_random / feature_counts
+            # tc_random[np.isnan(tc_random)] = 0
+            # tc_random[np.isinf(tc_random)] = 0
+            # # shuffle_array[shuffle, :] = tc_random
+            # # use the tc_idx to regenerate the activity
+            # predicted_calcium = tc_random[tc_idx-2]
+            # # get the correlation with the real calcium
+            # random_quality = stat.spearmanr(random_cell, predicted_calcium, nan_policy='omit')[0]
             shuffle_prediction[shuffle] = random_quality
 
         # get the threshold
-        resp_threshold = np.percentile(np.abs(shuffle_array.flatten()), percentile)
+        # resp_threshold = np.percentile(np.abs(shuffle_array.flatten()), percentile)
         qual_threshold = np.percentile(np.abs(shuffle_prediction.flatten()), percentile)
         # fill up the responsivity matrix
         # tc_cell_resp[cell, 0] = np.mean(np.sort(np.abs(tc_cell), axis=None)[-3:]) / resp_threshold
         # tc_cell_resp[cell, 1] = np.sum(np.abs(tc_cell) > resp_threshold) > 3
-        tc_cell_resp[cell, 0] = information_content
-        tc_cell_resp[cell, 1] = np.abs(information_content) > resp_threshold
+        # tc_cell_resp[cell, 0] = information_content
+        # tc_cell_resp[cell, 1] = np.abs(information_content) > resp_threshold
+        tc_cell_resp[cell, 0] = 0
+        tc_cell_resp[cell, 1] = 0
         tc_cell_resp[cell, 2] = tc_quality
         tc_cell_resp[cell, 3] = np.abs(tc_quality) > qual_threshold
         # store
@@ -294,7 +346,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
         # get the full tuning curves
         tc_cell_full, tc_cell_resp = extract_full_tc(counts_feature_0, feature_counts, cell_number,
                                                      calcium_trials, bins, keep_vector_full, shuffle_number,
-                                                     working_bin_number, percentile)
+                                                     0.7, percentile)
         # store the halves and fulls
         tc_half[feature_name] = tc_half_temp
         tc_full[feature_name] = tc_cell_full
@@ -521,7 +573,7 @@ if __name__ == '__main__':
         variable_names = processing_parameters.variable_list
 
         # clip the calcium traces
-        clipped_data = clip_calcium(raw_data)
+        clipped_data = clip_calcium([el[1] for el in raw_data])
 
         # parse the features (bin number is for spatial bins in this one)
         features, calcium = parse_features(clipped_data, variable_names, bin_number=10)

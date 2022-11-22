@@ -874,6 +874,9 @@ def build_interval_tree(intervals):
 
 def parse_bonsai(path_in):
     """Parse bonsai files"""
+
+    # if it's an avi path, convert to bonsai
+    path_in = path_in.replace('.avi', '.csv')
     parsed_data = []
     last_nan = 0
     with open(path_in) as f:

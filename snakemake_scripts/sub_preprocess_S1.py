@@ -9,6 +9,7 @@ import datetime
 import paths
 import tensorflow as tf
 import os
+import cv2
 
 
 # run inference on the incomplete pose points
@@ -58,6 +59,10 @@ def pose_repair(data_in, model_path, delay=4):
 def run_preprocess(file_path_bonsai, file_info,
                    kernel_size=21, max_step=300, max_length=50):
     """Preprocess the bonsai file"""
+    # get the number of frames from the avi file
+    cap = cv2.VideoCapture(file_info['avi_path'])
+    avi_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
     # parse the bonsai file
     parsed_data = fp.parse_bonsai(file_path_bonsai)
     # define the target columns
@@ -102,6 +107,16 @@ def run_preprocess(file_path_bonsai, file_info,
     filtered_traces['mouse'] = parsed_path['animal']
     filtered_traces['datetime'] = parsed_path['datetime']
 
+    # add frames to the start to match the video length
+    delta_frames = avi_frames - filtered_traces.shape[0]
+    if delta_frames > 0:
+        # add empty frames
+        first_frame = filtered_traces.iloc[0, :]
+        empty_frames = pd.DataFrame([first_frame]*delta_frames).reset_index(drop=True)
+        filtered_traces = pd.concat([empty_frames, filtered_traces], axis=0).reset_index(drop=True)
+    elif delta_frames < 0:
+        raise ValueError('More recorded frames than in video')
+
     # eliminate the cricket if there is no real cricket or this is a VScreen experiment
     if ('nocricket' in file_info['notes'] and 'VR' in file_info['rig']) or \
             ('real' not in file_info['notes'] and 'VPrey' in file_info['rig']) or \
@@ -110,8 +125,10 @@ def run_preprocess(file_path_bonsai, file_info,
         for column in filtered_traces.columns:
             if 'cricket' in column:
                 filtered_traces.drop([column], inplace=True, axis=1)
+    # generate arbitrary corners
+    corner_frame = pd.DataFrame(np.array([[0, -5, 39, 40], [40, 1, -5, 40]]), columns=['UL', 'BL', 'BR', 'UR'])
 
-    return filtered_traces
+    return filtered_traces, corner_frame, []
 
 
 def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
@@ -469,6 +486,11 @@ def extract_motive(file_path_motive, rig, trials=None):
                             'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
                             'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
                             'grating_phase', 'color_factor']
+
+        elif rig == 'ARPrey':
+            column_names = ['time_m', 'trial_num', 'mouse_x_m', 'mouse_y_m', 'mouse_z_m',
+                            'mouse_xrot_m', 'mouse_yrot_m', 'mouse_zrot_m',
+                            'cricket_x_m', 'cricket_y_m', 'cricket_z_m', 'color_factor']
 
         # create the column name dictionary
         column_dict = {old_col: column for old_col, column in zip(raw_data.columns, column_names)}

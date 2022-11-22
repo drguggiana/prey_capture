@@ -32,11 +32,8 @@ def preprocess_selector(ref_path, file_info):
             traces, corner_out, frame_b = s1.run_dlc_preprocess(ref_path, dlc_path, file_info)
     else:
         # if not, use the legacy non-dlc preprocessing
-        output_path, traces = s1.run_preprocess(ref_path, file_info)
-        # set corners to empty
-        corner_out = []
-        # set frame bounds to empty
-        frame_b = []
+        traces, corner_out, frame_b = s1.run_preprocess(ref_path, file_info)
+
     return traces, corner_out, frame_b
 
 
@@ -98,7 +95,7 @@ if files['rig'] == 'miniscope':
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
-    if files['imaging'] == 'doric':
+    if files['imaging'] in ['doric', 'wirefree', 'uc3', 'uc4']:
 
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data)
@@ -142,7 +139,7 @@ elif files['rig'] in ['VTuning']:
     params.to_hdf(save_path, key='params', mode='a')
 
     # calculate only if calcium is present
-    if files['imaging'] == 'doric':
+    if files['imaging'] in ['doric', 'wirefree', 'uc3', 'uc4']:
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
         # if there is a calcium output, write to the file
@@ -179,7 +176,7 @@ elif files['rig'] in ['VWheel']:
     params.to_hdf(save_path, key='params', mode='a')
 
     # calculate only if calcium is present
-    if files['imaging'] == 'doric':
+    if files['imaging'] in ['doric', 'wirefree', 'uc3', 'uc4']:
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
         # if there is a calcium output, write to the file
@@ -189,6 +186,32 @@ elif files['rig'] in ['VWheel']:
             # also get the cell matching if it exists
             cell_matches = fm.match_cells(match_path)
             cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
+
+elif files['rig'] == 'ARPrey':
+    # get the video tracking data
+    filtered_traces, px_corners, frame_bounds = preprocess_selector(files['avi_path'], files)
+
+    # define the dimensions of the arena
+    manual_coordinates = paths.arena_coordinates['VR']
+
+    # get the motive tracking data
+    motive_traces, reference_coordinates, obstacle_coordinates = \
+        s1.extract_motive(files['track_path'], files['rig'])
+
+    # assemble the sync path
+    # TODO: fix this in the database, need to modify entries or regenerate them, but they were parsed wrong, there
+    # was a missing underscore in the parsing function that I just corrected
+    sync_path = files['avi_path'].replace('_ARPrey_', '_syncARPrey_').replace('.avi', '.csv')
+    # align them temporally based on the sync file
+    filtered_traces = fm.match_motive(motive_traces, sync_path, filtered_traces)
+
+    # # scale the traces accordingly
+    # filtered_traces, corners = \
+    #     fp.rescale_pixels(filtered_traces, files, manual_coordinates, manual_coordinates)
+    corners = []
+
+    # run the preprocessing kinematic calculations
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations_arprey(filtered_traces)
 
 else:
     # return all empty outputs and print a warning

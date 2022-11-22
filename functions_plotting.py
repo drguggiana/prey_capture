@@ -10,9 +10,10 @@ from functools import partial
 
 
 # define the standard font sizes
-paper = '7pt'
+paper = '12pt'
 poster = '15pt'
 screen = '18pt'
+small = '7pt'
 # define the conversion constant from pt to cm
 constant_pt2cm = 0.0352778
 # define the font size default dictionary for figures
@@ -65,6 +66,22 @@ font_sizes_raw = {
         # 'legend': screen - 1,
         'legend_title': screen,
     },
+    'small': {
+        'xlabel': small,
+        'ylabel': small,
+        'zlabel': small,
+        'labels': small,
+        'xticks': small,
+        'yticks': small,
+        'zticks': small,
+        'ticks': small,
+        'minor_xticks': small,
+        'minor_yticks': small,
+        'minor_ticks': small,
+        'title': small,
+        # 'legend': screen - 1,
+        'legend_title': small,
+    }
 }
 
 attr_dict = {
