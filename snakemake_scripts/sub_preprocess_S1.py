@@ -195,7 +195,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
 
     except IndexError:
         # DLC in VR arena
-        if file_info['rig'] == 'VTuning':
+        if file_info['rig'] in ['VTuning', 'VTuningWF']:
             # Similar to small arena, but no cricket
             # Make miniscope the mouse head in this case.
             filtered_traces = pd.DataFrame(raw_h5[[

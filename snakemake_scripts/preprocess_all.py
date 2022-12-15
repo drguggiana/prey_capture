@@ -189,6 +189,85 @@ elif files['rig'] in ['VWheel']:
             cell_matches = fm.match_cells(match_path)
             cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
 
+elif files['rig'] in ['VTuningWF']:
+    # load the data for the trial structure and parameters
+    trials = read_hdf(files['screen_path'], key='trial_set')
+    params = read_hdf(files['screen_path'], key='params')
+
+    # get the video tracking data
+    filtered_traces, px_corners, frame_bounds = preprocess_selector(files['avi_path'], files)
+
+    # define the dimensions of the arena
+    manual_coordinates = paths.arena_coordinates['VTuningWF']
+
+    # get the motive tracking data
+    motive_traces, reference_coordinates, obstacle_coordinates = \
+        s1.extract_motive(files['track_path'], files['rig'])
+
+    # scale the traces accordingly
+    filtered_traces, corners = \
+        fp.rescale_pixels(filtered_traces, files, manual_coordinates, px_corners.to_numpy().T)
+
+    # align them temporally based on the sync file
+    filtered_traces = fm.match_motive_2(motive_traces, files['sync_path'], filtered_traces)
+
+    # run the preprocessing kinematic calculations
+    # also saves the data
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
+
+    # For these trials, save the trial set and the trial parameters to the output file
+    trials.to_hdf(save_path, key='trial_set', mode='a')
+    params.to_hdf(save_path, key='params', mode='a')
+
+    # calculate only if calcium is present
+    if files['imaging'] == 'wirefree':
+        # get a dataframe with the calcium data matched to the bonsai data
+        matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
+        # if there is a calcium output, write to the file
+        if matched_calcium is not None:
+            matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
+            roi_info.to_hdf(save_path, key='roi_info', mode='a', format='fixed')
+            # also get the cell matching if it exists
+            cell_matches = fm.match_cells(match_path)
+            cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
+
+elif files['rig'] in ['VWheelWF']:
+    # load the data for the trial structure and parameters
+    trials = read_hdf(files['screen_path'], key='trial_set')
+    params = read_hdf(files['screen_path'], key='params')
+
+    # run the first stage of preprocessing
+    filtered_traces, corners, frame_bounds = preprocess_selector(files['avi_path'], files)
+
+    # compute the eye metrics
+    filtered_traces = fm.match_eye(filtered_traces)
+
+    # get the wheel info
+    filtered_traces = fm.match_wheel(files, filtered_traces)
+
+    # get the motive tracking data
+    motive_traces, reference_coordinates, obstacle_coordinates = \
+        s1.extract_motive(files['track_path'], files['rig'])
+
+    # align them temporally based on the sync file
+    kinematics_data = fm.match_motive_2(motive_traces, files['sync_path'], filtered_traces)
+
+    # For these trials, save the trial set and the trial parameters to the output file
+    trials.to_hdf(save_path, key='trial_set', mode='a')
+    params.to_hdf(save_path, key='params', mode='a')
+
+    # calculate only if calcium is present
+    if files['imaging'] == 'wirefree':
+        # get a dataframe with the calcium data matched to the bonsai data
+        matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
+        # if there is a calcium output, write to the file
+        if matched_calcium is not None:
+            matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
+            roi_info.to_hdf(save_path, key='roi_info', mode='a', format='fixed')
+            # also get the cell matching if it exists
+            cell_matches = fm.match_cells(match_path)
+            cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
+
 else:
     # return all empty outputs and print a warning
     # TODO: replace with logging
