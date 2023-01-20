@@ -16,10 +16,12 @@ def minian_main():
     dpath = paths.temp_path
     minian_ds_path = os.path.join(dpath, "minian")
     intpath = paths.temp_minian
-    noise_freq = 0.05
-    subset = dict(frame=slice(0, None))
-    subset_mc = None
-    interactive = True
+
+
+    noise_freq = 0.06
+    subset = dict(frame=slice(500, -1))    # For wirefree processing
+    # subset = dict(frame=slice(0, None))
+    interactive = False
     output_size = 100
     n_workers = int(os.getenv("MINIAN_NWORKERS", 4))
     param_save_minian = {
@@ -36,8 +38,8 @@ def minian_main():
         "downsample": dict(frame=1, height=1, width=1),
         "downsample_strategy": "subset",
     }
-    param_denoise = {"method": "median", "ksize": 9}
-    param_background_removal = {"method": "tophat", "wnd": 20}
+    param_denoise = {"method": "median", "ksize": 5}
+    param_background_removal = {"method": "tophat", "wnd": 15}
 
     # Motion Correction Parameters#
     subset_mc = None
@@ -48,7 +50,7 @@ def minian_main():
         "wnd_size": 800,
         "method": "rolling",
         "stp_size": 400,
-        "max_wnd": 15,
+        "max_wnd": 20,
         "diff_thres": 3,
     }
     param_pnr_refine = {"noise_freq": noise_freq, "thres": 1}

@@ -1,17 +1,20 @@
+import numpy as np
+import pandas as pd
+import xarray as xr
+from matplotlib import pyplot as plt
+import re
 import os
-import paths
-from snakemake_scripts.run_MiniAn import minian_main
+import h5py
 import sys
 import json
+import paths
+
 import functions_bondjango as bd
 import functions_io as fi
 import functions_misc as fm
 import functions_denoise_calcium as fdn
-from matplotlib import pyplot as plt
-import re
+from snakemake_scripts.run_MiniAn_wirefree import minian_main
 import processing_parameters
-import h5py
-import numpy as np
 
 
 if __name__ == "__main__":
@@ -45,11 +48,10 @@ if __name__ == "__main__":
         animal = processing_parameters.animal
         day = processing_parameters.day
         rig = processing_parameters.rig
-        # search_string = 'rig:%s, imaging:doric, mouse:%s, slug:%s' % (rig, animal, day)
-        search_string = 'imaging:doric, mouse:%s, slug:%s' % (animal, day)
+        search_string = 'rig:%s, imaging:wirefree, mouse:%s, slug:%s' % (rig, animal, day)
+
         # query the database for data to plot
-        # data_all = bd.query_database('video_experiment', search_string)
-        data_all = bd.query_database('vr_experiment', processing_parameters.search_string)
+        data_all = bd.query_database('vr_experiment', search_string)
         # video_data = data_all[0]
         # video_path = video_data['tif_path']
         video_path = [el['tif_path'] for el in data_all]
@@ -60,10 +62,16 @@ if __name__ == "__main__":
 
     for video in video_path:
         # delete the folder contents
+        fi.delete_contents(paths.temp_minian)
         fi.delete_contents(paths.temp_path)
 
-        # denoise the video
-        out_path_tif, _, frames_list = fdn.denoise_stack(video, paths.temp_path)
+        # Here is some stupidity to deal with how Minian expects data to be formatted
+        save_path = os.path.join(paths.temp_path, animal, rig)
+        os.makedirs(save_path)
+
+        # denoise the video and save the tif in the  modified temp path
+        out_path_tif, _, frames_list = fdn.denoise_stack(video, save_path)
+        frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
 
         # # combine the selected files into a single tif
         # out_path_tif, _, frames_list = fi.combine_tif(video_path, paths.temp_path)
@@ -77,7 +85,11 @@ if __name__ == "__main__":
 
         try:
             # run minian
-            minian_out = minian_main()
+            print("starting minian")
+            minian_out = minian_main(rig, animal, override_dpath=save_path)
+
+            # Frame numbers are saved in dataset
+            analyzed_frames = minian_out['f'].values
 
             # custom save the output to include the frames list
             for idx, el in enumerate(frames_list.iloc[:, 0]):
@@ -110,9 +122,7 @@ if __name__ == "__main__":
             # define pic_path as empty
             pic_path = ''
 
-
-
-     # What to do here, as we don't do a calcium day file
+     # TODO What to do here, as we don't do a calcium day file
 
     # assemble the entry data
     entry_data = {
