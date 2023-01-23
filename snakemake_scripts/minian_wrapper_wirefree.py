@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import xarray as xr
 from matplotlib import pyplot as plt
 import re
 import os
@@ -87,9 +86,7 @@ if __name__ == "__main__":
             # run minian
             print("starting minian")
             minian_out = minian_main(rig, animal, override_dpath=save_path)
-
-            # Frame numbers are saved in dataset
-            analyzed_frames = minian_out['f'].values
+            minian_out['processed_frames'] = np.array(minian_out['f'].frame)
 
             # custom save the output to include the frames list
             for idx, el in enumerate(frames_list.iloc[:, 0]):
