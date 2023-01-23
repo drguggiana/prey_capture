@@ -787,6 +787,11 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     # load the calcium data (cells x time), transpose to get time x cells
     with h5py.File(calcium_path, mode='r') as f:
         calcium_data = np.array(f['calcium_data']).T
+
+        # TODO: Try to get raw fluorescence
+        if 'fluor_data' in f.keys():
+            fluor_data = np.array(f['fluor_data']).T
+
         # if there are no ROIs, skip
         if (type(calcium_data) == np.ndarray) and (calcium_data == 'no_ROIs'):
             return None, None
@@ -868,6 +873,7 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     matched_bonsai['datetime'] = kinematics_data.loc[0, 'datetime']
 
     # print a single dataframe with the calcium matched positions and timestamps
+    # TODO incorporate fluorescence data here. need to have new column names
     cell_column_names = ['_'.join(('cell', f'{el:04d}')) for el in range(calcium_data.shape[1])]
     calcium_dataframe = pd.DataFrame(calcium_data, columns=cell_column_names)
     # concatenate both data frames
