@@ -85,10 +85,12 @@ for idx, target_entries in enumerate(full_queries):
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
+                   'denoising_path': paths.ca_denoising_script,
                    'cnmfe_path': paths.calcium_script,
                    'interval': [2, 3],
                    'analysis_type': parsed_search['analysis_type'],
                    }
+
     # write the file
     with open(paths.snakemake_config, 'w') as f:
         target_file = yaml.dump(config_dict, f)
@@ -104,18 +106,21 @@ for idx, target_entries in enumerate(full_queries):
         out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
 
     # run snakemake
+    print(os.getcwd())
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
                               # '-F',         # (hard) force rerun everything
                               # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
-                              '--rerun-incomplete',
+                              # '--rerun-incomplete',
                               '--verbose',  # make the output more verbose for debugging
                               # '--debug-dag',  # show the file selection operation, also for debugging
                               # '--dryrun',  # generates the DAG and everything, but doesn't process
                               # '--reason',  # print the reason for executing each job
+                              # '--use-conda',
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working],
-                             stdout=sp.PIPE)
+                             stdout=sp.PIPE,
+                             )
 
     stdout = preprocess_sp.communicate()[0]
     print(stdout.decode())

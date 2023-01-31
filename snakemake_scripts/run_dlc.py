@@ -1,18 +1,20 @@
 # imports
 import os
 import sys
+import shutil
+import json
+
+os.environ["DLClight"] = "True"
+import deeplabcut as dlc
+
+print(os.getcwd())
+sys.path.insert(0, r'C:\Users\mmccann\repos\bonhoeffer\prey_capture')
 import paths
 sys.path.insert(0, os.path.abspath(paths.prey_capture_repo_directory))
-os.environ["DLClight"] = "True"
 
-import os
-import sys
-import shutil
-import deeplabcut as dlc
 import functions_bondjango as bd
 import functions_io as fi
 import functions_misc as fm
-import json
 import processing_parameters
 
 # # define the config_path
@@ -42,25 +44,22 @@ temp_video_path = os.path.join(paths.temp_path, os.path.basename(video_path))
 # copy the video to the working folder
 shutil.copyfile(video_path, temp_video_path)
 
-# analyze the video
-# dlc.analyze_videos?
-
 # select which network to use
 if video_data['rig'] == 'miniscope':
-    dlc.analyze_videos(paths.config_vame_path, [temp_video_path], destfolder=paths.temp_path)
     target_model = 'video_experiment'
+    config = paths.config_vame_path
 else:
     target_model = 'vr_experiment'
-    if video_data['rig'] == 'VWheel':
-        # Use dynamic cropping for eye tracking to speed up analysis.
-        dlc.analyze_videos(paths.config_path_VWheel, [temp_video_path], destfolder=paths.temp_path, dynamic=(True, .1, 100))
+    if video_data['rig'] in ['VWheel', 'VWheelWF']:
+        config = paths.config_path_VWheel
     else:
-        dlc.analyze_videos(paths.config_vame_path, [temp_video_path], destfolder=paths.temp_path)
+        config = paths.config_path_VTuningWF
+
+# analyze the video
+dlc.analyze_videos(paths.config_path_VTuningWF, [temp_video_path], destfolder=paths.temp_path)
 
 # filter the data
-# dlc.filterpredictions(config_path, [temp_video_path], filtertype='median',
-#                       windowlength=11, destfolder=paths.temp_path, save_as_csv=False)
-# dlc.filterpredictions?
+dlc.filterpredictions(config, [temp_video_path], destfolder=paths.temp_path, save_as_csv=False)
 
 # move and rename the file
 

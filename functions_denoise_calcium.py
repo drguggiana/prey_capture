@@ -1,5 +1,7 @@
 import numpy as np
 import cv2
+import sys
+import json
 import os.path
 from scipy.signal import butter, filtfilt
 from skimage import io
@@ -116,8 +118,35 @@ def denoise_stack(filename, processing_path=None):
 
 
 if __name__ == "__main__":
+
+    try:
+        # get the target video path
+        video_path = sys.argv[1]
+        out_path = sys.argv[2]
+        data_all = json.loads(sys.argv[3])
+        # get the parts for the file naming
+        name_parts = os.path.basename(out_path).split('_')
+        day = '_'.join(name_parts[0:3])
+        animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
+        rig = name_parts[6]
+
+        print(video_path)
+        print(out_path)
+        print(day, animal, rig)
+
+    except IndexError:
+        # get the search string
+        # search_string = processing_parameters.search_string
+        animal = processing_parameters.animal
+        day = processing_parameters.day
+        rig = processing_parameters.rig
+        search_string = 'rig:%s, imaging:wirefree, mouse:%s, slug:%s' % (rig, animal, day)
+
+
+
     data_dir = r"D:\minian_test\wirefree\test_consecutive_sessions\MM_221109_a\fixed"
     data_file = r"01_12_2023_12_03_07_VWheelWF_MM_221109_a_fixed0_gabor.tif"
-    print(f"Denoising {data_file} ...")
-    out_path = denoise_stack(os.path.join(data_dir, data_file), processing_path=data_dir)
+
+    print(f"Denoising {video_path} ...")
+    out_path = denoise_stack(video_path, processing_path=out_path)
     print("Done!\n")

@@ -45,7 +45,7 @@ except NameError:
     out_path = video_data['tif_path'].replace('.tif', '_calcium.hdf5')
 
     # get the input file path
-    calcium_path = os.path.join(paths.analysis_path, '_'.join((day, animal, 'calciumday.hdf5')))
+    calcium_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumraw.hdf5')))
 
 # get the model of origin
 if rig == 'miniscope':
@@ -81,7 +81,7 @@ try:
     prepend_pad = np.empty((calcium_data.shape[0], frame_start-1))
     postpend_pad = np.empty((calcium_data.shape[0], raw_frame_count - frame_end))
     prepend_pad[:] = np.NaN
-    prepend_pad[:] = np.NaN
+    postpend_pad[:] = np.NaN
     current_calcium = np.concatenate((prepend_pad, calcium_data, postpend_pad), axis=1)
     current_fluor = np.concatenate((prepend_pad, fluor_data, postpend_pad), axis=1)
 
@@ -108,6 +108,7 @@ except (KeyError, ValueError):
     # create a dummy empty file
     with h5py.File(out_path, 'w') as file:
         file.create_dataset('calcium_data', data='no_ROIs')
+        file.create_dataset('fluor_data', data='no_ROIs')
         file.create_dataset('centroids', data='no_ROIs')
 
 # update the bondjango entry (need to sort out some fields)

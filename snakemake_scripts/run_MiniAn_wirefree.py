@@ -1,10 +1,10 @@
-import itertools as itt
 import os
 import sys
-import paths
 import numpy as np
 import xarray as xr
+import itertools as itt
 from dask.distributed import Client, LocalCluster
+import paths
 
 
 def minian_main(rig, animal, override_dpath=None):
@@ -135,18 +135,18 @@ def minian_main(rig, animal, override_dpath=None):
         open_minian,
         save_minian,
     )
-    from minian.visualization import (
-        CNMFViewer,
-        VArrayViewer,
-        generate_videos,
-        visualize_gmm_fit,
-        visualize_motion,
-        visualize_preprocess,
-        visualize_seeds,
-        visualize_spatial_update,
-        visualize_temporal_update,
-        write_video,
-    )
+    # from minian.visualization import (
+    #     CNMFViewer,
+    #     VArrayViewer,
+    #     generate_videos,
+    #     visualize_gmm_fit,
+    #     visualize_motion,
+    #     visualize_preprocess,
+    #     visualize_seeds,
+    #     visualize_spatial_update,
+    #     visualize_temporal_update,
+    #     write_video,
+    # )
 
     # get the path
     dpath = os.path.abspath(dpath)
@@ -154,11 +154,12 @@ def minian_main(rig, animal, override_dpath=None):
     # start the cluster
     cluster = LocalCluster(
         n_workers=n_workers,
-        memory_limit="15GB",
+        memory_limit="10GB",
         resources={"MEM": 1},
         threads_per_worker=2,
         dashboard_address=":8787",
     )
+
     annt_plugin = TaskAnnotation()
     cluster.scheduler.add_plugin(annt_plugin)
     client = Client(cluster)
@@ -233,9 +234,7 @@ def minian_main(rig, animal, override_dpath=None):
     # CNMF Initialization
     print("CNMF Initialization")
     # max projection
-    max_proj = save_minian(
-        Y_fm_chk.max("frame").rename("max_proj"), **param_save_minian
-    ).compute()
+    max_proj = save_minian(Y_fm_chk.max("frame").rename("max_proj"), **param_save_minian).compute()
 
     # initialize seeds
     seeds = seeds_init(Y_fm_chk, **param_seeds_init)
@@ -414,6 +413,8 @@ def minian_main(rig, animal, override_dpath=None):
     # close cluster
     client.close()
     cluster.close()
+
+    print("MiniAn processing finished!")
 
     return {'A': A, 'C': C, 'S': S, 'c0': c0, 'b0': b0, 'b': b, 'f': f,
             'max_proj': max_proj, 'mean_frame_fluor': mean_frame_fluor}

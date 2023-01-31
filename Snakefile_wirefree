@@ -6,6 +6,7 @@ import json
 import datetime
 import numpy as np
 import processing_parameters
+from itertools import product
 
 
 def yaml_to_json(wildcards):
@@ -25,6 +26,16 @@ def yaml_list_to_json(wildcards):
     json_dict = json.dumps(url_dict).replace('"', '\\"')
     return json_dict
 
+
+def yaml_to_json_single_file(wildcards):
+    """Used only for calcium extraction because we get a weird wildcard input"""
+    day_trial_path = day_trial_selector(wildcards)
+    python_dict = yaml.load(config["file_info"][os.path.basename(day_trial_path)[:-4]], Loader=yaml.FullLoader)
+    url_dict = {os.path.basename(day_trial_path)[:-4]: python_dict['url']}
+    # escape the double quotes inside the json
+    json_dict = json.dumps(url_dict).replace('"', '\\"')
+    return json_dict
+
 # def yaml_animal(wildcards):
 #     animal_paths = [os.path.basename(el) for el in matched_input(wildcards)]
 #     # animal = '_'.join((wildcards.file.split('_')[:3]))
@@ -40,14 +51,15 @@ def yaml_list_to_json(wildcards):
 
 rule dlc_extraction:
     input:
-          lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi'),
+          lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
     output:
-          os.path.join(config["target_path"], "{file}_dlc.h5"),
+          os.path.join(config["target_path"], "{file}_dlc.h5")
     params:
             info=yaml_to_json,
-            dlc_path=config["dlc_path"],
+            dlc_path=config["dlc_path"]
     shell:
-        r'conda activate DEEPLABCUT & python "{params.dlc_path}" "{input}" "{output}" "{params.info}"'
+        r'cd "{paths.prey_capture_repo_directory}" & conda activate DEEPLABCUT & python "{params.dlc_path}" "{input}" '
+        r'"{output}" "{params.info}"'
 
 
 def dlc_input_selector(wildcards):
@@ -70,6 +82,53 @@ def day_selector(wildcards):
     return day_paths
 
 
+def day_trial_selector(wildcards):
+    """"Used to select single experiments for a given mouse on a given day"""
+    name_parts = wildcards.file.split('_')
+    day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
+    animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
+    rig = name_parts[6]
+    info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
+
+    day_paths = [el['tif_path'] for el in info_list if
+                 (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]]
+                  and el['mouse']==animal and el['date'][:10]==day and el['rig']==rig)]
+
+    day_rig_path = day_paths[0]
+    wildcards.day_rig_paths = day_rig_path
+    wildcards.animal = animal
+    wildcards.rig = rig
+    day_rig_path = os.path.join(config['target_path'], os.path.basename(day_rig_path))
+    return day_rig_path
+
+# TODO finish this rule and separate from calcium extract
+# rule calcium_denoise:
+#     input:
+#         day_trial_selector
+#     output:
+#         os.path.join(paths.temp_path, '{animal}', '{rig}', '{file}_denoised.tif')
+#     params:
+#         info=yaml_to_json_single_file,
+#         denoising_path=config["denoising_path"]
+#     shell:
+#         r'python "{params.denoising_path}" "{input}" "{output}" "{params.info}"'
+
+
+rule calcium_extract:
+    input:
+        day_trial_selector
+        # rules.calcium_denoise.output
+    output:
+        # os.path.join(paths.analysis_path, '{file}_calciumday.hdf5')
+        os.path.join(paths.analysis_path,'{file}_calciumraw.hdf5')
+    params:
+        info=yaml_to_json_single_file,
+        # info=yaml_list_to_json,
+        cnmfe_path=config["cnmfe_path"],
+    shell:
+        r'conda activate minian & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
+
+
 def day_animal_calcium_file(wildcards):
     python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
     animal = python_dict['mouse']
@@ -78,27 +137,25 @@ def day_animal_calcium_file(wildcards):
     return os.path.join(paths.analysis_path, '_'.join((day, animal, 'calciumday.hdf5')))
 
 
-rule calcium_extract:
-    input:
-        day_selector,
-    output:
-        os.path.join(paths.analysis_path, '{file}_calciumday.hdf5'),
-    params:
-        info=yaml_list_to_json,
-        cnmfe_path=config["cnmfe_path"],
-    shell:
-        # r'conda activate caiman & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
-        r'conda activate minian & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
+def day_animal_rig_calcium_file(wildcards):
+    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    animal = python_dict['mouse']
+    day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
+    rig = python_dict['rig']
+    return os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumraw.hdf5')))
+
 
 rule calcium_scatter:
     input:
-        day_animal_calcium_file,
+        day_animal_rig_calcium_file
+        # day_animal_calcium_file,
     output:
         os.path.join(config["target_path"], "{file}_calcium.hdf5"),
     params:
         info=lambda wildcards: config["file_info"][wildcards.file]
     script:
         "snakemake_scripts/scatter_calcium_wirefree.py"
+        # "snakemake_scripts/scatter_calcium.py"
 
 
 def calcium_input_selector(wildcards):
@@ -117,13 +174,23 @@ def matched_input(wildcards):
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
     # leave only the files with calcium data
     available_dates = np.unique([el['slug'][:10] for el in info_list
-                                 if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
-                                 (animal in el['mouse'])])
+                         if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
+                         (animal in el['mouse'])])
 
-    # assemble the paths to the calciumday files
-    animal_routes = ['_'.join((el, animal, 'calciumday.hdf5')) for el in available_dates]
-    animal_routes = [os.path.join(paths.analysis_path, el) for el in animal_routes]
+    available_rigs = np.unique([el['rig'] for el in info_list
+                         if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
+                         (animal in el['mouse'])])
+
+    # # assemble the paths to the calciumday files
+    animal_dates = ['_'.join((el, animal)) for el in available_dates]
+    # animal_routes = [os.path.join(paths.analysis_path, el) for el in animal_dates]
     # wildcards.day_routes = day_routes
+
+    unique_combinations = list(list(zip(animal_dates, element)) for
+                               element in product(available_rigs, repeat=len(animal_dates)))
+    animal_routes = ['_'.join((*el[0], 'calciumraw.hdf5')) for el in unique_combinations]
+    animal_routes = [os.path.join(paths.analysis_path, el) for el in animal_routes]
+
     return animal_routes
 
 

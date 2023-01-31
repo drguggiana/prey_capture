@@ -6,14 +6,19 @@ import os
 import h5py
 import sys
 import json
-import paths
+from skimage.io import imread
+print(os.environ["CONDA_PREFIX"])
+print(os.getcwd())
+sys.path.insert(0, '..')
+# sys.path.insert(0, r'C:\Users\mmccann\repos\bonhoeffer\prey_capture')
 
+import paths
 import functions_bondjango as bd
 import functions_io as fi
 import functions_misc as fm
 import functions_denoise_calcium as fdn
-from snakemake_scripts.run_MiniAn_wirefree import minian_main
 import processing_parameters
+from snakemake_scripts.run_MiniAn_wirefree import minian_main
 
 
 if __name__ == "__main__":
@@ -21,29 +26,29 @@ if __name__ == "__main__":
     try:
         # get the target video path
         video_path = sys.argv[1]
-        # find the occurrences of .tif terminators
-        ends = [el.start() for el in re.finditer('.tif', video_path)]
-        # allocate the list of videos
-        video_list = []
-        count = 0
-        # read the paths
-        for el in ends:
-            video_list.append(video_path[count:el+4])
-            count = el + 5
-
-        video_path = video_list
+        # # find the occurrences of .tif terminators
+        # ends = [el.start() for el in re.finditer('.tif', video_path)]
+        # # allocate the list of videos
+        # video_list = []
+        # count = 0
+        # # read the paths
+        # for el in ends:
+        #     video_list.append(video_path[count:el+4])
+        #     count = el + 5
+        #
+        # video_path = video_list
         # read the output path and the input file urls
         out_path = sys.argv[2]
         data_all = json.loads(sys.argv[3])
         # get the parts for the file naming
-        name_parts = out_path.split('_')
-        day = name_parts[0]
-        animal = name_parts[1]
-        rig = name_parts[2]
+        name_parts = os.path.basename(out_path).split('_')
+        day = '_'.join(name_parts[0:3])
+        animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
+        rig = name_parts[6]
 
     except IndexError:
         # get the search string
-        # search_string = processing_parameters.search_string_calcium
+        # search_string = processing_parameters.search_string
         animal = processing_parameters.animal
         day = processing_parameters.day
         rig = processing_parameters.rig
@@ -52,78 +57,88 @@ if __name__ == "__main__":
         # query the database for data to plot
         data_all = bd.query_database('vr_experiment', search_string)
         # video_data = data_all[0]
-        # video_path = video_data['tif_path']
-        video_path = [el['tif_path'] for el in data_all]
+        video_path = data_all[0]['tif_path']
+        # video_path = [el['tif_path'] for el in data_all]
         # overwrite data_all with just the urls
         data_all = {os.path.basename(el['bonsai_path'])[:-4]: el['url'] for el in data_all}
         # assemble the output path
-        out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, 'calciumday.hdf5')))
+        out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumraw.hdf5')))
 
-    for video in video_path:
+    # Here is some stupidity to deal with how Minian expects the directory to be formatted
+    save_path = os.path.join(paths.temp_path, animal, rig)
+
+    # denoise the video and save the tif in the  modified temp path
+    denoised_path = os.path.join(save_path, os.path.basename(video_path).replace('.tif', '_denoised.tif'))
+    if not os.path.isfile(denoised_path):
         # delete the folder contents
         fi.delete_contents(paths.temp_minian)
         fi.delete_contents(paths.temp_path)
-
-        # Here is some stupidity to deal with how Minian expects data to be formatted
-        save_path = os.path.join(paths.temp_path, animal, rig)
         os.makedirs(save_path)
-
-        # denoise the video and save the tif in the  modified temp path
-        out_path_tif, _, frames_list = fdn.denoise_stack(video, save_path)
+        out_path_tif, _, frames_list = fdn.denoise_stack(video_path, save_path)
         frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
+    else:
+        stack = imread(denoised_path).astype(np.uint8)
+        # allocate a list to store the original names and the number of frames
+        frames_list = []
+        # if it's 2d (i.e 1 frame), expand 1 dimension
+        if len(stack.shape) == 2:
+            stack = np.expand_dims(stack, 2)
+            stack = np.transpose(stack, [2, 0, 1])
 
-        # # combine the selected files into a single tif
-        # out_path_tif, _, frames_list = fi.combine_tif(video_path, paths.temp_path)
+        print(f"Number of frames: {stack.shape[0]}")
 
-        # # get the extraction parameters
-        # try:
-        #     online_dict = processing_parameters.mouse_parameters[animal]
-        # except KeyError:
-        #     print(f'mouse {animal} not found, using default')
-        #     online_dict = processing_parameters.mouse_parameters['default']
+        # save the file name and the number of frames
+        frames_list.append([os.path.basename(video_path), stack.shape[0]])
+        frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
+        del stack
 
-        try:
+    try:
+        if not os.path.isdir(os.path.join(save_path, 'minian')):
             # run minian
             print("starting minian")
             minian_out = minian_main(rig, animal, override_dpath=save_path)
-            minian_out['processed_frames'] = np.array(minian_out['f'].frame)
+        else:
+            sys.path.append(paths.minian_path)
+            from minian.utilities import open_minian
+            minian_out = open_minian(os.path.join(save_path, 'minian'), return_dict=True)
 
-            # custom save the output to include the frames list
-            for idx, el in enumerate(frames_list.iloc[:, 0]):
-                # parse the line
-                frames_list.iloc[idx, 0] = '_'.join(os.path.basename(el).split('_')[:6])
+        print("back in wrapper")
+        minian_out['processed_frames'] = np.array(minian_out['f'].frame)
 
-            # save in an hdf5 file
-            with h5py.File(out_path, 'w') as f:
-                # save the calcium data
-                for key, value in minian_out.items():
-                    f.create_dataset(key, data=np.array(value))
-                # save the frames list
-                f.create_dataset('frame_list', data=frames_list.values.astype('S'))
+        # custom save the output to include the frames list
+        for idx, el in enumerate(frames_list.iloc[:, 0]):
+            # parse the line
+            frames_list.iloc[idx, 0] = '_'.join(os.path.basename(el).split('_')[:6])
 
-            # produce the contour figure
-            calcium_pic = np.sum(minian_out['A'] > 0, axis=0)
-            plt.imshow(calcium_pic)
+        # save in an hdf5 file
+        with h5py.File(out_path, 'w') as f:
+            # save the calcium data
+            for key, value in minian_out.items():
+                f.create_dataset(key, data=np.array(value))
+            # save the frames list
+            f.create_dataset('frame_list', data=frames_list.values.astype('S'))
 
-            # assemble the pic path
-            pic_path = out_path.replace('_calciumday.hdf5', '_calciumpic.tif')
-            # also save a figure with the contours
-            plt.savefig(pic_path, dpi=200)
+        # produce the contour figure
+        calcium_pic = np.sum(minian_out['A'] > 0, axis=0)
+        # plt.imshow(calcium_pic)
 
-        except (ValueError, np.linalg.LinAlgError):
-            print(f'File {video_path} contained no ROIs')
-            # save in an hdf5 file
-            with h5py.File(out_path, 'w') as f:
-                # save an empty
-                f.create_dataset('frame_list', data='no_ROIs')
-            # define pic_path as empty
-            pic_path = ''
+        # assemble the pic path
+        pic_path = out_path.replace('_calciumraw.hdf5', '_calciumpic.tif')
+        # also save a figure with the contours
+        plt.savefig(pic_path, dpi=200)
 
-     # TODO What to do here, as we don't do a calcium day file
+    except (ValueError, np.linalg.LinAlgError):
+        print(f'File {video_path} contained no ROIs')
+        # save in an hdf5 file
+        with h5py.File(out_path, 'w') as f:
+            # save an empty
+            f.create_dataset('frame_list', data='no_ROIs')
+        # define pic_path as empty
+        pic_path = ''
 
     # assemble the entry data
     entry_data = {
-        'analysis_type': 'calciumday',
+        'analysis_type': 'calciumraw',
         'analysis_path': out_path,
         'date': '',
         'pic_path': pic_path,
