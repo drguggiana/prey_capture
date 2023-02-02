@@ -1,8 +1,5 @@
 import numpy as np
 import cv2
-import sys
-import json
-import os.path
 from scipy.signal import butter, filtfilt
 from skimage import io
 
@@ -64,7 +61,7 @@ def apply_spatial_filter(stack, fft_mask):
     return stack_back
 
 
-def apply_lpf(stack, fs=20, cutoff=4, order=6):
+def apply_lpf(stack: np.array, fs=20, cutoff=4, order=6):
     """Construct a lowpass filter to remove low-frequency fluorescence changes"""
 
     b, a = butter(order, cutoff / (0.5 * fs), btype='low', analog=False)
@@ -79,74 +76,20 @@ def apply_lpf(stack, fs=20, cutoff=4, order=6):
     return stack_lpf, mean_fluor, mean_filt
 
 
-def denoise_stack(filename, processing_path=None):
-    """Runs the denoosing functions and saves denoised stack"""
+def denoise_stack(filename):
+    """Runs the denoosing functions"""
     # Load the tif
     stack = io.imread(filename).astype(np.uint8)
 
-    print(f"Denoising {filename} ...")
-
-    # allocate a list to store the original names and the number of frames
-    frames_list = []
     # if it's 2d (i.e 1 frame), expand 1 dimension
     if len(stack.shape) == 2:
         stack = np.expand_dims(stack, 2)
         stack = np.transpose(stack, [2, 0, 1])
-
-    print(f"Number of frames: {stack.shape[0]}")
-    # save the file name and the number of frames
-    frames_list.append([filename, stack.shape[0]])
-
-    # Handle file renaming for denoised file
-    if processing_path is not None:
-        # get the basename
-        base_name = os.path.basename(filename)
-        out_path_tif = os.path.join(processing_path, base_name.replace('.tif', '_denoised.tif'))
-        out_path_log = os.path.join(processing_path, base_name.replace('.tif', '_denoised.csv'))
-    else:
-        out_path_tif = filename.replace('.tif', '_denoised.tif')
-        out_path_log = filename.replace('.tif', '_denoised.csv')
 
     # Run denoising
     sum_fft = get_sum_fft(stack, frame_skip=100)
     mask_fft = get_mask_fft(sum_fft)
     stack_spatial_filt = apply_spatial_filter(stack, mask_fft)
     stack_lowpass, _, _ = apply_lpf(stack_spatial_filt, cutoff=3.5, order=9)
-    io.imsave(out_path_tif, stack_lowpass, plugin="tifffile", bigtiff=True)
 
-    return out_path_tif, out_path_log, frames_list
-
-
-if __name__ == "__main__":
-
-    try:
-        # get the target video path
-        video_path = sys.argv[1]
-        out_path = sys.argv[2]
-        data_all = json.loads(sys.argv[3])
-        # get the parts for the file naming
-        name_parts = os.path.basename(out_path).split('_')
-        day = '_'.join(name_parts[0:3])
-        animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
-        rig = name_parts[6]
-
-        print(video_path)
-        print(out_path)
-        print(day, animal, rig)
-
-    except IndexError:
-        # get the search string
-        # search_string = processing_parameters.search_string
-        animal = processing_parameters.animal
-        day = processing_parameters.day
-        rig = processing_parameters.rig
-        search_string = 'rig:%s, imaging:wirefree, mouse:%s, slug:%s' % (rig, animal, day)
-
-
-
-    data_dir = r"D:\minian_test\wirefree\test_consecutive_sessions\MM_221109_a\fixed"
-    data_file = r"01_12_2023_12_03_07_VWheelWF_MM_221109_a_fixed0_gabor.tif"
-
-    print(f"Denoising {video_path} ...")
-    out_path = denoise_stack(video_path, processing_path=out_path)
-    print("Done!\n")
+    return stack_lowpass

@@ -1,8 +1,6 @@
 import os
 import sys
 import numpy as np
-import xarray as xr
-import itertools as itt
 from dask.distributed import Client, LocalCluster
 import paths
 

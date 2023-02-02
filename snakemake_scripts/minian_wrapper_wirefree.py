@@ -1,16 +1,12 @@
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
-import re
 import os
 import h5py
 import sys
 import json
-from skimage.io import imread
+from skimage.io import imread, imsave
 print(os.environ["CONDA_PREFIX"])
-print(os.getcwd())
-sys.path.insert(0, '..')
-# sys.path.insert(0, r'C:\Users\mmccann\repos\bonhoeffer\prey_capture')
 
 import paths
 import functions_bondjango as bd
@@ -26,20 +22,11 @@ if __name__ == "__main__":
     try:
         # get the target video path
         video_path = sys.argv[1]
-        # # find the occurrences of .tif terminators
-        # ends = [el.start() for el in re.finditer('.tif', video_path)]
-        # # allocate the list of videos
-        # video_list = []
-        # count = 0
-        # # read the paths
-        # for el in ends:
-        #     video_list.append(video_path[count:el+4])
-        #     count = el + 5
-        #
-        # video_path = video_list
+
         # read the output path and the input file urls
         out_path = sys.argv[2]
         data_all = json.loads(sys.argv[3])
+
         # get the parts for the file naming
         name_parts = os.path.basename(out_path).split('_')
         day = '_'.join(name_parts[0:3])
@@ -58,7 +45,6 @@ if __name__ == "__main__":
         data_all = bd.query_database('vr_experiment', search_string)
         # video_data = data_all[0]
         video_path = data_all[0]['tif_path']
-        # video_path = [el['tif_path'] for el in data_all]
         # overwrite data_all with just the urls
         data_all = {os.path.basename(el['bonsai_path'])[:-4]: el['url'] for el in data_all}
         # assemble the output path
@@ -74,8 +60,18 @@ if __name__ == "__main__":
         fi.delete_contents(paths.temp_minian)
         fi.delete_contents(paths.temp_path)
         os.makedirs(save_path)
-        out_path_tif, _, frames_list = fdn.denoise_stack(video_path, save_path)
+        stack = fdn.denoise_stack(video_path, save_path)
+        # allocate a list to store the original names and the number of frames
+        frames_list = []
+        print(f"Number of frames: {stack.shape[0]}")
+        # save the file name and the number of frames
+        frames_list.append([os.path.basename(video_path), stack.shape[0]])
         frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
+        # Handle file renaming for denoised file
+        out_path_tif = os.path.join(save_path, os.path.basename(video_path).replace('.tif', '_denoised.tif'))
+        # Save the denoised stack
+        imsave(out_path_tif, stack, plugin="tifffile", bigtiff=True)
+        del stack
     else:
         stack = imread(denoised_path).astype(np.uint8)
         # allocate a list to store the original names and the number of frames
