@@ -7,8 +7,8 @@ import json
 os.environ["DLClight"] = "True"
 import deeplabcut as dlc
 
-print(os.getcwd())
-sys.path.insert(0, r'C:\Users\mmccann\repos\bonhoeffer\prey_capture')
+# print(os.getcwd())
+# sys.path.insert(0, r'C:\Users\mmccann\repos\bonhoeffer\prey_capture')
 import paths
 sys.path.insert(0, os.path.abspath(paths.prey_capture_repo_directory))
 
@@ -52,14 +52,20 @@ else:
     target_model = 'vr_experiment'
     if video_data['rig'] in ['VWheel', 'VWheelWF']:
         config = paths.config_path_VWheel
-    else:
+    elif video_data['rig'] == 'VTuningWF':
         config = paths.config_path_VTuningWF
+    else:
+        config = paths.config_path_VTuning
+
+# Load the config and get necessary parameters (namely shuffle)
+cfg = dlc.auxiliaryfunctions.read_config(config)
+shuffle = cfg.get('shuffle', 1)    # Defaults to 1 if not present in config file
 
 # analyze the video
-dlc.analyze_videos(paths.config_path_VTuningWF, [temp_video_path], destfolder=paths.temp_path)
+dlc.analyze_videos(config, [temp_video_path], shuffle=shuffle, destfolder=paths.temp_path)
 
 # filter the data
-dlc.filterpredictions(config, [temp_video_path], destfolder=paths.temp_path, save_as_csv=False)
+dlc.filterpredictions(config, [temp_video_path], shuffle=shuffle, destfolder=paths.temp_path, save_as_csv=False)
 
 # move and rename the file
 

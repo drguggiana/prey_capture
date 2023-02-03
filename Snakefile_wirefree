@@ -58,8 +58,7 @@ rule dlc_extraction:
             info=yaml_to_json,
             dlc_path=config["dlc_path"]
     shell:
-        r'cd "{paths.prey_capture_repo_directory}" & conda activate DEEPLABCUT & python "{params.dlc_path}" "{input}" '
-        r'"{output}" "{params.info}"'
+        r'conda activate DEEPLABCUT & python "{params.dlc_path}" "{input}" "{output}" "{params.info}"'
 
 
 def dlc_input_selector(wildcards):
@@ -124,9 +123,9 @@ rule calcium_extract:
     params:
         info=yaml_to_json_single_file,
         # info=yaml_list_to_json,
-        cnmfe_path=config["cnmfe_path"],
+        cnmfe_path=config["cnmfe_path"]
     shell:
-        r'conda activate minian & python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
+        r'conda activate minian && python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
 
 
 def day_animal_calcium_file(wildcards):
@@ -147,6 +146,7 @@ def day_animal_rig_calcium_file(wildcards):
 
 rule calcium_scatter:
     input:
+        # rules.calcium_extract.output,
         day_animal_rig_calcium_file
         # day_animal_calcium_file,
     output:
@@ -155,7 +155,6 @@ rule calcium_scatter:
         info=lambda wildcards: config["file_info"][wildcards.file]
     script:
         "snakemake_scripts/scatter_calcium_wirefree.py"
-        # "snakemake_scripts/scatter_calcium.py"
 
 
 def calcium_input_selector(wildcards):
@@ -214,6 +213,7 @@ def match_selector(wildcards):
         animal = python_dict['mouse']
         # rig = python_dict['rig']
         return os.path.join(paths.analysis_path,'_'.join((animal, 'cellMatch.hdf5')))
+        # return rules.match_cells.output
     else:
         return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
 
@@ -255,6 +255,7 @@ def motif_selector(wildcards):
 rule preprocess_compile:
     input:
         lambda wildcards: os.path.join(paths.analysis_path, config["files"][wildcards.file] + '_rawcoord.hdf5'),
+        # rules.preprocess.output[0],
         motif_selector,
     output:
         os.path.join(paths.analysis_path, "{file}_preproc.hdf5"),

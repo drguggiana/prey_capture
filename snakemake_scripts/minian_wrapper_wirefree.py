@@ -6,7 +6,6 @@ import h5py
 import sys
 import json
 from skimage.io import imread, imsave
-print(os.environ["CONDA_PREFIX"])
 
 import paths
 import functions_bondjango as bd
@@ -60,7 +59,7 @@ if __name__ == "__main__":
         fi.delete_contents(paths.temp_minian)
         fi.delete_contents(paths.temp_path)
         os.makedirs(save_path)
-        stack = fdn.denoise_stack(video_path, save_path)
+        stack = fdn.denoise_stack(video_path)
         # allocate a list to store the original names and the number of frames
         frames_list = []
         print(f"Number of frames: {stack.shape[0]}")

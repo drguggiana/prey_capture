@@ -4,7 +4,6 @@ import functions_bondjango as bd
 import paths
 import functions_data_handling as fd
 import os
-import numpy as np
 import processing_parameters
 
 
@@ -108,6 +107,9 @@ for idx, target_entries in enumerate(full_queries):
     # run snakemake
     print(os.getcwd())
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
+                              '-s', paths.snakemake_scripts,
+                              '-d', paths.snakemake_working,
+                              # '--use-conda',
                               # '-F',         # (hard) force rerun everything
                               # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
@@ -116,9 +118,7 @@ for idx, target_entries in enumerate(full_queries):
                               # '--debug-dag',  # show the file selection operation, also for debugging
                               # '--dryrun',  # generates the DAG and everything, but doesn't process
                               # '--reason',  # print the reason for executing each job
-                              # '--use-conda',
-                              '-s', paths.snakemake_scripts,
-                              '-d', paths.snakemake_working],
+                              ],
                              stdout=sp.PIPE,
                              )
 
