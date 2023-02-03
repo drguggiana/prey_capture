@@ -927,11 +927,13 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
         start_idx = np.argwhere(frame_idx_mini_sync > frame_idx_camera_sync[0])[0][0]
         frame_idx_mini_sync = frame_idx_mini_sync[start_idx:]
         calcium_data = calcium_data[start_idx:, :]
+        fluor_data = fluor_data[start_idx:, :]
 
     if frame_idx_mini_sync[-1] > frame_idx_camera_sync[-1]:
         end_idx = np.argwhere(frame_idx_mini_sync < frame_idx_camera_sync[-1])[-1][0] + 1
         frame_idx_mini_sync = frame_idx_mini_sync[:end_idx]
         calcium_data = calcium_data[:end_idx, :]
+        fluor_data = fluor_data[:end_idx, :]
 
     # get the delta frames with the calcium
     delta_frames = frame_idx_mini_sync.shape[0] - calcium_data.shape[0]
@@ -943,6 +945,7 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     elif delta_frames < 0:
         print(f'There were {-delta_frames} more frames than triggers on file {os.path.basename(calcium_path)}')
         calcium_data = calcium_data[:delta_frames, :]
+        fluor_data = fluor_data[:delta_frames, :]
 
     # trim calcium according to the frames left within the behavior
     calcium_data = calcium_data[frame_idx_mini_sync > frame_idx_camera_sync[0], :]
@@ -1004,9 +1007,17 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
 def match_wheel(file_info, filtered_traces, wheel_diameter=16):
     """Get the wheel speed and acceleration on each frame"""
     # load the sync data
-    sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'camera_frames',
-                                                           'sync_trigger', 'mini_frames', 'wheel_frames'],
-                            index_col=False)
+    sync_data = pd.read_csv(file_info['sync_path'], header=None)
+    if sync_data.shape[1] == 6:
+        sync_data.columns = ['Time', 'projector_frames', 'camera_frames',
+                             'sync_trigger', 'mini_frames', 'wheel_frames']
+    else:
+        sync_data.columns = ['Time', 'projector_frames', 'camera_frames',
+                             'sync_trigger', 'mini_frames', 'wheel_frames', 'projector_frames_2']
+    #
+    # sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'camera_frames',
+    #                                                        'sync_trigger', 'mini_frames', 'wheel_frames'],
+    #                         index_col=False)
     # get the wheel trace
     wheel_position = sync_data.loc[filtered_traces['sync_frames'], ['wheel_frames']]
     # convert the position to radians
@@ -1120,11 +1131,27 @@ def match_dlc(filtered_traces, file_info, file_date):
         # get the actual frame times
         time = sync_data.loc[cam_idx, 'Time'].to_numpy()
 
-    else:
+    elif (file_date > datetime.datetime(year=2021, month=12, day=14)) & \
+            (file_date <= datetime.datetime(year=2022, month=2, day=21)):
         # read the sync file
         sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'camera_frames',
                                                                'sync_trigger', 'mini_frames', 'wheel_frames'],
                                 index_col=False)
+        # get the cam frame times based on the triggers
+        # get the camera triggers
+        cam_idx = np.argwhere(np.diff(sync_data.loc[:, 'camera_frames']) > 1).squeeze() + 1
+        # filter them by the sync trigger
+        sync_start = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 1)[0]
+        sync_end = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 2)[0]
+        cam_idx = cam_idx[(cam_idx > sync_start) & (cam_idx < sync_end)]
+        # get the actual frame times
+        time = sync_data.loc[cam_idx, 'Time'].to_numpy()
+
+    else:
+        # read the sync file
+        sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'camera_frames',
+                                                               'sync_trigger', 'mini_frames', 'wheel_frames',
+                                                               'projector_frames_2'], index_col=False)
         # get the cam frame times based on the triggers
         # get the camera triggers
         cam_idx = np.argwhere(np.diff(sync_data.loc[:, 'camera_frames']) > 1).squeeze() + 1
