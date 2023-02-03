@@ -195,7 +195,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
 
     except IndexError:
         # DLC in VR arena
-        if file_info['rig'] in ['VTuning', 'VTuningWF']:
+        if file_info['rig'] in ['VTuning']:
             # Similar to small arena, but no cricket
             # Make miniscope the mouse head in this case.
             filtered_traces = pd.DataFrame(raw_h5[[
@@ -231,6 +231,48 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
                 [el for el in column_names if ('mouseBody3' in el) and ('likelihood' in el)][0],
                 [el for el in column_names if ('mouseBase' in el) and ('likelihood' in el)][0],
                 [el for el in column_names if ('miniscope' in el) and ('likelihood' in el)][0],
+            ]].to_numpy(), columns=['mouse_snout', 'mouse_barl', 'mouse_barr', 'mouse', 'mouse_body2', 'mouse_body3',
+                                    'mouse_base', 'mouse_head'])
+
+        elif file_info['rig'] in ['VTuningWF']:
+            # Similar to small arena, but no cricket
+            # Make miniscope_base the mouse head in this case.
+            filtered_traces = pd.DataFrame(raw_h5[[
+                [el for el in column_names if ('mouseSnout' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseSnout' in el) and ('y' in el)][0],
+                [el for el in column_names if ('HeadBarL' in el) and ('x' in el)][0],
+                [el for el in column_names if ('HeadBarL' in el) and ('y' in el)][0],
+                [el for el in column_names if ('HeadBarR' in el) and ('x' in el)][0],
+                [el for el in column_names if ('HeadBarR' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody1' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody1' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody2' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody2' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody3' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody3' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBase' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBase' in el) and ('y' in el)][0],
+                [el for el in column_names if ('miniscope_base' in el) and ('x' in el)][0],
+                [el for el in column_names if ('miniscope_base' in el) and ('y' in el)][0],
+                [el for el in column_names if ('miniscope_top' in el) and ('x' in el)][0],
+                [el for el in column_names if ('miniscope_top' in el) and ('y' in el)][0],
+            ]].to_numpy(), columns=['mouse_snout_x', 'mouse_snout_y', 'mouse_barl_x', 'mouse_barl_y',
+                                    'mouse_barr_x', 'mouse_barr_y',
+                                    'mouse_x', 'mouse_y', 'mouse_body2_x', 'mouse_body2_y',
+                                    'mouse_body3_x', 'mouse_body3_y', 'mouse_base_x', 'mouse_base_y',
+                                    'mouse_head_x', 'mouse_head_y',
+                                    'miniscope_top_x', 'miniscope_top_y'])
+
+            # get the likelihoods
+            likelihood_frame = pd.DataFrame(raw_h5[[
+                [el for el in column_names if ('mouseSnout' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('HeadBarL' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('HeadBarR' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBody1' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBody2' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBody3' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBase' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('miniscope_base' in el) and ('likelihood' in el)][0],
             ]].to_numpy(), columns=['mouse_snout', 'mouse_barl', 'mouse_barr', 'mouse', 'mouse_body2', 'mouse_body3',
                                     'mouse_base', 'mouse_head'])
 
@@ -358,7 +400,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
         filtered_traces = filtered_traces.iloc[1:, :].reset_index(drop=True)
         frame_bounds['start'] += 1
 
-    if file_info['rig'] != 'VTuning':
+    if file_info['rig'] not in ['VTuning', 'VTuningWF']:
         if file_info['result'] != 'habi':
             # interpolate the position of the cricket assuming stationarity
             filtered_traces = fp.interpolate_animals(filtered_traces, np.nan,
@@ -464,7 +506,7 @@ def extract_motive(file_path_motive, rig, trials=None):
                             'target_y_m', 'target_z_m', 'target_x_m',
                             'color_factor']
 
-        elif rig == 'VTuning':
+        elif rig in ['VTuning', 'VTuningWF', 'VWheel', 'VWheelWF']:
             column_names = ['time_m', 'trial_num',
                             'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
                             'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',
