@@ -1,15 +1,15 @@
-import functions_bondjango as bd
-import paths
-import os
-from caiman.base.rois import register_multisession
-
-import h5py
 import numpy as np
-import functions_misc as fm
-import processing_parameters
+import os
 import sys
 import re
-import json
+import h5py
+from caiman.base.rois import register_multisession
+
+
+import paths
+import processing_parameters
+import functions_bondjango as bd
+import functions_misc as fm
 import functions_plotting as fplot
 
 # Main script
@@ -39,8 +39,7 @@ except IndexError:
 
     # get the search string
     animal = processing_parameters.animal
-    rig = processing_parameters.rig
-    search_string = 'slug:%s, analysis_type:calciumday' % (fm.slugify(animal))
+    search_string = 'slug:%s, analysis_type:calciumraw' % (fm.slugify(animal))
     # query the database for data to plot
     data_all = bd.query_database('analyzed_data', search_string)
     # get the paths to the files
@@ -62,6 +61,7 @@ date_list = []
 # load the calcium data
 for files in calcium_path:
     with h5py.File(files, mode='r') as f:
+
         try:
             calcium_data = np.array(f['A'])
         except KeyError:
@@ -80,7 +80,13 @@ for files in calcium_path:
         size_list.append(calcium_data.shape[1:])
         template_list.append(np.zeros(size_list[0]))
         # template_list.append(np.array(f['max_proj']))
-        date_list.append(os.path.basename(files)[:10])
+
+        date = os.path.basename(files)[:10]
+        rig = os.path.basename(files).split('_')[6]
+        if rig in ['VTuning', 'VWheel', 'VTuningWF', 'VWheelWF']:
+            date_list.append('_'.join((date, rig)))
+        else:
+            date_list.append(date)
         # frame_lists.append(np.array(f['frame_list']))
 
 try:
@@ -99,7 +105,7 @@ with h5py.File(out_path, 'w') as f:
     #     f.create_dataset(key, data=np.array(value))
     f.create_dataset('assignments', data=assignments)
     # f.create_dataset('matchings', data=np.array(matchings))
-    f.create_dataset('date_list', data=np.array(date_list).astype('S10'))
+    f.create_dataset('date_list', data=np.array(date_list).astype('S20'))
 
 # create the appropriate bondjango entry
 entry_data = {
