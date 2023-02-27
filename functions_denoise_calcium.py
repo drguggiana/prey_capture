@@ -93,3 +93,18 @@ def denoise_stack(filename):
     stack_lowpass, _, _ = apply_lpf(stack_spatial_filt, cutoff=3.5, order=9)
 
     return stack_lowpass
+
+
+if __name__ == "__main__":
+
+    video_path = r"D:\minian_test\wirefree\test_free\01_10_2023_15_57_15_VWheelWF_MM_221110_a_fixed0_gabor.tif"
+    out_path = video_path.replace('.tif', '_denoised.tif')
+
+    print(f"Denoising {video_path} ...")
+    denoised_stack = denoise_stack(video_path)
+
+    # Save the denoised stack
+    io.imsave(out_path, denoised_stack, plugin="tifffile", bigtiff=True)
+
+    print("Done!\n")
+
