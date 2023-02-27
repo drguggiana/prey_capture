@@ -52,52 +52,28 @@ if __name__ == "__main__":
     # Here is some stupidity to deal with how Minian expects the directory to be formatted
     save_path = os.path.join(paths.temp_path, animal, rig)
 
-    # denoise the video and save the tif in the  modified temp path
+    # denoise the video and save the tif in the modified temp path
     denoised_path = os.path.join(save_path, os.path.basename(video_path).replace('.tif', '_denoised.tif'))
-    if not os.path.isfile(denoised_path):
-        # delete the folder contents
-        fi.delete_contents(paths.temp_minian)
-        fi.delete_contents(paths.temp_path)
-        os.makedirs(save_path)
-        stack = fdn.denoise_stack(video_path)
-        # allocate a list to store the original names and the number of frames
-        frames_list = []
-        print(f"Number of frames: {stack.shape[0]}")
-        # save the file name and the number of frames
-        frames_list.append([os.path.basename(video_path), stack.shape[0]])
-        frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
-        # Handle file renaming for denoised file
-        out_path_tif = os.path.join(save_path, os.path.basename(video_path).replace('.tif', '_denoised.tif'))
-        # Save the denoised stack
-        imsave(out_path_tif, stack, plugin="tifffile", bigtiff=True)
-        del stack
-    else:
-        stack = imread(denoised_path).astype(np.uint8)
-        # allocate a list to store the original names and the number of frames
-        frames_list = []
-        # if it's 2d (i.e 1 frame), expand 1 dimension
-        if len(stack.shape) == 2:
-            stack = np.expand_dims(stack, 2)
-            stack = np.transpose(stack, [2, 0, 1])
-
-        print(f"Number of frames: {stack.shape[0]}")
-
-        # save the file name and the number of frames
-        frames_list.append([os.path.basename(video_path), stack.shape[0]])
-        frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
-        del stack
+    # delete the folder contents
+    fi.delete_contents(paths.temp_minian)
+    fi.delete_contents(paths.temp_path)
+    os.makedirs(save_path)
+    stack = fdn.denoise_stack(video_path)
+    # allocate a list to store the original names and the number of frames
+    frames_list = []
+    print(f"Number of frames: {stack.shape[0]}")
+    # save the file name and the number of frames
+    frames_list.append([os.path.basename(video_path), stack.shape[0]])
+    frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
+    # Handle file renaming for denoised file
+    out_path_tif = os.path.join(save_path, os.path.basename(video_path).replace('.tif', '_denoised.tif'))
+    # Save the denoised stack
+    imsave(out_path_tif, stack, plugin="tifffile", bigtiff=True)
+    del stack
 
     try:
-        if not os.path.isdir(os.path.join(save_path, 'minian')):
-            # run minian
-            print("starting minian")
-            minian_out = minian_main(rig, animal, override_dpath=save_path)
-        else:
-            sys.path.append(paths.minian_path)
-            from minian.utilities import open_minian
-            minian_out = open_minian(os.path.join(save_path, 'minian'), return_dict=True)
-
-        print("back in wrapper")
+        print("starting minian")
+        minian_out = minian_main(rig, animal, override_dpath=save_path)
         minian_out['processed_frames'] = np.array(minian_out['f'].frame)
 
         # custom save the output to include the frames list
@@ -124,7 +100,7 @@ if __name__ == "__main__":
 
     except (ValueError, np.linalg.LinAlgError):
         print(f'File {video_path} contained no ROIs')
-        # save in an hdf5 file
+        # save as a hdf5 file
         with h5py.File(out_path, 'w') as f:
             # save an empty
             f.create_dataset('frame_list', data='no_ROIs')
