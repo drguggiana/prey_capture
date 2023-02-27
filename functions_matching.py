@@ -892,7 +892,7 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
         fluor_data = np.array(f['fluor_data']).T
 
         # if there are no ROIs, skip
-        if (type(calcium_data) == np.ndarray) and (calcium_data == 'no_ROIs'):
+        if (type(calcium_data) == np.ndarray) and np.any(calcium_data.astype(str) == 'no_ROIs'):
             return None, None
 
         roi_info = np.array(f['roi_info'])
