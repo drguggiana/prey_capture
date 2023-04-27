@@ -1,11 +1,12 @@
 import os
 import sys
+import yaml
 import numpy as np
 from dask.distributed import Client, LocalCluster
 import paths
 
 
-def minian_main(rig, animal, override_dpath=None):
+def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
 
     # Set up Initial Basic Parameters#
     minian_path = paths.minian_path
@@ -34,6 +35,7 @@ def minian_main(rig, animal, override_dpath=None):
         "downsample": dict(frame=1, height=1, width=1),
         "downsample_strategy": "subset",
     }
+    # Denoising and background removal #
     param_denoise = {"method": "median", "ksize": 5}
     param_background_removal = {"method": "tophat", "wnd": 15}
 
@@ -50,53 +52,36 @@ def minian_main(rig, animal, override_dpath=None):
         "diff_thres": 3,
     }
 
-    noise_freq = 0.06
+    # Load the yaml file containing the relevant parameters
+    with open(paths.minian_parameters, 'r') as f:
+        # Load the contents of the file into a dictionary
+        params = yaml.safe_load(f)
+        # Get the parameters based on the animal and rig
+        animal_rig_params = params.get(animal).get(rig)
+        # Get the default param set
+        default_params = params.get('default')
+
+    # Load the noise_freq from the yaml, but have a default as well
+    noise_freq = animal_rig_params.get('noise_freq', default_params['noise_freq'])
+
     param_pnr_refine = {"noise_freq": noise_freq, "thres": 1.05}
     param_ks_refine = {"sig": 0.05}
     param_seeds_merge = {"thres_dist": 5, "thres_corr": 0.8, "noise_freq": noise_freq}
     param_initialize = {"thres_corr": 0.8, "wnd": 18, "noise_freq": noise_freq}
     param_init_merge = {"thres_corr": 0.8}
 
-    # CNMF Parameters#
+    # CNMF Parameters #
+    # Most of these are loaded from the minian_params_wirefree.yaml file, but have defaults set just in case
     param_get_noise = {"noise_range": (noise_freq, 0.5)}
-    param_first_spatial = {
-        "dl_wnd": 10,
-        "sparse_penal": 0.01,
-        "size_thres": (25, None),
-    }
 
-    # This step is state-dependent, so needs to change between experiment types
-    if rig == "VTuningWF":
-        param_first_temporal = {
-            "noise_freq": noise_freq,
-            "sparse_penal": 0.75,
-            "p": 1,
-            "add_lag": 20,
-            "jac_thres": 0.2,
-        }
-    else:
-         param_first_temporal = {
-            "noise_freq": noise_freq,
-            "sparse_penal": 0.5,
-            "p": 1,
-            "add_lag": 20,
-            "jac_thres": 0.2,
-        }
-
+    param_first_spatial = animal_rig_params.get('param_first_spatial', default_params['param_first_spatial'])
+    param_first_temporal = animal_rig_params.get('param_first_temporal', default_params['param_first_temporal'])
     param_first_merge = {"thres_corr": 0.8}
-    param_second_spatial = {
-        "dl_wnd": 10,
-        "sparse_penal": 0.005,
-        "size_thres": (25, None),
-    }
-    param_second_temporal = {
-        "noise_freq": noise_freq,
-        "sparse_penal": 0.5,
-        "p": 1,
-        "add_lag": 20,
-        "jac_thres": 0.4,
-    }
 
+    param_second_spatial = animal_rig_params.get('param_second_spatial', default_params['param_second_spatial'])
+    param_second_temporal = animal_rig_params.get('param_second_temporal', default_params['param_second_temporal'])
+
+    # Environment variables #
     os.environ["OMP_NUM_THREADS"] = "1"
     os.environ["MKL_NUM_THREADS"] = "1"
     os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -133,18 +118,6 @@ def minian_main(rig, animal, override_dpath=None):
         open_minian,
         save_minian,
     )
-    # from minian.visualization import (
-    #     CNMFViewer,
-    #     VArrayViewer,
-    #     generate_videos,
-    #     visualize_gmm_fit,
-    #     visualize_motion,
-    #     visualize_preprocess,
-    #     visualize_seeds,
-    #     visualize_spatial_update,
-    #     visualize_temporal_update,
-    #     write_video,
-    # )
 
     # get the path
     dpath = os.path.abspath(dpath)
@@ -175,7 +148,7 @@ def minian_main(rig, animal, override_dpath=None):
     )
     # subset so that we exclude the first 200 frames and the last frame
     last_idx = int(varr.frame[-2].values)
-    varr_ref = varr.sel(frame=slice(200, last_idx))
+    varr_ref = varr.sel(frame=slice(subset_start_idx, last_idx))
 
     # BACKGROUND CORRECTION
     print("background correction")
