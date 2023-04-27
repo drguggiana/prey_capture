@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 from scipy.signal import butter, filtfilt
-from skimage import io
 
 
 def get_sum_fft(stack, frame_skip=10, apply_vignette=False):
@@ -96,15 +95,94 @@ def denoise_stack(filename):
 
 
 if __name__ == "__main__":
+    import ffmpeg
+    from skimage import io
+    from glob import glob
+    import os
+    import re
 
-    video_path = r"D:\minian_test\wirefree\test_free\01_10_2023_15_57_15_VWheelWF_MM_221110_a_fixed0_gabor.tif"
-    out_path = video_path.replace('.tif', '_denoised.tif')
 
-    print(f"Denoising {video_path} ...")
-    denoised_stack = denoise_stack(video_path)
+    def load_avi(file_name):
 
-    # Save the denoised stack
-    io.imsave(out_path, denoised_stack, plugin="tifffile", bigtiff=True)
+        """Load an avi video from the wirefree miniscope (based on minian code)"""
+        # get the file info
+        info = ffmpeg.probe(file_name)
+        video_info = next(s for s in info["streams"] if s["codec_type"] == "video")
+        w = int(video_info["width"])
+        h = int(video_info["height"])
+        f = int(video_info["nb_frames"])
+        # load the file
+        out_bytes, err = (
+            ffmpeg.input(file_name)
+            .video.output("pipe:", format="rawvideo", pix_fmt="gray")
+            .run(capture_stdout=True)
+        )
+        stack_out = np.frombuffer(out_bytes, np.uint8).reshape(f, h, w).copy()
+        # get rid of the 0 frames
+        keep_idx = np.sum(np.sum(stack_out, axis=2), axis=1) != 0
+        stack_out = stack_out[keep_idx, :, :]
+        return stack_out
+
+
+    def concatenate_wirefree_video(filenames, processing_path=None):
+        """Concatenate the videos from a single recording into a single tif file"""
+        # based on https://stackoverflow.com/questions/47182125/how-to-combine-tif-stacks-in-python
+
+        # read the first stack on the list
+        im_1 = load_avi(filenames[0])
+
+        # save the file name and the number of frames
+        frames_list = [[filenames[0], im_1.shape[0]]]
+        # assemble the output path
+        if processing_path is not None:
+            # get the basename
+            base_name = os.path.basename(filenames[0])
+            out_path_tif = os.path.join(processing_path, base_name.replace('.avi', '_CAT.tif'))
+            out_path_log = os.path.join(processing_path, base_name.replace('.avi', '_CAT.csv'))
+        else:
+            out_path_tif = filenames[0].replace('.avi', '_CAT.tif')
+            out_path_log = filenames[0].replace('.avi', '_CAT.csv')
+        # run through the remaining files
+        for i in range(1, len(filenames)):
+            # load the next file
+            im_n = load_avi(filenames[i])
+
+            # concatenate it to the previous one
+            im_1 = np.concatenate((im_1, im_n))
+            # save the file name and the number of frames
+            frames_list.append([filenames[i], im_n.shape[0]])
+        # scale the output to max and turn into uint8 (for MiniAn)
+        max_value = np.max(im_1)
+        for idx, frames in enumerate(im_1):
+            im_1[idx, :, :] = ((frames / max_value) * 255).astype('uint8')
+        # save the final stack
+        io.imsave(out_path_tif, im_1, plugin='tifffile', bigtiff=True)
+        # save the info about the files
+        # frames_list = pd.DataFrame(frames_list, columns=['filename', 'frame_number'])
+        # frames_list.to_csv(out_path_log)
+
+        return out_path_tif, out_path_log, im_1
+
+    base_path = r"D:\test_041423"
+    sub_dirs = os.listdir(base_path)
+    sub_dirs = [os.path.join(base_path, d) for d in sub_dirs]
+
+    for item_path in sub_dirs:
+
+        if not os.path.isfile(item_path):
+            videos = glob(os.path.join(item_path, "*.avi"))
+            videos.sort(key=lambda f: int(re.sub(r'\D', '', f)))
+            video_path, _, _ = concatenate_wirefree_video(videos, processing_path=item_path)
+        else:
+            video_path = item_path
+
+        out_path = video_path.replace('.tif', '_denoised.tif')
+
+        print(f"Denoising {video_path} ...")
+        denoised_stack = denoise_stack(video_path)
+
+        # Save the denoised stack
+        io.imsave(out_path, denoised_stack, plugin="tifffile", bigtiff=True)
 
     print("Done!\n")
 

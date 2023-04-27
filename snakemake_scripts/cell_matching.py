@@ -16,7 +16,10 @@ import functions_plotting as fplot
 try:
     # get the target video path
     video_path = sys.argv[1]
-    # find the occurrences of .tif terminators
+    # read the output path and the input file urls
+    out_path = sys.argv[2]
+
+    # find the occurrences of .hdf5 terminators
     ends = [el.start() for el in re.finditer('.hdf5', video_path)]
     # allocate the list of videos
     video_list = []
@@ -27,28 +30,24 @@ try:
         count = el + 6
     print(video_list)
     calcium_path = video_list
-    # read the output path and the input file urls
-    out_path = sys.argv[2]
-    # data_all = json.loads(sys.argv[3])
-    # get the parts for the file naming
-    name_parts = out_path.split('_')
-    animal = name_parts[:3]
-    rig = name_parts[3]
 
 except IndexError:
 
     # get the search string
     animal = processing_parameters.animal
+    day = processing_parameters.day
+    rig = processing_parameters.rig
+
     search_string = 'slug:%s, analysis_type:calciumraw' % (fm.slugify(animal))
     # query the database for data to plot
     data_all = bd.query_database('analyzed_data', search_string)
     # get the paths to the files
     calcium_path = [el['analysis_path'] for el in data_all if 'miniscope' not in el['slug']]
     calcium_path.sort()
-    # # for testing, filter calcium path
-    # calcium_path = [el for el in calcium_path if ('03_24' in el) or ('03_23' in el) or ('03_29' in el)]
+
     # assemble the output path
     # out_path = os.path.join(paths.analysis_path, '_'.join((animal, rig, 'cellMatch.hdf5')))
+    # out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, 'cellMatch.hdf5')))
     out_path = os.path.join(paths.analysis_path, '_'.join((animal, 'cellMatch.hdf5')))
 
 # load the data for the matching
@@ -80,7 +79,6 @@ for files in calcium_path:
             continue
 
         calcium_data = calcium_data[keep_vector, :, :]
-
 
         # format and masks and store for matching
 
