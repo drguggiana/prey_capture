@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 from scipy.signal import butter, filtfilt
+from skimage import io
 
 
 def get_sum_fft(stack, frame_skip=10, apply_vignette=False):
@@ -96,7 +97,6 @@ def denoise_stack(filename):
 
 if __name__ == "__main__":
     import ffmpeg
-    from skimage import io
     from glob import glob
     import os
     import re

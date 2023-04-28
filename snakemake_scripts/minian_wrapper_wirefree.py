@@ -49,6 +49,7 @@ if __name__ == "__main__":
         # assemble the output path
         out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumraw.hdf5')))
 
+
     # Here is some stupidity to deal with how Minian expects the directory to be formatted
     save_path = os.path.join(paths.temp_path, animal, rig)
 
