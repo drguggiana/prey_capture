@@ -32,9 +32,9 @@ MM_220915_a:
 
     param_first_temporal:
       noise_freq: 0.05
-      sparse_penal: 0.75
+      sparse_penal: 0.5
       p: 1
-      add_lag: 20
+      add_lag: 10
       jac_thresh: 0.2
 
     param_first_spatial:
@@ -46,12 +46,12 @@ MM_220915_a:
       noise_freq: 0.05
       sparse_penal: 0.5
       p: 1
-      add_lag: 20
+      add_lag: 10
       jac_thresh: 0.4
 
     param_second_spatial:
       dl_wnd: 10
-      sparse_penal: 0.005
+      sparse_penal: 0.01
       size_thres: (25, None)
 
   VWheelWF:
@@ -87,26 +87,26 @@ MM_220928_a:
 
     param_first_temporal:
       noise_freq: 0.05
-      sparse_penal: 0.75
+      sparse_penal: 0.5
       p: 1
-      add_lag: 20
-      jac_thresh: 0.2
+      add_lag: 10
+      jac_thresh: 0.4
 
     param_first_spatial:
       dl_wnd: 10
-      sparse_penal: 0.01
+      sparse_penal: 0.015
       size_thres: (25, None)
 
     param_second_temporal:
       noise_freq: 0.05
       sparse_penal: 0.5
       p: 1
-      add_lag: 20
+      add_lag: 10
       jac_thresh: 0.4
 
     param_second_spatial:
       dl_wnd: 10
-      sparse_penal: 0.005
+      sparse_penal: 0.01
       size_thres: (25, None)
 
   VWheelWF:
@@ -143,9 +143,9 @@ MM_221109_a:
     param_first_temporal:
       noise_freq: 0.05
       sparse_penal: 0.75
-      p: 1
-      add_lag: 20
-      jac_thresh: 0.2
+      p: 2
+      add_lag: 10
+      jac_thresh: 0.4
 
     param_first_spatial:
       dl_wnd: 10
@@ -161,7 +161,7 @@ MM_221109_a:
 
     param_second_spatial:
       dl_wnd: 10
-      sparse_penal: 0.005
+      sparse_penal: 0.015
       size_thres: (25, None)
 
   VWheelWF:
@@ -170,9 +170,9 @@ MM_221109_a:
     param_first_temporal:
       noise_freq: 0.05
       sparse_penal: 0.5
-      p: 1
-      add_lag: 20
-      jac_thresh: 0.2
+      p: 2
+      add_lag: 10
+      jac_thresh: 0.4
 
     param_first_spatial:
       dl_wnd: 10
@@ -182,8 +182,8 @@ MM_221109_a:
     param_second_temporal:
       noise_freq: 0.05
       sparse_penal: 0.5
-      p: 1
-      add_lag: 20
+      p: 2
+      add_lag: 10
       jac_thresh: 0.4
 
     param_second_spatial:
@@ -197,26 +197,26 @@ MM_221110_a:
 
     param_first_temporal:
       noise_freq: 0.05
-      sparse_penal: 0.75
+      sparse_penal: 0.5
       p: 1
-      add_lag: 20
+      add_lag: 10
       jac_thresh: 0.2
 
     param_first_spatial:
       dl_wnd: 10
-      sparse_penal: 0.01
+      sparse_penal: 0.015
       size_thres: (25, None)
 
     param_second_temporal:
       noise_freq: 0.05
       sparse_penal: 0.5
       p: 1
-      add_lag: 20
+      add_lag: 10
       jac_thresh: 0.4
 
     param_second_spatial:
       dl_wnd: 10
-      sparse_penal: 0.005
+      sparse_penal: 0.01
       size_thres: (25, None)
 
   VWheelWF:
