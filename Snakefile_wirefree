@@ -32,7 +32,7 @@ def yaml_list_to_json(wildcards):
 
 def yaml_to_json_single_file(wildcards):
     """Used only for calcium extraction because we get a weird wildcard input"""
-    day_trial_path = day_trial_selector(wildcards)
+    day_trial_path = day_animal_rig_trial_selector(wildcards)
     python_dict = yaml.load(config["file_info"][os.path.basename(day_trial_path)[:-4]], Loader=yaml.FullLoader)
     url_dict = {os.path.basename(day_trial_path)[:-4]: python_dict['url']}
     # escape the double quotes inside the json
