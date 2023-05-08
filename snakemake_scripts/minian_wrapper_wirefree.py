@@ -1,18 +1,18 @@
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
 import os
 import h5py
 import sys
 import json
+from matplotlib import pyplot as plt
 from skimage.io import imread, imsave
 
 import paths
+import processing_parameters
 import functions_bondjango as bd
 import functions_io as fi
 import functions_misc as fm
 import functions_denoise_calcium as fdn
-import processing_parameters
 from snakemake_scripts.run_MiniAn_wirefree import minian_main
 
 
