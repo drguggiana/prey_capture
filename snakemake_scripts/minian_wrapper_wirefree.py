@@ -29,8 +29,9 @@ if __name__ == "__main__":
         # get the parts for the file naming
         name_parts = os.path.basename(out_path).split('_')
         day = '_'.join(name_parts[0:3])
-        animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
         rig = name_parts[6]
+        animal = '_'.join([name_parts[7].upper()] + name_parts[8:10])
+
 
     except IndexError:
         # get the search string
