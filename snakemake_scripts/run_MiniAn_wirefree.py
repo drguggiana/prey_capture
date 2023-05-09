@@ -76,7 +76,7 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
 
     param_first_spatial = animal_rig_params.get('param_first_spatial', default_params['param_first_spatial'])
     param_first_temporal = animal_rig_params.get('param_first_temporal', default_params['param_first_temporal'])
-    param_first_merge = {"thres_corr": 0.8}
+    param_first_merge = {"thres_corr": 0.85}
 
     param_second_spatial = animal_rig_params.get('param_second_spatial', default_params['param_second_spatial'])
     param_second_temporal = animal_rig_params.get('param_second_temporal', default_params['param_second_temporal'])
