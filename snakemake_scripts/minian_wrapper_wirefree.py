@@ -25,13 +25,14 @@ if __name__ == "__main__":
         # read the output path and the input file urls
         out_path = sys.argv[2]
         data_all = json.loads(sys.argv[3])
+        # overwrite data_all with just the urls
+        # data_all = {os.path.basename(el['tif_path'])[:-4]: el['url'] for el in data_all}
 
         # get the parts for the file naming
         name_parts = os.path.basename(out_path).split('_')
         day = '_'.join(name_parts[0:3])
         rig = name_parts[6]
         animal = '_'.join([name_parts[7].upper()] + name_parts[8:10])
-
 
     except IndexError:
         # get the search string
@@ -46,7 +47,7 @@ if __name__ == "__main__":
         # video_data = data_all[0]
         video_path = data_all[0]['tif_path']
         # overwrite data_all with just the urls
-        data_all = {os.path.basename(el['bonsai_path'])[:-4]: el['url'] for el in data_all}
+        data_all = {os.path.basename(el['tif_path'])[:-4]: el['url'] for el in data_all}
         # assemble the output path
         out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumraw.hdf5')))
 

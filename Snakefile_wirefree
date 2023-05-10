@@ -29,6 +29,15 @@ def yaml_list_to_json(wildcards):
     json_dict = json.dumps(url_dict).replace('"', '\\"')
     return json_dict
 
+def yaml_to_json_single_file(wildcards):
+    """Used only for calcium extraction because we get a weird wildcard input"""
+    experiment_path = day_animal_rig_trial_selector(wildcards)
+    python_dict = yaml.load(config["file_info"][os.path.basename(experiment_path)[:-4]], Loader=yaml.FullLoader)
+    url_dict = {os.path.basename(experiment_path)[:-4]: python_dict['url']}
+    # escape the double quotes inside the json
+    json_dict = json.dumps(url_dict).replace('"', '\\"')
+    return json_dict
+
 rule dlc_extraction:
     """Runs DLC in a new process in its conda environment"""
     input:
@@ -69,14 +78,15 @@ def day_animal_rig_trial_selector(wildcards):
 # TODO finish this rule and separate from calcium extract
 # rule calcium_denoise:
 #     input:
-#         day_trial_selector
+#         day_animal_rig_trial_selector
 #     output:
-#         os.path.join(paths.temp_path, '{animal}', '{rig}', '{file}_denoised.tif')
+#         os.path.join(paths.temp_path, r'{file}_denoised.tif')
 #     params:
 #         info=yaml_to_json_single_file,
 #         denoising_path=config["denoising_path"]
+#         processing_dir = paths.temp_path
 #     shell:
-#         r'python "{params.denoising_path}" "{input}" "{output}" "{params.info}"'
+#         r'python "{params.denoising_path}" "{input}" "{output}" "{params.processing_dir}" "{params.info}"'
 
 
 rule calcium_extract:
@@ -85,7 +95,7 @@ rule calcium_extract:
     output:
         os.path.join(paths.analysis_path,'{file}_calciumraw.hdf5')
     params:
-        info=yaml_to_json,
+        info=yaml_to_json_single_file,
         cnmfe_path=config["cnmfe_path"]
     shell:
         r'conda activate minian && python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
