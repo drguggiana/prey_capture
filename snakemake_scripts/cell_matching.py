@@ -58,6 +58,8 @@ template_list = []
 # frame_lists = []
 # also store the date for each file
 date_list = []
+# store the rig for each file
+rig_list = []
 # load the calcium data
 for files in calcium_path:
     with h5py.File(files, mode='r') as f:
@@ -91,6 +93,7 @@ for files in calcium_path:
         rig = os.path.basename(files).split('_')[6]
         if rig in ['VTuning', 'VWheel', 'VTuningWF', 'VWheelWF']:
             date_list.append('_'.join((date, rig)))
+            rig_list.append(rig)
         else:
             date_list.append(date)
         # frame_lists.append(np.array(f['frame_list']))
@@ -112,6 +115,12 @@ with h5py.File(out_path, 'w') as f:
     f.create_dataset('assignments', data=assignments)
     # f.create_dataset('matchings', data=np.array(matchings))
     f.create_dataset('date_list', data=np.array(date_list).astype('S20'))
+
+# Check if there are unique rigs or not
+if len(set(rig_list)) == 1:
+    rig = rig_list[0]
+else:
+    rig = 'multi'
 
 # create the appropriate bondjango entry
 entry_data = {

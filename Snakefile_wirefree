@@ -112,7 +112,6 @@ def day_animal_rig_calcium_file(wildcards):
 rule calcium_scatter:
     input:
         rules.calcium_extract.output
-        # day_animal_rig_calcium_file
     output:
         os.path.join(config["target_path"], "{file}_calcium.hdf5"),
     params:
