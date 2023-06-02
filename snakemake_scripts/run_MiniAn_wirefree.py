@@ -6,7 +6,7 @@ from dask.distributed import Client, LocalCluster
 import paths
 
 
-def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
+def minian_main(rig, animal, override_dpath=None, subset_start_idx=400):
 
     # Set up Initial Basic Parameters#
     minian_path = paths.minian_path
@@ -55,7 +55,7 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
     # Load the yaml file containing the relevant parameters
     with open(paths.minian_parameters, 'r') as f:
         # Load the contents of the file into a dictionary
-        params = yaml.safe_load(f)
+        params = yaml.unsafe_load(f)
         # Get the parameters based on the animal and rig
         animal_rig_params = params.get(animal).get(rig)
         # Get the default param set
@@ -66,9 +66,9 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
 
     param_pnr_refine = {"noise_freq": noise_freq, "thres": 1.05}
     param_ks_refine = {"sig": 0.05}
-    param_seeds_merge = {"thres_dist": 5, "thres_corr": 0.8, "noise_freq": noise_freq}
-    param_initialize = {"thres_corr": 0.8, "wnd": 18, "noise_freq": noise_freq}
-    param_init_merge = {"thres_corr": 0.8}
+    param_seeds_merge = {"thres_dist": 3, "thres_corr": 0.85, "noise_freq": noise_freq}
+    param_initialize = {"thres_corr": 0.85, "wnd": 15, "noise_freq": noise_freq}
+    param_init_merge = {"thres_corr": 0.85}
 
     # CNMF Parameters #
     # Most of these are loaded from the minian_params_wirefree.yaml file, but have defaults set just in case
@@ -117,6 +117,7 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
         load_videos,
         open_minian,
         save_minian,
+        rechunk_like,
     )
 
     # get the path
@@ -128,7 +129,7 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
         memory_limit="10GB",
         resources={"MEM": 1},
         threads_per_worker=2,
-        dashboard_address=":8787",
+        dashboard_address=":8789",
     )
 
     annt_plugin = TaskAnnotation()
@@ -141,12 +142,10 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
     print(f'Current chunk size: {chk}')
 
     # intermediate save
-    varr = save_minian(
-        varr.chunk({"frame": chk["frame"], "height": -1, "width": -1}).rename("varr"),
-        intpath,
-        overwrite=True,
-    )
-    # subset so that we exclude the first 200 frames and the last frame
+    varr = save_minian(varr.chunk({"frame": chk["frame"], "height": -1, "width": -1}).rename("varr"), intpath,
+                       overwrite=True)
+
+    # subset so that we exclude the first n frames and the last frame
     last_idx = int(varr.frame[-2].values)
     varr_ref = varr.sel(frame=slice(subset_start_idx, last_idx))
 
@@ -154,14 +153,16 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
     print("background correction")
 
     # remove glow
-    varr_min = varr_ref.chunk({"frame": -1, "height": -1, "width": -1}).quantile(0.0025, dim="frame", skipna=True).compute()
+    varr_min = varr_ref.chunk({"frame": -1, "height": -1, "width": -1}).quantile(0.0025,
+                                                                                 dim="frame", skipna=True).compute()
     varr_min = varr_min - np.min(varr_min)
-    varr_ref -= varr_min
+    varr_ref = varr_ref - varr_min
     varr_ref = varr_ref.where(varr_ref > 0, 0).astype(np.uint8)
 
     # Rechunk
-    chk, _ = get_optimal_chk(varr_ref, dtype=float)
-    varr_ref = varr_ref.chunk({"frame": chk["frame"], "height": -1, "width": -1}).rename("varr_ref")
+    # chk, _ = get_optimal_chk(varr_ref, dtype=float)
+    # varr_ref = varr_ref.chunk({"frame": chk["frame"], "height": -1, "width": -1}).rename("varr_ref")
+    varr_ref = rechunk_like(varr_ref, varr)
 
     # denoise
     varr_ref = denoise(varr_ref, **param_denoise)
@@ -178,25 +179,15 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
     motion = estimate_motion(varr_ref.sel(subset_mc), **param_estimate_motion)
 
     # save motion estimate
-    motion = save_minian(
-        motion.rename("motion").chunk({"frame": chk["frame"]}), **param_save_minian
-    )
+    motion = save_minian(motion.rename("motion").chunk({"frame": chk["frame"]}), **param_save_minian)
 
     # apply motion correction
     Y = apply_transform(varr_ref, motion, fill=0)
 
     # save motion corrected results
     Y_fm_chk = save_minian(Y.astype(float).rename("Y_fm_chk"), intpath, overwrite=True)
-    Y_hw_chk = save_minian(
-        Y_fm_chk.rename("Y_hw_chk"),
-        intpath,
-        overwrite=True,
-        chunks={"frame": -1, "height": chk["height"], "width": chk["width"]},
-    )
-
-    # # OPTIONAL generate motion corrected video
-    # vid_arr = xr.concat([varr_ref, Y_fm_chk], "width").chunk({"width": -1})
-    # write_video(vid_arr, "minian_mc.mp4", dpath)
+    Y_hw_chk = save_minian(Y_fm_chk.rename("Y_hw_chk"), intpath, overwrite=True,
+                           chunks={"frame": -1, "height": chk["height"], "width": chk["width"]})
 
     # Added by MM, not part of minian pipeline
     # Get average frame fluorescence across the recording
@@ -226,20 +217,13 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
 
     # initialize temporal matrix
     C_init = initC(Y_fm_chk, A_init)
-    C_init = save_minian(
-        C_init.rename("C_init"), intpath, overwrite=True, chunks={"unit_id": 1, "frame": -1}
-    )
+    C_init = save_minian(C_init.rename("C_init"), intpath, overwrite=True, chunks={"unit_id": 1, "frame": -1})
 
     # merge units from initialization
     A, C = unit_merge(A_init, C_init, **param_init_merge)
     A = save_minian(A.rename("A"), intpath, overwrite=True)
     C = save_minian(C.rename("C"), intpath, overwrite=True)
-    C_chk = save_minian(
-        C.rename("C_chk"),
-        intpath,
-        overwrite=True,
-        chunks={"unit_id": -1, "frame": chk["frame"]},
-    )
+    C_chk = save_minian(C.rename("C_chk"), intpath, overwrite=True, chunks={"unit_id": -1, "frame": chk["frame"]})
 
     # initialize background terms
     b, f = update_background(Y_fm_chk, A, C_chk)
@@ -256,50 +240,33 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
     print("spatial update 1")
     A_new, mask, norm_fac = update_spatial(Y_hw_chk, A, C, sn_spatial, **param_first_spatial)
     C_new = save_minian((C.sel(unit_id=mask) * norm_fac).rename("C_new"), intpath, overwrite=True)
-    C_chk_new = save_minian((C_chk.sel(unit_id=mask) * norm_fac).rename("C_chk_new"), intpath, overwrite=True
-    )
+    C_chk_new = save_minian((C_chk.sel(unit_id=mask) * norm_fac).rename("C_chk_new"), intpath, overwrite=True)
+
     # update background
     b_new, f_new = update_background(Y_fm_chk, A_new, C_chk_new)
 
     # save spatial results
-    A = save_minian(
-        A_new.rename("A"),
-        intpath,
-        overwrite=True,
-        chunks={"unit_id": 1, "height": -1, "width": -1},
-    )
+    A = save_minian(A_new.rename("A"), intpath, overwrite=True, chunks={"unit_id": 1, "height": -1, "width": -1})
     b = save_minian(b_new.rename("b"), intpath, overwrite=True)
     f = save_minian(f_new.chunk({"frame": chk["frame"]}).rename("f"), intpath, overwrite=True)
     C = save_minian(C_new.rename("C"), intpath, overwrite=True)
     C_chk = save_minian(C_chk_new.rename("C_chk"), intpath, overwrite=True)
 
     # save raw signal for temporal update
-    YrA = save_minian(
-        compute_trace(Y_fm_chk, A, b, C_chk, f).rename("YrA"),
-        intpath,
-        overwrite=True,
-        chunks={"unit_id": 1, "frame": -1},
-    )
+    YrA = save_minian(compute_trace(Y_fm_chk, A, b, C_chk, f).rename("YrA"), intpath,
+                      overwrite=True, chunks={"unit_id": 1, "frame": -1})
 
     # temporal update 1
     print("temporal update 1")
-    C_new, S_new, b0_new, c0_new, g, mask = update_temporal(
-        A, C, YrA=YrA, **param_first_temporal
-    )
+    C_new, S_new, b0_new, c0_new, g, mask = update_temporal(A, C, YrA=YrA, **param_first_temporal)
 
     # save temporal results
-    C = save_minian(
-        C_new.rename("C").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True
-    )
-    C_chk = save_minian(
-        C.rename("C_chk"),
-        intpath,
-        overwrite=True,
-        chunks={"unit_id": -1, "frame": chk["frame"]},
-    )
+    C = save_minian(C_new.rename("C").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
+    C_chk = save_minian(C.rename("C_chk"), intpath, overwrite=True, chunks={"unit_id": -1, "frame": chk["frame"]})
     S = save_minian(S_new.rename("S").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
     b0 = save_minian(b0_new.rename("b0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
     c0 = save_minian(c0_new.rename("c0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
+
     A = A.sel(unit_id=C.coords["unit_id"].values)
 
     # merge units
@@ -308,65 +275,36 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=200):
     # save merged results
     A = save_minian(A_mrg.rename("A_mrg"), intpath, overwrite=True)
     C = save_minian(C_mrg.rename("C_mrg"), intpath, overwrite=True)
-    C_chk = save_minian(
-        C.rename("C_mrg_chk"),
-        intpath,
-        overwrite=True,
-        chunks={"unit_id": -1, "frame": chk["frame"]},
-    )
+    C_chk = save_minian(C.rename("C_mrg_chk"), intpath, overwrite=True, chunks={"unit_id": -1, "frame": chk["frame"]})
     sig = save_minian(sig_mrg.rename("sig_mrg"), intpath, overwrite=True)
 
     # second spatial update
     print("spatial update 2")
-    A_new, mask, norm_fac = update_spatial(
-        Y_hw_chk, A, C, sn_spatial, **param_second_spatial
-    )
-    C_new = save_minian(
-        (C.sel(unit_id=mask) * norm_fac).rename("C_new"), intpath, overwrite=True
-    )
-    C_chk_new = save_minian(
-        (C_chk.sel(unit_id=mask) * norm_fac).rename("C_chk_new"), intpath, overwrite=True
-    )
+    A_new, mask, norm_fac = update_spatial(Y_hw_chk, A, C, sn_spatial, **param_second_spatial)
+    C_new = save_minian((C.sel(unit_id=mask) * norm_fac).rename("C_new"), intpath, overwrite=True)
+    C_chk_new = save_minian((C_chk.sel(unit_id=mask) * norm_fac).rename("C_chk_new"), intpath, overwrite=True)
 
     # update background
     b_new, f_new = update_background(Y_fm_chk, A_new, C_chk_new)
 
     # save second spatial results
-    A = save_minian(
-        A_new.rename("A"),
-        intpath,
-        overwrite=True,
-        chunks={"unit_id": 1, "height": -1, "width": -1},
-    )
+    A = save_minian(A_new.rename("A"), intpath, overwrite=True, chunks={"unit_id": 1, "height": -1, "width": -1})
     b = save_minian(b_new.rename("b"), intpath, overwrite=True)
     f = save_minian(f_new.chunk({"frame": chk["frame"]}).rename("f"), intpath, overwrite=True)
     C = save_minian(C_new.rename("C"), intpath, overwrite=True)
     C_chk = save_minian(C_chk_new.rename("C_chk"), intpath, overwrite=True)
 
     # save second raw for temporal
-    YrA = save_minian(
-        compute_trace(Y_fm_chk, A, b, C_chk, f).rename("YrA"),
-        intpath,
-        overwrite=True,
-        chunks={"unit_id": 1, "frame": -1},
-    )
+    YrA = save_minian(compute_trace(Y_fm_chk, A, b, C_chk, f).rename("YrA"), intpath,
+                      overwrite=True, chunks={"unit_id": 1, "frame": -1},)
 
     # second temporal update
     print("temporal update 2")
-    C_new, S_new, b0_new, c0_new, g, mask = update_temporal(
-        A, C, YrA=YrA, **param_second_temporal
-    )
+    C_new, S_new, b0_new, c0_new, g, mask = update_temporal(A, C, YrA=YrA, **param_second_temporal)
 
     # save second temporal results
-    C = save_minian(
-        C_new.rename("C").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True
-    )
-    C_chk = save_minian(
-        C.rename("C_chk"),
-        intpath,
-        overwrite=True,
-        chunks={"unit_id": -1, "frame": chk["frame"]},
-    )
+    C = save_minian(C_new.rename("C").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
+    C_chk = save_minian(C.rename("C_chk"), intpath, overwrite=True, chunks={"unit_id": -1, "frame": chk["frame"]})
     S = save_minian(S_new.rename("S").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
     b0 = save_minian(b0_new.rename("b0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
     c0 = save_minian(c0_new.rename("c0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)

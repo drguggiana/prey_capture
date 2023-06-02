@@ -22,7 +22,7 @@ def find_unmatched_files(target_directory, animals, regex_pattern, exp_to_match)
             unmatched = [file for file in animal_filenames if date in file]
             unmatched_experiments.extend(unmatched)
 
-    print('The following files are unmatched:')
+    print(f'The following {len(unmatched_experiments)} files are unmatched:')
     if len(unmatched_experiments) > 0:
         for exp in unmatched_experiments:
             print('    ' + exp)
@@ -41,7 +41,7 @@ def find_files_with_missing_ca(target_directory, regex_pattern, exp_to_match):
     keep_with_ca_basenames = [os.path.basename(file).split('.')[0] for file in keep_ca_files]
     files_without_ca = [file for file in keep_file_basenames if file not in keep_with_ca_basenames]
 
-    print('\nThe following files do not have calcium data:')
+    print(f'\nThe following {len(files_without_ca)} files do not have calcium data:')
     if len(files_without_ca) > 0:
         for exp in files_without_ca:
             print('    ' + exp)
@@ -63,7 +63,7 @@ def find_empty_ROIS(target_directory, regex_pattern, exp_to_match):
                 if (type(calcium_data) == np.ndarray) and np.any(calcium_data.astype(str) == 'no_ROIs'):
                     no_ROI_exps.append(calcium_path)
 
-    print('\nThe following files do not have ROIS:')
+    print(f'\nThe following {len(no_ROI_exps)} files do not have ROIS:')
     if len(no_ROI_exps) > 0:
         for exp in no_ROI_exps:
             print('    ' + exp)
