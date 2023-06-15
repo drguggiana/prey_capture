@@ -48,7 +48,6 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=400):
     # Denoising and background removal #
     # param_denoise = {"method": "median", "ksize": 5}
     param_denoise = animal_rig_params.get('param_denoise', default_params['param_denoise'])
-
     param_background_removal = {"method": "tophat", "wnd": 15}
 
     # Motion Correction Parameters #
