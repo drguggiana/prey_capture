@@ -21,6 +21,15 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=400):
     intpath = paths.temp_minian
     n_workers = int(os.getenv("MINIAN_NWORKERS", 4))
 
+    # Load the yaml file containing the relevant parameters
+    with open(paths.minian_parameters, 'r') as f:
+        # Load the contents of the file into a dictionary
+        params = yaml.unsafe_load(f)
+        # Get the parameters based on the animal and rig
+        animal_rig_params = params.get(animal).get(rig)
+        # Get the default param set
+        default_params = params.get('default')
+
     param_save_minian = {
         "dpath": minian_ds_path,
         "meta_dict": dict(session=-1, animal=-2),
@@ -35,8 +44,11 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=400):
         "downsample": dict(frame=1, height=1, width=1),
         "downsample_strategy": "subset",
     }
+
     # Denoising and background removal #
-    param_denoise = {"method": "median", "ksize": 5}
+    # param_denoise = {"method": "median", "ksize": 5}
+    param_denoise = animal_rig_params.get('param_denoise', default_params['param_denoise'])
+
     param_background_removal = {"method": "tophat", "wnd": 15}
 
     # Motion Correction Parameters #
@@ -51,15 +63,6 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=400):
         "max_wnd": 20,
         "diff_thres": 3,
     }
-
-    # Load the yaml file containing the relevant parameters
-    with open(paths.minian_parameters, 'r') as f:
-        # Load the contents of the file into a dictionary
-        params = yaml.unsafe_load(f)
-        # Get the parameters based on the animal and rig
-        animal_rig_params = params.get(animal).get(rig)
-        # Get the default param set
-        default_params = params.get('default')
 
     # Load the noise_freq from the yaml, but have a default as well
     noise_freq = animal_rig_params.get('noise_freq', default_params['noise_freq'])
@@ -126,7 +129,7 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=400):
     # start the cluster
     cluster = LocalCluster(
         n_workers=n_workers,
-        memory_limit="10GB",
+        memory_limit="15GB",
         resources={"MEM": 1},
         threads_per_worker=2,
         dashboard_address=":8789",
