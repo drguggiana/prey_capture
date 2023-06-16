@@ -94,7 +94,7 @@ if __name__ == "__main__":
 
         # produce the contour figure
         calcium_pic = np.sum(minian_out['A'] > 0, axis=0)
-        # plt.imshow(calcium_pic)
+        plt.imshow(calcium_pic)
 
         # assemble the pic path
         pic_path = out_path.replace('_calciumraw.hdf5', '_calciumpic.tif')
