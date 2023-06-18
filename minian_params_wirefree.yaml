@@ -219,7 +219,6 @@ MM_221109_a:
       add_lag: 10
       jac_thres: 0.5
 
-#TODO
 MM_221110_a:
   VTuningWF:
     noise_freq: 0.05
