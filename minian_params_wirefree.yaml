@@ -30,6 +30,8 @@ default:
     add_lag: 20
     jac_thres: 0.5
 
+### --- Cohort 1 --- ###
+
 MM_220915_a:
   VTuningWF:
     noise_freq: 0.05
@@ -280,4 +282,258 @@ MM_221110_a:
       sparse_penal: 1.0
       p: 2
       add_lag: 10
+      jac_thres: 0.5
+
+### ---Cohort 2 --- ###
+# TODO
+MM_230516_a:
+  VTuningWF:
+    noise_freq: 0.05
+
+    param_denoise:
+      method: "median"
+      ksize: 3
+
+    param_first_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.0025
+      size_thres: !!python/tuple [20, 400]
+
+    param_first_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+
+    param_second_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.0025
+      size_thres: !!python/tuple [20, 400]
+
+    param_second_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+
+  VWheelWF:
+    noise_freq: 0.05
+
+    param_denoise:
+      method: "median"
+      ksize: 5
+
+    param_first_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.005
+      size_thres: !!python/tuple [20, 400]
+
+    param_first_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+
+    param_second_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.005
+      size_thres: !!python/tuple [20, 400]
+
+    param_second_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+# TODO
+MM_230517_a:
+  VTuningWF:
+    noise_freq: 0.05
+
+    param_denoise:
+      method: "median"
+      ksize: 3
+
+    param_first_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.0025
+      size_thres: !!python/tuple [20, 400]
+
+    param_first_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+
+    param_second_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.0025
+      size_thres: !!python/tuple [20, 400]
+
+    param_second_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+
+  VWheelWF:
+    noise_freq: 0.05
+
+    param_denoise:
+      method: "median"
+      ksize: 5
+
+    param_first_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.005
+      size_thres: !!python/tuple [20, 400]
+
+    param_first_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+
+    param_second_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.005
+      size_thres: !!python/tuple [20, 400]
+
+    param_second_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+# TODO
+MM_230517_b:
+  VTuningWF:
+    noise_freq: 0.05
+
+    param_denoise:
+      method: "median"
+      ksize: 3
+
+    param_first_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.0025
+      size_thres: !!python/tuple [20, 400]
+
+    param_first_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+
+    param_second_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.0025
+      size_thres: !!python/tuple [20, 400]
+
+    param_second_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+
+  VWheelWF:
+    noise_freq: 0.05
+
+    param_denoise:
+      method: "median"
+      ksize: 5
+
+    param_first_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.005
+      size_thres: !!python/tuple [20, 400]
+
+    param_first_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+
+    param_second_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.005
+      size_thres: !!python/tuple [20, 400]
+
+    param_second_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 10
+      jac_thres: 0.5
+
+MM_230518_b:
+  VTuningWF:
+    noise_freq: 0.05
+
+    param_denoise:
+      method: "median"
+      ksize: 3
+
+    param_first_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.005
+      size_thres: !!python/tuple [20, 400]
+
+    param_first_temporal:
+      noise_freq: 0.05
+      sparse_penal: 0.75
+      p: 2
+      add_lag: 5
+      jac_thres: 0.5
+
+    param_second_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.005
+      size_thres: !!python/tuple [20, 400]
+
+    param_second_temporal:
+      noise_freq: 0.05
+      sparse_penal: 0.75
+      p: 2
+      add_lag: 5
+      jac_thres: 0.5
+
+  VWheelWF:
+    noise_freq: 0.05
+
+    param_denoise:
+      method: "median"
+      ksize: 5
+
+    param_first_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.005
+      size_thres: !!python/tuple [20, 400]
+
+    param_first_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 5
+      jac_thres: 0.5
+
+    param_second_spatial:
+      dl_wnd: 5
+      sparse_penal: 0.005
+      size_thres: !!python/tuple [20, 400]
+
+    param_second_temporal:
+      noise_freq: 0.05
+      sparse_penal: 1.0
+      p: 2
+      add_lag: 5
       jac_thres: 0.5

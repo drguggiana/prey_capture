@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+from tqdm import tqdm
 from scipy.signal import butter, filtfilt
 from skimage import io
 
@@ -48,7 +49,7 @@ def apply_spatial_filter(stack, fft_mask):
 
     # Need to go frame by frame to avoid memory overflow
     stack_back = np.zeros(stack.shape, dtype=np.uint8)
-    for i, frame in enumerate(stack):
+    for i, frame in enumerate(tqdm(stack)):
         dft = np.fft.fftn(frame)
         dft_shift = np.fft.fftshift(dft)
         fshift = dft_shift * fft_mask
@@ -163,7 +164,7 @@ if __name__ == "__main__":
 
         return out_path_tif, out_path_log, im_1
 
-    base_path = r"D:\test_041423"
+    base_path = r"D:\minian_test\wirefree_fullstack\MM_230518_b"
     sub_dirs = os.listdir(base_path)
     sub_dirs = [os.path.join(base_path, d) for d in sub_dirs]
 
