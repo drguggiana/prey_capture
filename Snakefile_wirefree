@@ -204,7 +204,6 @@ def matched_day(wildcards):
     # # assemble the paths to the calciumraw files
     ca_files = ['_'.join((el, 'calciumraw.hdf5')) for el in matched_slugs]
     ca_files = [os.path.join(paths.analysis_path, el) for el in ca_files]
-    print(ca_files)
     return ca_files
 
 
