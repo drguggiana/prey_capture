@@ -2,9 +2,7 @@ import numpy as np
 import pycircstat as circ
 from scipy.stats import sem, norm, binned_statistic, percentileofscore, ttest_1samp, ttest_ind
 from scipy.optimize import least_squares
-
 import functions_kinematic as fk
-
 
 
 def gaussian(x, c, mu, sigma):
@@ -109,3 +107,31 @@ def calculate_pref_orientation(angles, tuning_curve, **kwargs):
     real_pref = angles[np.argmin(np.abs(angles - pref))]
 
     return fit, (x, fit_curve), pref, real_pref
+
+
+### --- For circular statistics --- ###
+# def fit_von_mises(angles, magnitudes):
+#     resultant_length, mean_angle = polar_vector_sum(magnitudes, angles)
+#     kappa = circ.kappa(resultant_length)
+#
+#     x = np.deg2rad(np.linspace(angles.min(), angles.max(), 1000, endpoint=True))
+#     mean, var = circ.distributions.vonmises.stats(kappa, moments='mv')
+#     fit_curve = circ.distributions.vonmises.pdf(x, kappa, loc=np.deg2rad(mean_angle))
+#     return fit_curve, mean, var
+
+
+# def fit_von_mises2(angles, magnitudes):
+#     if max(angles) > 2 * np.pi:
+#         angles = np.deg2rad(angles)
+#
+#     kappa = circ.kappa(angles)
+#
+#     x = np.linspace(angles.min(), angles.max(), 1000, endpoint=True)
+#
+#     # Take a guess at the location of the peak using max value
+#     loc_max = angles[np.argmax(magnitudes)]
+#
+#     r = circ.distributions.vonmises.rvs(kappa, loc=loc_max)
+#     vonmises = circ.distributions.vonmises.fit()
+#
+#     return fit_curve, mean, var

@@ -185,13 +185,12 @@ def match_animal_selector(wildcards):
 
 # --- Cell matching across the experiments of a given animal on a particular day --- #
 def matched_day(wildcards):
-
     """Finds the matching session for a given file from the same mouse on the same day. This matched files paths are
     fed to the rule match_cells_day"""
 
     name_parts = wildcards.file.split('_')
 
-    day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%d_%m_%Y').strftime('%m_%d_%Y')
+    day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%m_%d_%Y')
     animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
 
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
@@ -205,7 +204,7 @@ def matched_day(wildcards):
     # # assemble the paths to the calciumraw files
     ca_files = ['_'.join((el, 'calciumraw.hdf5')) for el in matched_slugs]
     ca_files = [os.path.join(paths.analysis_path, el) for el in ca_files]
-
+    print(ca_files)
     return ca_files
 
 
@@ -217,16 +216,46 @@ rule match_cells_day:
     shell:
         r'conda activate caiman & python "{paths.matching_script}" "{input}" "{output}"'
 
+def check_both_calcium_files(file):
+    name_parts = file.split('_')
+    day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y')
+    animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
+
+    info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
+
+    # leave only the files with calcium data on that given day for that mouse
+    matched_slugs = np.unique([os.path.basename(el['avi_path']).split('.')[0] for el in info_list
+                         if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
+                         (animal in el['mouse']) &
+                         (day in el['slug'])])
+
+    # # assemble the paths to the calciumraw files
+    ca_files = ['_'.join((el, 'calciumraw.hdf5')) for el in matched_slugs]
+    ca_files = [os.path.join(paths.analysis_path, el) for el in ca_files]
+    both_exist = sum([os.path.isfile(file) for file in ca_files])
+    if both_exist > 1:
+        return True
+    else:
+        return False
+
 def match_day_selector(wildcards):
     """Returns a path for cell matching across experiments for a given animal on a given day if calcium data is present
     for the file in question. This triggers the match_cells_day rule."""
 
+    # If the experiment has calcium data, try matching
     if config["calcium_flag"][wildcards.file]:
-        python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
-        animal = python_dict['mouse']
-        name_parts = wildcards.file.split('_')
-        day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y').strftime('%d_%m_%Y')
-        return os.path.join(paths.analysis_path,'_'.join((day, animal, 'dayCellMatch.hdf5')))
+
+        # Check if both Ca2+ files exist. If they do, proceed with the matching
+        if check_both_calcium_files:
+            python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+            animal = python_dict['mouse']
+            name_parts = wildcards.file.split('_')
+            day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y').strftime('%m_%d_%Y')
+            return os.path.join(paths.analysis_path,'_'.join((day, animal, 'dayCellMatch.hdf5')))
+
+        # Otherwise return the avi path
+        else:
+            return os.path.join(config["target_path"],config["files"][wildcards.file] + '.avi')
     else:
         return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
 
