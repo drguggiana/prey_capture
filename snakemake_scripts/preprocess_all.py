@@ -65,7 +65,8 @@ except NameError:
     raw_path = files['avi_path']
     calcium_path = files['avi_path'][:-4] + '_calcium.hdf5'
     # match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], files['rig'], 'cellMatch.hdf5')))
-    match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], 'cellMatch.hdf5')))
+    day = files['slug'][:10]
+    match_path = os.path.join(paths.analysis_path, '_'.join((day, files['mouse'], 'dayCellMatch.hdf5')))
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
                              os.path.basename(files['avi_path'][:-4]))+'_rawcoord.hdf5'

@@ -92,7 +92,9 @@ for files in calcium_path:
         date = os.path.basename(files)[:10]
         rig = os.path.basename(files).split('_')[6]
         if rig in ['VTuning', 'VWheel', 'VTuningWF', 'VWheelWF']:
-            date_list.append('_'.join((date, rig)))
+            trial = re.findall(r'fixed\d', files) + re.findall(r'free\d', files)
+            trial = trial[0]
+            date_list.append('_'.join((date, rig, trial)))
             rig_list.append(rig)
         else:
             date_list.append(date)
@@ -114,7 +116,7 @@ with h5py.File(out_path, 'w') as f:
     #     f.create_dataset(key, data=np.array(value))
     f.create_dataset('assignments', data=assignments)
     # f.create_dataset('matchings', data=np.array(matchings))
-    f.create_dataset('date_list', data=np.array(date_list).astype('S20'))
+    f.create_dataset('date_list', data=np.array(date_list).astype('S30'))
 
 # Check if there are unique rigs or not
 if len(set(rig_list)) == 1:

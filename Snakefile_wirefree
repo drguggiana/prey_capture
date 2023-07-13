@@ -215,7 +215,7 @@ rule match_cells_day:
     shell:
         r'conda activate caiman & python "{paths.matching_script}" "{input}" "{output}"'
 
-def check_both_calcium_files(file):
+def check_multiple_exist_calcium_files(file):
     name_parts = file.split('_')
     day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y')
     animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
@@ -231,8 +231,8 @@ def check_both_calcium_files(file):
     # # assemble the paths to the calciumraw files
     ca_files = ['_'.join((el, 'calciumraw.hdf5')) for el in matched_slugs]
     ca_files = [os.path.join(paths.analysis_path, el) for el in ca_files]
-    both_exist = sum([os.path.isfile(file) for file in ca_files])
-    if both_exist > 1:
+    multiple_exist = sum([os.path.isfile(file) for file in ca_files])
+    if multiple_exist > 1:
         return True
     else:
         return False
@@ -244,8 +244,8 @@ def match_day_selector(wildcards):
     # If the experiment has calcium data, try matching
     if config["calcium_flag"][wildcards.file]:
 
-        # Check if both Ca2+ files exist. If they do, proceed with the matching
-        if check_both_calcium_files:
+        # Check if multiple Ca2+ files from the day exist. If they do, proceed with the matching
+        if check_multiple_exist_calcium_files:
             python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
             animal = python_dict['mouse']
             name_parts = wildcards.file.split('_')
