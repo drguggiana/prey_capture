@@ -95,9 +95,9 @@ def _circfuncs_common(samples, high, low):
     return samples, ang
 
 
-def jump_killer(data_in, jump_threshold):
+def jump_killer(data_in, jump_threshold, discont=3.141592653589793):
     # unwrap the trace
-    data_in = unwrap(data_in)
+    data_in = unwrap(data_in, discont=discont)
     # id the large jumps
     smooth_map = np.concatenate(([1], np.abs(np.diff(data_in)) < jump_threshold)) == 1
     # generate a vector with indexes

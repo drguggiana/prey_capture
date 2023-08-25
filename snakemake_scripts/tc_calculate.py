@@ -50,7 +50,7 @@ def clip_calcium(pre_data):
         # get the non-cell data
         non_cell_data = current_df[not_cells]
         # get the current calcium data
-        cell_data = current_df[cells]
+        cell_data = current_df[cells].fillna(0)
 
         # do the cell clipping
         cell_data.apply(clipping_function, axis=1, raw=True, threshold=clip_threshold)
@@ -476,7 +476,7 @@ if __name__ == '__main__':
     for idx0, files in enumerate(input_path):
 
         # get the metadata
-        meta_list.append([data_all[idx0][el1] for el1 in processing_parameters.meta_fields])
+        # meta_list.append([data_all[idx0][el1] for el1 in processing_parameters.meta_fields])
 
         # load the data
         with pd.HDFStore(files, mode='r') as h:
@@ -506,6 +506,9 @@ if __name__ == '__main__':
                     motifs = pd.concat([motif_padding, motifs, motif_padding], axis=0).reset_index(drop=True)
                     # concatenate with the main data
                     dataframe = pd.concat([dataframe, egocentric_coords, latents, motifs], axis=1)
+
+                fluor_cols = [col for col in dataframe.columns if 'fluor' in col]
+                dataframe.drop(columns=fluor_cols, inplace=True)
                 # store
                 raw_data.append((files, dataframe))
 
@@ -551,8 +554,8 @@ if __name__ == '__main__':
             tcs_counts_dict[feature].to_hdf(out_path, feature+'_counts')
             # tcs_bins_dict[feature].to_hdf(out_path, feature + '_edges')
         # save the meta data
-        meta_data = pd.DataFrame(np.vstack(meta_list), columns=processing_parameters.meta_fields)
-        meta_data.to_hdf(out_path, 'meta_data')
+        # meta_data = pd.DataFrame(np.vstack(meta_list), columns=processing_parameters.meta_fields)
+        # meta_data.to_hdf(out_path, 'meta_data')
         # save as a new entry to the data base
         # assemble the entry data
         entry_data = {

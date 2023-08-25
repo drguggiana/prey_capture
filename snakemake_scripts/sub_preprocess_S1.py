@@ -450,6 +450,30 @@ def extract_motive(file_path_motive, rig, trials=None):
         parsed_path = parse_path(file_path_motive)
         # select the appropriate header
         if rig == 'VR':
+            """
+            ### --- Why we rename the coordinate system --- ###
+            (See Unity_DLC_coordinate_map.png)
+            Tracking happens in Motive and then gets passed to Unity. 
+            Motive is a right-handed coordinate system with X as the forward vector and Y as the upward (anti-gravity) vector.
+            Unity is a left-handed coordinate system with Z as the forward vector and Y as the upward (anti-gravity) vector.
+            This means that when the mouse moves forward in Motive, forward motion moves along +X, but along -X (NOT Z!) in Unity.
+            This transform is handled by a Unity plugin, so we don't need to think about it for position, but we do for rotations. 
+
+            We also track the body and other objects using DeepLabCut, which does pose estimation on 2D, top down images. 
+            We only get X and Y coordinates there. However, the DLC convention is to take Z as the upward (anti-gravity) vector. 
+            We want all of these coordinate spaces to match, so we remap the Unity coordiantes such that:
+            (up) Unity Y = DLC Z
+            (forward) Unity Z = DLC X
+            (lateral) Unity X = DLC Y
+
+            We rename the rotations similarly. Note here that the names correspond to rotations about tha axis in DLC space.
+            Because of the handedness shift, all Unity rotations are negated from what we see in Motive
+            mouse_xrot_m is rotation about unity Z axis (x axis moves up/down), correponds to mouse pitch.
+            mouse_yrot_m is rotation about unity X axis (y axis moves side to side), correponds to mouse roll.
+            mouse_zrot_m is rotation about unity Y axis (z axis moves left/right), correponds to mouse yaw.
+            
+            """
+
             # if it's before the sync files, exclude the last column
             if parsed_path['datetime'] <= datetime.datetime(year=2019, month=11, day=10):
                 column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',

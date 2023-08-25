@@ -308,6 +308,7 @@ def match_rig_selector(wildcards):
         return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
 
 
+
 rule preprocess:
     input:
           dlc_input_selector,
@@ -374,7 +375,7 @@ def files_to_day(wildcards):
     animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
 
-    day_routes = [el['avi_path'].replace('.avi', '_preproc.hdf5').replace('VideoExperiment', 'AnalyzedData')
+    day_routes = [el['avi_path'].replace('.avi', '_preproc.hdf5').replace('VRExperiment', 'AnalyzedData')
                   for el in info_list if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]]
                   and el['mouse']==animal and el['date'][:10]==day)]
 
@@ -408,6 +409,18 @@ def all_days(wildcards):
                  for el in unique_patterns]
 
     return path_list
+
+
+rule tc_day:
+    input:
+        files_to_day,
+    output:
+        os.path.join(paths.analysis_path,'{file}_tcday.hdf5'),
+    params:
+        file_info = config["file_info"],
+    script:
+        "snakemake_scripts/tc_calculate.py"
+
 
 rule combinedanalysis_run:
     input:

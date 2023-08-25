@@ -4,31 +4,29 @@ import xarray as xr
 
 from ast import literal_eval
 from functions_kinematic import wrap
-import functions_tuning as tuning
+
 
 
 class DataContainer():
-    pass
+    def list_attributes(self):
+        return list(self.__dict__.keys())
 
-
-class Cell():
-    def __init__(self, name):
-        self.id = name
-        self.spikes_props = DataContainer()
-        self.fluor_props = DataContainer()
-
-    # def plot_tuning_curve(self)
-
-
-class Metadata():
+class Metadata(DataContainer):
     def __init__(self, dictionary):
         for k, v in dictionary.items():           
             setattr(self, k, v)
 
 
+class Cell(DataContainer):
+    def __init__(self, name):
+        self.id = name
 
-class WirefreeExperiment():
-    def __init__(self, filepath, use_xarray=False):
+    def _add_attribute_container(self, name):
+        setattr(self, name, DataContainer())
+
+
+class WirefreeExperiment(DataContainer):
+    def __init__(self, filepath, load_from='preproc', use_xarray=False):
         # Experiment attributes
         self.metadata = None
 
@@ -46,7 +44,9 @@ class WirefreeExperiment():
         self.raw_fluor = None
 
         # Load the data
-        self._load_hdf(filepath, use_xarray)
+        if load_from == 'preproc':
+            self._load_preprocessing(filepath, use_xarray)
+
         print(f'Loaded experiment from {filepath}')
 
         # Create cell objects
@@ -54,7 +54,27 @@ class WirefreeExperiment():
         self.cell_props = self._create_cell_class()
 
 
-    def _load_hdf(self, file, use_xarray):
+    def add_attributes_to_cells(self, attributes):
+        # Populate cell objects with attributes
+        for cell_id, cell_obj in self.cell_props.items():
+            for attribute in attributes:
+                ds = getattr(self, attribute)
+                value = ds.iloc[:, [*range(6), ds.columns.get_loc(cell_id)]]
+                setattr(cell_obj, attribute, value)
+
+    # def load_cell_properties(self, file):
+
+    def save_hdf(self, file, attributes):
+        for attribute in attributes:
+            df = getattr(self, attribute)
+            df.to_hdf(file, attribute, mode='a', format='fixed')
+
+    def save_cell_properties(self, file, attributes):
+        for attribute in attributes:
+            df = self._cellprops_to_dataframe(attribute)
+            df.to_hdf(file, attribute, mode='a', format='fixed')
+
+    def _load_preprocessing(self, file, use_xarray):
         """
         Load the data from the HDF file
         
@@ -68,20 +88,20 @@ class WirefreeExperiment():
 
         with pd.HDFStore(file) as h:
 
-                self._parse_params(h['params'])
-                self._add_orientation_to_params()
-            
-                self._parse_kinematic_data(h['matched_calcium'], use_xarray)
+            self._parse_params(h['params'])
+            self._add_orientation_to_params()
+        
+            self._parse_kinematic_data(h['matched_calcium'], use_xarray)
 
-                if use_xarray:
-                    self.full_kinematics = h['full_traces'].to_xarray()
-                else:
-                    self.full_kinematics = h['full_traces']
+            if use_xarray:
+                self.full_kinematics = h['full_traces'].to_xarray()
+            else:
+                self.full_kinematics = h['full_traces']
 
-                self.roi_info = h['roi_info']
-                self.trial_set = h['trial_set']
-                self.cell_matches = h['cell_matches']
-                self.arena_corners = h['arena_corners']
+            self.roi_info = h['roi_info']
+            self.trial_set = h['trial_set']
+            self.cell_matches = h['cell_matches'].dropna().reset_index(drop=True).astype('int')
+            self.arena_corners = h['arena_corners']
 
     def _parse_kinematic_data(self, matched_calcium, use_xarray):
 
@@ -172,3 +192,13 @@ class WirefreeExperiment():
             cell_props[cell] = Cell(cell)
 
         return cell_props
+
+    def _cellprops_to_dataframe(self, attribute):
+        df_list = []
+        for cell_id, cell in self.cell_props.items():
+            df = getattr(cell, attribute).copy()
+            df.insert(loc=0, column='cell_id', value=cell_id)
+            df_list.append(df)
+
+        attr_df = pd.concat(df_list).reset_index(drop=True)
+        return attr_df

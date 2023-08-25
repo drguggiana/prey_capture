@@ -112,11 +112,11 @@ for idx, target_entries in enumerate(full_queries):
                               # '--use-conda',
                               # '-F',         # (hard) force rerun everything
                               # '-f',         # (soft) force rerun last step
-                              # '--unlock',   # unlocks the files after force quit
+                              '--unlock',   # unlocks the files after force quit
                               '--rerun-incomplete',
                               '--verbose',  # make the output more verbose for debugging
                               # '--debug-dag',  # show the file selection operation, also for debugging
-                              # '--dryrun',  # generates the DAG and everything, but doesn't process
+                              # '--dryrun',  # generates the DAG and everything, but doesn't process,
                               # '--reason',  # print the reason for executing each job
                               ],
                              stdout=sp.PIPE,

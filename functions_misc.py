@@ -175,3 +175,7 @@ def list_lists_to_array(list_of_lists):
         new_array[row, :len(l)] = l
 
     return new_array
+
+def find_nearest(array, value):
+    idx = (np.abs(array - value)).argmin()
+    return idx, array[idx]
