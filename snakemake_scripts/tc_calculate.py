@@ -527,7 +527,7 @@ if __name__ == '__main__':
         clipped_data = clip_calcium(raw_data)
 
         # parse the features (bin number is for spatial bins in this one)
-        features, calcium = parse_features(clipped_data, variable_names, bin_number=10)
+        features, calcium = parse_features(clipped_data, variable_names, bin_number=20)
 
         # concatenate all the trials
         features = pd.concat(features)

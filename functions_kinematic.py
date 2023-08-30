@@ -132,3 +132,12 @@ def accumulated_distance(data_in):
     distance = np.zeros(len(data_in))
     distance[1:] = distance_calculation(data_in[1:, :], data_in[:-1, :])
     return distance
+
+
+def smooth_trace(data, jump=25, kernel_size=5, range=(0, 360), discont=2*np.pi):
+    jump_killed = jump_killer(data, jump, discont=discont)
+    jump_killed[jump_killed > range[-1]] = range[-1]
+    jump_killed[jump_killed < range[0]] = range[0]
+    kernel = np.ones(kernel_size) / kernel_size
+    smoothed = np.convolve(jump_killed, kernel, mode='same')
+    return smoothed

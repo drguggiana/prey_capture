@@ -7,11 +7,9 @@ import json
 os.environ["DLClight"] = "True"
 import deeplabcut as dlc
 
-# print(os.getcwd())
-# sys.path.insert(0, r'C:\Users\mmccann\repos\bonhoeffer\prey_capture')
+os.chdir(os.getcwd())
+sys.path.insert(0, os.getcwd())
 import paths
-sys.path.insert(0, os.path.abspath(paths.prey_capture_repo_directory))
-
 import functions_bondjango as bd
 import functions_io as fi
 import functions_misc as fm

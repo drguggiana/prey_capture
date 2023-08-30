@@ -258,6 +258,16 @@ def kinematic_calculations(data, kernel_size=11):
 
     # if the motive flag is on, also calculate head direction
     if 'mouse_x_m' in data.columns:
+        # Tidy up pitch, yaw, roll
+        pitch = -wrap_negative(data.mouse_xrot_m.values)
+        kine_data['pitch'] = smooth_trace(pitch, range=(-180, 180), kernel_size=10, discont=2*np.pi)
+
+        yaw = wrap_negative(data.mouse_zrot_m.values)
+        kine_data['yaw'] = smooth_trace(yaw, range=(-180, 180), kernel_size=10, discont=2*np.pi)
+
+        roll = wrap_negative(data.mouse_yrot_m.values)
+        kine_data['roll'] = smooth_trace(roll, range=(-180, 180), kernel_size=10, discont=2*np.pi)
+
         # get the head direction around the vertical axis
         head_direction = data['mouse_zrot_m']
         # get the head height

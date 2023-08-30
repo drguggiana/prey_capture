@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import pycircstat as circ
 from scipy.special import i0
 from scipy.stats import sem, norm, binned_statistic, percentileofscore, ttest_1samp, ttest_ind
@@ -6,9 +7,6 @@ from scipy.optimize import least_squares
 from sklearn.metrics import r2_score
 import functions_kinematic as fk
 from functions_misc import find_nearest
-
-
-### --- Main Function --- # 
 
 
 ### --- Gaussian fitting --- ###
@@ -208,13 +206,12 @@ def calculate_pref_direction_vm(angles, tuning_curve, **kwargs):
     # --- Fit double gaussian ---#
 
     # Shift baseline to zero for fitting the data
-    curve_to_fit = tuning_curve - tuning_curve.min()
+    curve_to_fit = tuning_curve - tuning_curve.min(axis=0)
 
     # Approximate parameters for the fit
-    amp = kwargs.get('amplitude', np.max(curve_to_fit))
+    amp = kwargs.get('amplitude', np.max(curve_to_fit, axis=0))
     kappa = kwargs.get('kappa', 5)
-    mean = kwargs.get('mean', angles[np.argmax(curve_to_fit)])
-
+    mean = kwargs.get('mean', angles[np.argmax(curve_to_fit, axis=0)])
 
     # Following Carandini and Ferster, 2000, (https://doi.org/10.1523%2FJNEUROSCI.20-01-00470.2000)
     # initialize the double gaussian with the same width and amplitude, but shift the center of the second gaussian
@@ -248,29 +245,27 @@ def calculate_pref_direction_vm(angles, tuning_curve, **kwargs):
 def generate_response_vector(responses, function, **kwargs):
     columns = list(responses.columns)
     tuning_kind = columns[0]
-    cell_id = columns[1]
+    trial_nums = columns[1]
+    cell_ids = columns[2:]
 
     # Get response across trials
-    resp = responses.groupby([tuning_kind])[cell_id].apply(function, **kwargs)
-
-    # Fill any NaNs with zeros
-    resp = resp.fillna(0)
-    
-    # Get a list of directions/orientations
-    angles = resp.index.to_numpy()
+    resp = responses.groupby([tuning_kind])[cell_ids].agg(function, **kwargs).reset_index()
 
     # Wrap angles from [-180, 180] to [0, 360] for direction tuning, and sort angles and cell responses
     # Needed for pycircstat toolbox
-    sorted_angles, sort_idx = wrap_sort(angles)
-    sorted_resp = resp.values[sort_idx]
+    resp[tuning_kind] = fk.wrap(resp[tuning_kind].to_numpy())
+    resp_sorted = resp.sort_values(tuning_kind)
 
     if 'direction' in tuning_kind:
-        # Make sure to explicitly represent 360 degrees in the data if looking at direction tuning. 
+        # Make sure to explicitly represent 360 degrees in the data if looking at direction tuning.
         # This is done by duplicating the 0 degrees value
-        sorted_resp, sorted_angles = append_360(sorted_angles, sorted_resp)
-        
-    return sorted_resp, sorted_angles
+        dup = resp_sorted.loc[resp_sorted[tuning_kind] == 0]
+        dup[tuning_kind] = 360
+        resp_sorted = pd.concat([resp_sorted, dup], ignore_index=True)
 
+    sorted_angles = resp_sorted[tuning_kind].to_numpy()
+
+    return resp_sorted, sorted_angles
 
 def bootstrap_responsivity(angles, magnitudes, num_shuffles=1000):
     
@@ -295,8 +290,31 @@ def bootstrap_responsivity(angles, magnitudes, num_shuffles=1000):
     shuffled_circ_var = np.array(shuffled_circ_var)
     shuffled_responsivity = np.array(shuffled_responsivity)
     
-    return shuffled_circ_var, shuffled_responsivity
+    return shuffled_responsivity
 
+
+def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, **kwargs):
+    columns = list(responses.columns)
+    tuning_kind = columns[0]
+    cell = columns[2]
+
+    r2_list = []
+    for i in np.arange(num_shuffles):
+        test_trials = responses.groupby([tuning_kind])['trial_num'].apply(
+            lambda x: np.random.choice(x, 2)).iloc[1:].to_list()
+        test_trials = np.concatenate(test_trials)
+        train_trials = np.setdiff1d(responses.trial_num.unique(), test_trials)
+
+        test_set = responses[responses.trial_num.isin(test_trials)]
+        train_set = responses[responses.trial_num.isin(train_trials)]
+
+        fit, fit_curve, pref_angle, real_pref_angle = fit_function(train_set[tuning_kind].to_numpy(),
+                                                                   train_set[cell].to_numpy(),
+                                                                   **kwargs)
+        r2 = fit_r2(test_set[tuning_kind].to_numpy(), test_set[cell].to_numpy(),
+                    fit_curve[:, 0], fit_curve[:, 1])
+        r2_list.append(r2)
+    return np.array(r2_list)
 
 def polar_vector_sum(magnitudes, thetas):
     directions = np.deg2rad(directions)
@@ -315,8 +333,7 @@ def fit_r2(angles, responses, fit_angles, fit_values):
     for angle in angles:
         i, _ = find_nearest(fit_angles, angle)
         pred_resp.append(fit_values[i])
-    pred_resp = np.array(pred_resp)
-    r2 = r2_score(responses, pred_resp)
+    r2 = r2_score(responses, np.array(pred_resp))
     return r2
 
 def wrap_sort_negative(angles, values, bound=180):
@@ -385,7 +402,7 @@ def normalize_responses(ds, quantile=0.07):
     return ds_norm
 
 
-def calculate_dff(ds, baseline_type='iti'):
+def calculate_dff(ds, baseline_type='iti', **kwargs):
     
     cells = [el for el in ds.columns if "cell" in el]
     raw = ds.copy().fillna(0)

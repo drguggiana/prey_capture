@@ -1,11 +1,14 @@
 import numpy as np
 import pandas as pd
 import os
-import h5py
 import sys
 import json
+import h5py
 from matplotlib import pyplot as plt
 from skimage.io import imread, imsave
+
+os.chdir(os.getcwd())
+sys.path.insert(0, os.getcwd())
 
 import paths
 import processing_parameters

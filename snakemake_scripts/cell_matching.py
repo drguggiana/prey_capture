@@ -5,6 +5,8 @@ import re
 import h5py
 from caiman.base.rois import register_multisession
 
+os.chdir(os.getcwd())
+sys.path.insert(0, os.getcwd())
 
 import paths
 import processing_parameters

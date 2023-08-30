@@ -1,9 +1,11 @@
 import numpy as np
 import pandas as pd
 import xarray as xr
+from os.path import join
 
 from ast import literal_eval
 from functions_kinematic import wrap
+import paths
 
 
 
@@ -26,7 +28,7 @@ class Cell(DataContainer):
 
 
 class WirefreeExperiment(DataContainer):
-    def __init__(self, filepath, load_from='preproc', use_xarray=False):
+    def __init__(self, filename, use_xarray=False):
         # Experiment attributes
         self.metadata = None
 
@@ -44,14 +46,17 @@ class WirefreeExperiment(DataContainer):
         self.raw_fluor = None
 
         # Load the data
-        if load_from == 'preproc':
-            self._load_preprocessing(filepath, use_xarray)
+        if 'preproc' in filename:
+            self._load_preprocessing(filename, use_xarray)
 
-        print(f'Loaded experiment from {filepath}')
+        # if 'tcday' in filename:
+        #     self._load_tc(filename)
 
-        # Create cell objects
+        print(f'Loaded experiment from {filename}')
+
         self.cells = [el for el in self.raw_spikes.columns if "cell" in el]
-        self.cell_props = self._create_cell_class()
+        # Create cell objects
+        # self.cell_props = self._create_cell_class()
 
 
     def add_attributes_to_cells(self, attributes):
@@ -69,10 +74,10 @@ class WirefreeExperiment(DataContainer):
             df = getattr(self, attribute)
             df.to_hdf(file, attribute, mode='a', format='fixed')
 
-    def save_cell_properties(self, file, attributes):
-        for attribute in attributes:
-            df = self._cellprops_to_dataframe(attribute)
-            df.to_hdf(file, attribute, mode='a', format='fixed')
+    # def save_cell_properties(self, file, attributes):
+    #     for attribute in attributes:
+    #         df = self._cellprops_to_dataframe(attribute)
+    #         df.to_hdf(file, attribute, mode='a', format='fixed')
 
     def _load_preprocessing(self, file, use_xarray):
         """
@@ -86,26 +91,29 @@ class WirefreeExperiment(DataContainer):
             Whether to use xarray for the data structures
         """	
 
-        with pd.HDFStore(file) as h:
+        with pd.HDFStore(file, 'r') as preproc:
 
-            self._parse_params(h['params'])
+            self._parse_params(preproc['params'])
             self._add_orientation_to_params()
         
-            self._parse_kinematic_data(h['matched_calcium'], use_xarray)
+            self._parse_kinematic_data(preproc['matched_calcium'], use_xarray)
 
             if use_xarray:
-                self.full_kinematics = h['full_traces'].to_xarray()
+                self.full_kinematics = preproc['full_traces'].to_xarray()
             else:
-                self.full_kinematics = h['full_traces']
+                self.full_kinematics = preproc['full_traces']
 
-            self.roi_info = h['roi_info']
-            self.trial_set = h['trial_set']
-            self.cell_matches = h['cell_matches'].dropna().reset_index(drop=True).astype('int')
-            self.arena_corners = h['arena_corners']
+            self.roi_info = preproc['roi_info']
+            self.trial_set = preproc['trial_set']
+            self.cell_matches = preproc['cell_matches'].dropna().reset_index(drop=True).astype('int')
+            self.arena_corners = preproc['arena_corners']
+    #
+    # def _load_tc(self, file):
+    #     with pd.HDFStore(file, 'r') as tc:
 
     def _parse_kinematic_data(self, matched_calcium, use_xarray):
 
-        # Calculate orientation expicitly
+        # Calculate orientation explicitly
         if 'orientation' not in matched_calcium.columns:
             matched_calcium['orientation'] = matched_calcium['direction']
             matched_calcium['orientation'][(matched_calcium['orientation'] > -180) & (matched_calcium['orientation'] < 0)] += 180
@@ -126,11 +134,10 @@ class WirefreeExperiment(DataContainer):
         self.metadata.exp_date = matched_calcium['datetime'][0]
         spikes_cols = [key for key in matched_calcium.keys() if 'spikes' in key]
         fluor_cols = [key for key in matched_calcium.keys() if 'fluor' in key]
-        motive_tracking_cols = ['mouse_y_m','mouse_z_m','mouse_x_m','mouse_yrot_m','mouse_zrot_m','mouse_xrot_m']
-
+        motive_tracking_cols = ['mouse_y_m', 'mouse_z_m',' mouse_x_m', 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m']
 
         # If there is more than one spatial or temporal frequency, include it, othewise don't
-        stimulus_cols = ['trial_num', 'time_vector', 'direction', 'direction_wrapped', 'orientation', 'grating_phase',]
+        stimulus_cols = ['trial_num', 'time_vector', 'direction', 'direction_wrapped', 'orientation', 'grating_phase']
         if len(self.metadata.temporal_freq) > 1:
             stimulus_cols.append('temporal_freq')
         if len(self.metadata.spatial_freq) > 1:
@@ -185,20 +192,20 @@ class WirefreeExperiment(DataContainer):
         directions_wrapped = np.concatenate((directions_wrapped, [360.]))
         self.metadata.direction_wrapped = directions_wrapped
 
-    def _create_cell_class(self):
-        cell_props = {}
-    
-        for cell in self.cells:
-            cell_props[cell] = Cell(cell)
+    # def _create_cell_class(self):
+    #     cell_props = {}
+    #
+    #     for cell in self.cells:
+    #         cell_props[cell] = Cell(cell)
+    #
+    #     return cell_props
 
-        return cell_props
-
-    def _cellprops_to_dataframe(self, attribute):
-        df_list = []
-        for cell_id, cell in self.cell_props.items():
-            df = getattr(cell, attribute).copy()
-            df.insert(loc=0, column='cell_id', value=cell_id)
-            df_list.append(df)
-
-        attr_df = pd.concat(df_list).reset_index(drop=True)
-        return attr_df
+    # def _cellprops_to_dataframe(self, attribute):
+    #     df_list = []
+    #     for cell_id, cell in self.cell_props.items():
+    #         df = getattr(cell, attribute).copy()
+    #         df.insert(loc=0, column='cell_id', value=cell_id)
+    #         df_list.append(df)
+    #
+    #     attr_df = pd.concat(df_list).reset_index(drop=True)
+    #     return attr_df
