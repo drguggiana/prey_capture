@@ -7,8 +7,10 @@ import json
 os.environ["DLClight"] = "True"
 import deeplabcut as dlc
 
+# Insert the cwd for local imports
 os.chdir(os.getcwd())
 sys.path.insert(0, os.getcwd())
+
 import paths
 import functions_bondjango as bd
 import functions_io as fi

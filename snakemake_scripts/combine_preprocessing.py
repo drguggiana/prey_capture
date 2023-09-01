@@ -33,11 +33,11 @@ except NameError:
     files = bd.query_database(target_model, search_string)[0]
 
     # assemble the input paths
-    preproc_path = files['bonsai_path'].replace('.csv', '_rawcoord.hdf5').replace('VideoExperiment', 'AnalyzedData')
-    motifs_path = files['bonsai_path'].replace('.csv', '_motifs.hdf5').replace('VideoExperiment', 'AnalyzedData')
+    preproc_path = files['avi_path'].replace('.avi', '_rawcoord.hdf5').replace('VRExperiment', 'AnalyzedData')
+    motifs_path = files['bonsai_path'].replace('.csv', '_motifs.hdf5').replace('VRExperiment', 'AnalyzedData')
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
-                             os.path.basename(files['bonsai_path'][:-4]))+'_preproc.hdf5'
+                             os.path.basename(files['avi_path'][:-4]))+'_preproc.hdf5'
 
 # copy the preprocessing file as the output file
 shutil.copy(preproc_path, save_path)

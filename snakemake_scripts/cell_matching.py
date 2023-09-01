@@ -5,6 +5,7 @@ import re
 import h5py
 from caiman.base.rois import register_multisession
 
+# Insert the cwd for local imports
 os.chdir(os.getcwd())
 sys.path.insert(0, os.getcwd())
 

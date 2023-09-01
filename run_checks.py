@@ -73,7 +73,8 @@ def find_empty_ROIS(target_directory, regex_pattern, exp_to_match):
 
 base_dir = r'Z:\Prey_capture\VRExperiment'
 conflict_dir = r"Z:\Prey_capture\conflict_files\VTuningWF"
-animals = ["MM_220915_a", "MM_220928_a", "MM_221109_a", "MM_221110_a"]
+animals = ["MM_220915_a", "MM_220928_a", "MM_221109_a", "MM_221110_a", 'MM_230518_b', 'MM_230705_b', 'MM_230706_a',
+           'MM_230706_b']
 
 
 # Get unmatched files

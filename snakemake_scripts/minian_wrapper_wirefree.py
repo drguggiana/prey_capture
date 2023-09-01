@@ -7,6 +7,7 @@ import h5py
 from matplotlib import pyplot as plt
 from skimage.io import imread, imsave
 
+# Insert the cwd for local imports
 os.chdir(os.getcwd())
 sys.path.insert(0, os.getcwd())
 

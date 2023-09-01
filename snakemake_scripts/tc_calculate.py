@@ -507,8 +507,6 @@ if __name__ == '__main__':
                     # concatenate with the main data
                     dataframe = pd.concat([dataframe, egocentric_coords, latents, motifs], axis=1)
 
-                fluor_cols = [col for col in dataframe.columns if 'fluor' in col]
-                dataframe.drop(columns=fluor_cols, inplace=True)
                 # store
                 raw_data.append((files, dataframe))
 

@@ -55,17 +55,7 @@ class WirefreeExperiment(DataContainer):
         print(f'Loaded experiment from {filename}')
 
         self.cells = [el for el in self.raw_spikes.columns if "cell" in el]
-        # Create cell objects
-        # self.cell_props = self._create_cell_class()
 
-
-    def add_attributes_to_cells(self, attributes):
-        # Populate cell objects with attributes
-        for cell_id, cell_obj in self.cell_props.items():
-            for attribute in attributes:
-                ds = getattr(self, attribute)
-                value = ds.iloc[:, [*range(6), ds.columns.get_loc(cell_id)]]
-                setattr(cell_obj, attribute, value)
 
     # def load_cell_properties(self, file):
 
@@ -134,7 +124,7 @@ class WirefreeExperiment(DataContainer):
         self.metadata.exp_date = matched_calcium['datetime'][0]
         spikes_cols = [key for key in matched_calcium.keys() if 'spikes' in key]
         fluor_cols = [key for key in matched_calcium.keys() if 'fluor' in key]
-        motive_tracking_cols = ['mouse_y_m', 'mouse_z_m',' mouse_x_m', 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m']
+        motive_tracking_cols = ['mouse_y_m', 'mouse_z_m', 'mouse_x_m', 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m']
 
         # If there is more than one spatial or temporal frequency, include it, othewise don't
         stimulus_cols = ['trial_num', 'time_vector', 'direction', 'direction_wrapped', 'orientation', 'grating_phase']
@@ -144,17 +134,24 @@ class WirefreeExperiment(DataContainer):
             stimulus_cols.append('spatial_freq')
         
         # For headfixed data
-        eye_cols = ['eye_horizontal_vector_x', 'eye_horizontal_vector_y', 'eye_midpoint_x', 'eye_midpoint_y', 'pupil_center_ref_x', 'pupil_center_ref_y', 'fit_pupil_center_x', 'fit_pupil_center_y',
-                       'pupil_diameter', 'minor_axis', 'pupil_rotation', 'eyelid_angle']
-        eye_dlc_cols = ['pupil_center_x','pupil_center_y','pupil_top_left_x','pupil_top_left_y','pupil_top_x','pupil_top_y','pupil_top_right_x','pupil_top_right_y' 'pupil_right_x' 'pupil_right_y', 
-                           'pupil_bottom_right_x','pupil_bottom_right_y','pupil_bottom_x','pupil_bottom_y','pupil_bottom_left_x','pupil_bottom_left_y','pupil_left_x','pupil_left_y','eye_corner_nasal_x',
-                           'eye_corner_nasal_y','eye_corner_temporal_x','eye_corner_temporal_y','eyelid_top_x','eyelid_top_y','eyelid_bottom_x','eyelid_bottom_y','led_x','led_y']
+        eye_cols = ['eye_horizontal_vector_x', 'eye_horizontal_vector_y', 'eye_midpoint_x', 'eye_midpoint_y',
+                    'pupil_center_ref_x', 'pupil_center_ref_y', 'fit_pupil_center_x', 'fit_pupil_center_y',
+                    'pupil_diameter', 'minor_axis', 'pupil_rotation', 'eyelid_angle']
+        eye_dlc_cols = ['pupil_center_x','pupil_center_y','pupil_top_left_x','pupil_top_left_y','pupil_top_x',
+                        'pupil_top_y','pupil_top_right_x','pupil_top_right_y' 'pupil_right_x' 'pupil_right_y',
+                        'pupil_bottom_right_x','pupil_bottom_right_y','pupil_bottom_x','pupil_bottom_y',
+                        'pupil_bottom_left_x','pupil_bottom_left_y','pupil_left_x','pupil_left_y','eye_corner_nasal_x',
+                        'eye_corner_nasal_y','eye_corner_temporal_x','eye_corner_temporal_y','eyelid_top_x',
+                        'eyelid_top_y','eyelid_bottom_x','eyelid_bottom_y','led_x','led_y']
         wheel_cols = ['wheel_speed', 'wheel_acceleration']
         
         # For free data
-        mouse_kinem_cols = ['mouse_heading', 'mouse_angular_speed', 'mouse_speed', 'mouse_acceleration', 'head_direction', 'head_height']
-        mouse_dlc_cols = ['mouse_snout_x', 'mouse_snout_y', 'mouse_barl_x', 'mouse_barl_y', 'mouse_barr_x', 'mouse_barr_y', 'mouse_x', 'mouse_y', 'mouse_body2_x', 'mouse_body2_y', 
-                          'mouse_body3_x', 'mouse_body3_y', 'mouse_base_x', 'mouse_base_y', 'mouse_head_x', 'mouse_head_y', 'miniscope_top_x', 'miniscope_top_y']
+        mouse_kinem_cols = ['mouse_heading', 'mouse_angular_speed', 'mouse_speed', 'mouse_acceleration',
+                            'head_direction', 'head_height', 'head_pitch', 'head_yaw', 'head_roll']
+        mouse_dlc_cols = ['mouse_snout_x', 'mouse_snout_y', 'mouse_barl_x', 'mouse_barl_y', 'mouse_barr_x',
+                          'mouse_barr_y', 'mouse_x', 'mouse_y', 'mouse_body2_x', 'mouse_body2_y', 'mouse_body3_x',
+                          'mouse_body3_y', 'mouse_base_x', 'mouse_base_y', 'mouse_head_x', 'mouse_head_y',
+                          'miniscope_top_x', 'miniscope_top_y']
 
         if self.metadata.exp_type == 'fixed':
             self.kinematics = matched_calcium.loc[:, stimulus_cols + motive_tracking_cols + eye_cols + wheel_cols]

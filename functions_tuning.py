@@ -260,7 +260,7 @@ def generate_response_vector(responses, function, **kwargs):
         # Make sure to explicitly represent 360 degrees in the data if looking at direction tuning.
         # This is done by duplicating the 0 degrees value
         dup = resp_sorted.loc[resp_sorted[tuning_kind] == 0]
-        dup[tuning_kind] = 360
+        dup.at[0, tuning_kind] = 360.
         resp_sorted = pd.concat([resp_sorted, dup], ignore_index=True)
 
     sorted_angles = resp_sorted[tuning_kind].to_numpy()

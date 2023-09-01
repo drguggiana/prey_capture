@@ -38,6 +38,7 @@ def yaml_to_json_single_file(wildcards):
     json_dict = json.dumps(url_dict).replace('"', '\\"')
     return json_dict
 
+
 rule dlc_extraction:
     """Runs DLC in a new process in its conda environment"""
     input:
@@ -356,6 +357,7 @@ rule preprocess_compile:
     script:
         "snakemake_scripts/combine_preprocessing.py"
 
+
 rule aggregate_preprocessed:
     input:
           expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files'])
@@ -389,6 +391,7 @@ def days_to_file(wildcards):
     rig = python_dict['rig']
     return os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'regressionday.hdf5')))
 
+
 def all_days(wildcards):
     # initialize the keyword list
     keyword_list = []
@@ -411,6 +414,28 @@ def all_days(wildcards):
     return path_list
 
 
+def matched_tc_files(wildcards):
+    """Finds the matching session for a given file from the same mouse on the same day. This matched files paths are
+    fed to the rule match_cells_day"""
+
+    name_parts = wildcards.file.split('_')
+
+    day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y').strftime('%m_%d_%Y')
+    animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
+
+    info_list = [yaml.load(config["file_info"][el],Loader=yaml.FullLoader) for el in config["file_info"]]
+
+    # leave only the files with calcium data on that given day for that mouse
+    matched_slugs = np.unique([el['avi_path'].replace('.avi', '_tcday.hdf5').replace('VRExperiment', 'AnalyzedData') for el in info_list
+                               if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
+                               (animal in el['mouse']) & (day in el['slug'])])
+
+    # # assemble the paths to the calciumraw files
+    tc_files = ['_'.join((el, 'calciumraw.hdf5')) for el in matched_slugs]
+    tc_files = [os.path.join(paths.analysis_path,el) for el in tc_files]
+    return tc_files
+
+
 rule tc_day:
     input:
         files_to_day,
@@ -419,7 +444,31 @@ rule tc_day:
     params:
         file_info = config["file_info"],
     script:
-        "snakemake_scripts/tc_calculate.py"
+        "snakemake_scripts/wf_tc_calculate.py"
+
+#
+# rule tc_day_combine:
+#     """Combines TC files for matched experiments"""
+#     input:
+#         # days_to_file,
+#         # animal_to_file,
+#         # expand(os.path.join(paths.analysis_path,"{file}_tcday.hdf5"), file=config['files'])
+#         all_days,
+#     output:
+#         os.path.join(paths.analysis_path,"{file}_tcconsolidate.hdf5"),
+#     script:
+#         "snakemake_scripts/wf_tc_consolidate.py"
+
+rule tuning_run:
+    input:
+          expand(os.path.join(paths.analysis_path,"{file}"+'_tcday.hdf5'), file=config['files']),
+    output:
+          os.path.join(paths.analysis_path, "tuning_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"
 
 
 rule combinedanalysis_run:
