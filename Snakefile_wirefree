@@ -438,7 +438,7 @@ def matched_tc_files(wildcards):
 
 rule tc_day:
     input:
-        files_to_day,
+        os.path.join(paths.analysis_path,'{file}_preproc.hdf5'),
     output:
         os.path.join(paths.analysis_path,'{file}_tcday.hdf5'),
     params:
