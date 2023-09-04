@@ -98,7 +98,7 @@ def calculate_pref_direction(angles, tuning_curve, **kwargs):
     curve_to_fit = tuning_curve - tuning_curve.min()
 
     # Approximate parameters for the fit
-    amp = kwargs.get('amplitude', np.max(curve_to_fit))
+    amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
     width = kwargs.get('width', 25)
     mean = kwargs.get('mean', angles[np.argmax(curve_to_fit)])
 
@@ -139,7 +139,7 @@ def calculate_pref_orientation(angles, tuning_curve, **kwargs):
     curve_to_fit = tuning_curve - tuning_curve.min()
 
     # Approximate parameters for the fit
-    amp = kwargs.get('amplitude', np.max(curve_to_fit))
+    amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
     width = kwargs.get('width', 10)
     mean = kwargs.get('mean', angles[np.argmax(curve_to_fit)])
 
@@ -174,7 +174,7 @@ def calculate_pref_orientation_vm(angles, tuning_curve, **kwargs):
     curve_to_fit = tuning_curve - tuning_curve.min()
 
     # Approximate parameters for the fit
-    amp = kwargs.get('amplitude', np.max(curve_to_fit))
+    amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
     kappa = kwargs.get('kappa', 5)
     mean = kwargs.get('mean', angles[np.argmax(curve_to_fit)])
 
@@ -209,7 +209,7 @@ def calculate_pref_direction_vm(angles, tuning_curve, **kwargs):
     curve_to_fit = tuning_curve - tuning_curve.min(axis=0)
 
     # Approximate parameters for the fit
-    amp = kwargs.get('amplitude', np.max(curve_to_fit, axis=0))
+    amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
     kappa = kwargs.get('kappa', 5)
     mean = kwargs.get('mean', angles[np.argmax(curve_to_fit, axis=0)])
 

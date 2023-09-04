@@ -147,13 +147,12 @@ def parse_kinematic_data(matched_calcium):
 if __name__ == '__main__':
     # get the data paths
     try:
-        input_path = snakemake.input
+        input_path = list(snakemake.input)
         # get the slugs
         slug_list = [os.path.basename(el).replace('_preproc.hdf5', '') for el in input_path]
         # read the output path and the input file urls
         out_path = snakemake.output[0]
         data_all = snakemake.params.file_info
-        data_all = [yaml.load((data_all[el]), Loader=yaml.FullLoader) for el in slug_list]
         # get the parts for the file naming
         name_parts = os.path.basename(out_path).split('_')
         day = '_'.join(name_parts[:3])
