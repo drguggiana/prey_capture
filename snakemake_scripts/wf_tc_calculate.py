@@ -220,18 +220,24 @@ if __name__ == '__main__':
             actvity_ds_dict['norm_fluor'] = norm_fluor
             actvity_ds_dict['norm_dff'] = norm_dff
 
-            # Filter trials by head pitch
-            pitch_lower_cutoff = processing_parameters.head_pitch_cutoff[0]
-            pitch_upper_cutoff = processing_parameters.head_pitch_cutoff[1]
-            view_fraction = processing_parameters.view_fraction
-            kinematics['viewed'] = np.logical_and(kinematics['head_pitch'].to_numpy() >= pitch_lower_cutoff,
-                                                  kinematics['head_pitch'].to_numpy() <= pitch_upper_cutoff)
-            viewed_trials = kinematics.groupby('trial_num').filter(
-                lambda x: (x['viewed'].sum() / len(x['viewed'])) > view_fraction).trial_num.unique()
+            # Filter trials by head pitch if freely moving
+            if rig in ['VTuningWF', 'VTuning']:
+                pitch_lower_cutoff = processing_parameters.head_pitch_cutoff[0]
+                pitch_upper_cutoff = processing_parameters.head_pitch_cutoff[1]
+                view_fraction = processing_parameters.view_fraction
+                kinematics['viewed'] = np.logical_and(kinematics['head_pitch'].to_numpy() >= pitch_lower_cutoff,
+                                                      kinematics['head_pitch'].to_numpy() <= pitch_upper_cutoff)
+                viewed_trials = kinematics.groupby('trial_num').filter(
+                    lambda x: (x['viewed'].sum() / len(x['viewed'])) > view_fraction).trial_num.unique()
 
-            raw_spikes_viewed = raw_spikes.loc[raw_spikes.trial_num.isin(viewed_trials)].copy()
-            norm_spikes_viewed = norm_spikes.loc[norm_spikes.trial_num.isin(viewed_trials)].copy()
-            norm_dff_viewed = norm_dff.loc[norm_dff.trial_num.isin(viewed_trials)].copy()
+                raw_spikes_viewed = raw_spikes.loc[raw_spikes.trial_num.isin(viewed_trials)].copy()
+                norm_spikes_viewed = norm_spikes.loc[norm_spikes.trial_num.isin(viewed_trials)].copy()
+                norm_dff_viewed = norm_dff.loc[norm_dff.trial_num.isin(viewed_trials)].copy()
+            else:
+                viewed_trials = raw_spikes.trial_num.unique()
+                raw_spikes_viewed = raw_spikes.copy()
+                norm_spikes_viewed = norm_spikes.copy()
+                norm_dff_viewed = norm_dff.copy()
 
             actvity_ds_dict['raw_spikes_viewed'] = raw_spikes_viewed
             actvity_ds_dict['norm_spikes_viewed'] = norm_spikes_viewed

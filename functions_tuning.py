@@ -206,7 +206,8 @@ def calculate_pref_direction_vm(angles, tuning_curve, **kwargs):
     # --- Fit double gaussian ---#
 
     # Shift baseline to zero for fitting the data
-    curve_to_fit = tuning_curve - tuning_curve.min(axis=0)
+    amp_min = tuning_curve.min(axis=0)
+    curve_to_fit = tuning_curve - amp_min
 
     # Approximate parameters for the fit
     amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
@@ -219,7 +220,7 @@ def calculate_pref_direction_vm(angles, tuning_curve, **kwargs):
     mean2 = fk.wrap(mean + 180)
 
     init_params = [amp, np.deg2rad(mean), kappa, amp, np.deg2rad(mean2), kappa]
-    lower_bound = [0, 0, 0, 0, 0, 0]
+    lower_bound = [amp_min, 0, 0, amp_min, 0, 0]
     upper_bound = [1, 2*np.pi, 10, 1, 2*np.pi, 10]
 
     # Run regression
@@ -372,7 +373,10 @@ def normalize_rows(data_in):
 
 
 def normalize(data_in):
-    return (data_in - np.nanmin(data_in)) / (np.nanmax(data_in) - np.nanmin(data_in))
+    if np.nanmax(data_in) == 0:
+        return data_in
+    else:
+        return (data_in - np.nanmin(data_in)) / (np.nanmax(data_in) - np.nanmin(data_in))
 
 
 def normalize_responses(ds, quantile=0.07):
