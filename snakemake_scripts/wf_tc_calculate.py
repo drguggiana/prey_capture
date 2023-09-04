@@ -225,8 +225,8 @@ if __name__ == '__main__':
             pitch_lower_cutoff = processing_parameters.head_pitch_cutoff[0]
             pitch_upper_cutoff = processing_parameters.head_pitch_cutoff[1]
             view_fraction = processing_parameters.view_fraction
-            kinematics['viewed'] = np.logical_and(kinematics.head_pitch.to_numpy() >= pitch_lower_cutoff,
-                                                  kinematics.head_pitch.to_numpy() <= pitch_upper_cutoff)
+            kinematics['viewed'] = np.logical_and(kinematics['head_pitch'].to_numpy() >= pitch_lower_cutoff,
+                                                  kinematics['head_pitch'].to_numpy() <= pitch_upper_cutoff)
             viewed_trials = kinematics.groupby('trial_num').filter(
                 lambda x: (x['viewed'].sum() / len(x['viewed'])) > view_fraction).trial_num.unique()
 
@@ -261,6 +261,7 @@ if __name__ == '__main__':
             actvity_ds_dict['norm_dff_viewed_still'] = norm_dff_viewed_still
 
             # Run the visual tuning loop
+            print('Calculating visual tuning curves...')
             vis_prop_dict = {}
             for ds_name in processing_parameters.activity_datasets:
                 activity_ds = actvity_ds_dict[ds_name]
@@ -276,6 +277,7 @@ if __name__ == '__main__':
 
             # --- Process kinematic tuning --- #
             # This is lifted directly from tc_calculate.py
+            print('Calculating kinematic tuning curves...')
 
             # Drop fluorescence columns since not used for this analysis
             fluor_cols = [col for col in dataframe.columns if 'fluor' in col]
@@ -324,32 +326,32 @@ if __name__ == '__main__':
             # meta_data = pd.DataFrame(np.vstack(meta_list), columns=processing_parameters.meta_fields)
             # meta_data.to_hdf(out_path, 'meta_data')
 
-            # save as a new entry to the data base
-            # assemble the entry data
+        # save as a new entry to the data base
+        # assemble the entry data
 
-            entry_data = {
-                'analysis_type': 'tc_analysis',
-                'analysis_path': out_path,
-                'date': '',
-                'pic_path': '',
-                'result': 'multi',
-                'rig': rig,
-                'lighting': 'multi',
-                'imaging': 'multi',
-                'slug': fm.slugify(os.path.basename(out_path)[:-5]),
+        entry_data = {
+            'analysis_type': 'tc_analysis',
+            'analysis_path': out_path,
+            'date': '',
+            'pic_path': '',
+            'result': 'multi',
+            'rig': rig,
+            'lighting': 'multi',
+            'imaging': 'multi',
+            'slug': fm.slugify(os.path.basename(out_path)[:-5]),
 
-            }
+        }
 
-            # check if the entry already exists, if so, update it, otherwise, create it
-            update_url = '/'.join((paths.bondjango_url, 'analyzed_data', entry_data['slug'], ''))
-            output_entry = bd.update_entry(update_url, entry_data)
-            if output_entry.status_code == 404:
-                # build the url for creating an entry
-                create_url = '/'.join((paths.bondjango_url, 'analyzed_data', ''))
-                output_entry = bd.create_entry(create_url, entry_data)
+        # check if the entry already exists, if so, update it, otherwise, create it
+        update_url = '/'.join((paths.bondjango_url, 'analyzed_data', entry_data['slug'], ''))
+        output_entry = bd.update_entry(update_url, entry_data)
+        if output_entry.status_code == 404:
+            # build the url for creating an entry
+            create_url = '/'.join((paths.bondjango_url, 'analyzed_data', ''))
+            output_entry = bd.create_entry(create_url, entry_data)
 
-            print('The output status was %i, reason %s' %
-                  (output_entry.status_code, output_entry.reason))
-            if output_entry.status_code in [500, 400]:
-                print(entry_data)
+        print('The output status was %i, reason %s' %
+              (output_entry.status_code, output_entry.reason))
+        if output_entry.status_code in [500, 400]:
+            print(entry_data)
 
