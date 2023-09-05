@@ -309,16 +309,21 @@ def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, **kwargs):
         test_set = responses[responses.trial_num.isin(test_trials)]
         train_set = responses[responses.trial_num.isin(train_trials)]
 
-        fit, fit_curve, pref_angle, real_pref_angle = fit_function(train_set[tuning_kind].to_numpy(),
-                                                                   train_set[cell].to_numpy(),
-                                                                   **kwargs)
-        r2 = fit_r2(test_set[tuning_kind].to_numpy(), test_set[cell].to_numpy(),
-                    fit_curve[:, 0], fit_curve[:, 1])
+        # Sometimes the data cannot be fit - catch that here
+        try:
+            fit, fit_curve, pref_angle, real_pref_angle = fit_function(train_set[tuning_kind].to_numpy(),
+                                                                       train_set[cell].to_numpy(),
+                                                                       **kwargs)
+            r2 = fit_r2(test_set[tuning_kind].to_numpy(), test_set[cell].to_numpy(),
+                        fit_curve[:, 0], fit_curve[:, 1])
+        except ValueError:
+            r2 = 0.0
+
         r2_list.append(r2)
     return np.array(r2_list)
 
 def polar_vector_sum(magnitudes, thetas):
-    directions = np.deg2rad(directions)
+    thetas = np.deg2rad(thetas)
 
     r = magnitudes * np.exp(1j * thetas)
     t = np.sum(r)
