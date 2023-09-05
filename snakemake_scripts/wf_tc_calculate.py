@@ -184,16 +184,16 @@ if __name__ == '__main__':
         # Load the data
         with pd.HDFStore(file, mode='r') as h:
 
-            if '/matched_calcium' in h.keys():
-                # concatenate the latents
-                dataframe = h['matched_calcium']
-
             if '/cell_matches' in h.keys():
                 # concatenate the latents
                 cell_matches = h['cell_matches']
 
-            # store
-            raw_data.append((file, dataframe))
+            if '/matched_calcium' in h.keys():
+                # concatenate the latents
+                dataframe = h['matched_calcium']
+
+                # store
+                raw_data.append((file, dataframe.fillna(0)))
 
         # skip processing if the file is empty
         if len(raw_data) == 0:
@@ -202,12 +202,8 @@ if __name__ == '__main__':
             empty.to_hdf(out_path, 'no_ROIs')
 
         else:
-
-            dataframe = raw_data[0][-1]
-            dataframe = dataframe.fillna(0)
-
             # --- Process visual tuning --- #
-            kinematics, raw_spikes, raw_fluor = parse_kinematic_data(dataframe)
+            kinematics, raw_spikes, raw_fluor = parse_kinematic_data(raw_data[0][-1])
 
             # Calculate dFF and normalize other neural data
             actvity_ds_dict = {}
