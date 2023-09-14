@@ -17,6 +17,7 @@ try:
     # read the output path and the input file urls
     out_path = os.path.join(paths.analysis_path, f'{day[0]}_{mouse[0]}_tcconsolidate.hdf5')
     dummy_out = snakemake.output
+
 except NameError:
     # get the search string
     search_string = processing_parameters.search_string
@@ -61,7 +62,7 @@ if empty_flag:
 else:
     # Save cell matches
     if matches is not None:
-        matches.to_hdf(out_path, f'cell_matches')
+        matches.to_hdf(out_path, 'cell_matches')
 
     matched_data_list = []
     for data, rig in zip(data_list, rigs):

@@ -306,6 +306,158 @@ def simple_animation(data_in, interval=10):
     return anim
 
 
+def spike_raster(data_in, cells=None):
+    if cells is None:
+        cells = [el for el in data_in.columns if 'cell' in el]
+
+    spikes = data_in.loc[:, cells]
+
+    im = hv.Image((data_in.time_vector, np.arange(len(cells)), spikes.values.T),
+                  kdims=['Time (s)', 'Cells'], vdims=['Activity (a.u.)'])
+    im.opts(width=600)  # , cmap='Purples')
+    return im
+
+
+def trace_raster(data, cells=None, ds_factor=1):
+    if cells is None:
+        cells = [el for el in data.columns if 'cell' in el]
+
+    trace = data.loc[:, cells]
+    max_std = trace.std().max()
+
+    lines = {i: hv.Curve((data.time_vector, trace.iloc[:, i].values.T + i * max_std)) for i in np.arange(len(cells))}
+    lineoverlay = hv.NdOverlay(lines, kdims=['Time (s)']).opts(height=500, width=800)
+    return lineoverlay
+
+
+def rand_jitter(arr):
+    stdev = .01 * (max(arr) - min(arr))
+    return arr + np.random.randn(len(arr)) * stdev
+
+
+def plot_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_angle=None, ax=None, **kwargs):
+    if ax is None:
+        fig = plt.figure(dpi=300, figsize=(10, 6))
+        ax = fig.add_subplot(111)
+
+    tuning = ax.errorbar(tuning_curve[:, 0], tuning_curve[:, 1], yerr=error, elinewidth=0.5, **kwargs)
+
+    if fit is not None:
+        ax.plot(fit[:, 0], fit[:, 1], c='r')
+
+    if pref_angle is not None:
+        ax.axvline(pref_angle, color='k', linewidth=1)
+
+    if trials is not None:
+        ax.scatter(trials[:, 0], rand_jitter(trials[:, 1]), marker='.', c='k', alpha=0.5)
+
+    return tuning
+
+
+def plot_polar_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_angle=None, ax=None, **kwargs):
+    theta_max = kwargs.pop('theta_max', 360)
+
+    if ax is None:
+        fig = plt.figure(dpi=300, figsize=(10, 6))
+        ax = fig.add_subplot(111, projection='polar')
+
+    tuning = ax.errorbar(np.deg2rad(tuning_curve[:, 0]), tuning_curve[:, 1], yerr=error, elinewidth=0.5, **kwargs)
+
+    if fit is not None:
+        ax.plot(np.deg2rad(fit[:, 0]), fit[:, 1], c='r')
+
+    if trials is not None:
+        ax.scatter(np.deg2rad(trials[:, 0]), rand_jitter(trials[:, 1]), marker='.', color='k', alpha=0.5)
+
+    if pref_angle is not None:
+        ax.axvline(np.deg2rad(pref_angle), color='k', linewidth=1)
+
+    ax.set_thetamax(theta_max)
+    ax.set_theta_zero_location("W")
+    ax.set_theta_direction(-1)
+    ax.set_rlabel_position(180)
+
+    return tuning
+
+
+def plot_tuning_curve_hv(tuning_curve, fit=None, error=None, trials=None, pref_angle=None, **kwargs):
+    overlay = []
+
+    tuning = hv.Curve(tuning_curve).opts(width=600, height=300, **kwargs)
+    overlay.append(tuning)
+
+    error_plot = hv.Spread((*tuning_curve.T, error)).opts(fill_alpha=0.25)
+    overlay.append(error_plot)
+
+    if fit is not None:
+        fit_plot = hv.Curve(fit)
+        overlay.append(fit_plot)
+
+    if trials is not None:
+        trials_plot = hv.Scatter(trials).opts(color='k', size=3)
+        overlay.append(trials_plot)
+
+    if pref_angle is not None:
+        pref_plot = hv.VLine(pref_angle).opts(color='k', line_width=1)
+        overlay.append(pref_plot)
+
+    return hv.Overlay(overlay)
+
+
+def plot_visual_tuning_curves(orientation_data, direction_data, cell, data_type, error='std', norm=True, polar=True,
+                              axes=None):
+    direction_data = getattr(experiment, data_type + '_direction_props')
+    direction_data = direction_data.loc[cell]
+
+    orientation_data = getattr(experiment, data_type + '_orientation_props')
+    orientation_data = orientation_data.loc[cell]
+
+    data_cols = ['mean', error, 'trial_resp']
+    fit_cols = ['fit_curve', 'shown_pref']
+
+    if norm:
+        data_cols = [el + '_norm' for el in data_cols]
+
+    columns = data_cols + fit_cols
+
+    if axes is None:
+        if polar:
+            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 4), subplot_kw=dict(projection="polar"))
+        else:
+            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
+
+    if polar:
+        plot_func = plot_polar_tuning_curve
+    else:
+        plot_func = plot_tuning_curve
+
+    # Plot directions
+    _ = plot_func(direction_data[columns[0]],
+                    direction_data[columns[1]],
+                    trials=direction_data[columns[2]],
+                    fit=direction_data[columns[3]],
+                    pref_angle=direction_data[columns[4]],
+                    ax=axes[0]
+                    )
+
+    if polar:
+        plot_kwargs = {'theta_max': 180}
+    else:
+        plot_kwargs = {}
+
+    # Plot orientations
+    fig = plot_func(orientation_data[columns[0]],
+                    orientation_data[columns[1]],
+                    trials=orientation_data[columns[2]],
+                    fit=orientation_data[columns[3]],
+                    pref_angle=orientation_data[columns[4]],
+                    ax=axes[1],
+                    **plot_kwargs
+                    )
+
+    return fig, axes
+
+
 def histogram(data_in, rows=1, columns=1, bins=50, fig=None, color=None, fontsize=None, dpi=None):
     """Wrapper for the histogram function in subplots"""
     # create a new figure window

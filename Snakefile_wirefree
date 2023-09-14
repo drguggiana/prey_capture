@@ -278,8 +278,7 @@ def matched_rig(wildcards):
     # leave only the files with calcium data on that rig
     matched_slugs = np.unique([os.path.basename(el['avi_path']).split('.')[0] for el in info_list
                                if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
-                               (animal in el['mouse']) &
-                               (rig in el['rig'])])
+                               (animal in el['mouse']) & (rig in el['rig'])])
 
     # # assemble the paths to the calciumraw files
     ca_files = ['_'.join((el, 'calciumraw.hdf5')) for el in matched_slugs]
@@ -309,12 +308,11 @@ def match_rig_selector(wildcards):
         return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
 
 
-
 rule preprocess:
     input:
           dlc_input_selector,
           calcium_input_selector,
-          match_day_selector,
+          match_day_selector
     output:
           os.path.join(paths.analysis_path, "{file}_rawcoord.hdf5"),
           os.path.join(paths.analysis_path, "{file}.png")
@@ -413,36 +411,13 @@ def all_days(wildcards):
     return path_list
 
 
-def matched_tc_files(wildcards):
-    """Finds the matching session for a given file from the same mouse on the same day. This matched files paths are
-    fed to the rule match_cells_day"""
-
-    name_parts = wildcards.file.split('_')
-
-    day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y').strftime('%m_%d_%Y')
-    animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
-
-    info_list = [yaml.load(config["file_info"][el],Loader=yaml.FullLoader) for el in config["file_info"]]
-
-    # leave only the files with calcium data on that given day for that mouse
-    matched_slugs = np.unique([el['avi_path'].replace('.avi', '_tcday.hdf5').replace('VRExperiment', 'AnalyzedData') for el in info_list
-                               if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
-                               (animal in el['mouse']) & (day in el['slug'])])
-
-    # # assemble the paths to the calciumraw files
-    tc_files = ['_'.join((el, 'calciumraw.hdf5')) for el in matched_slugs]
-    tc_files = [os.path.join(paths.analysis_path,el) for el in tc_files]
-    return tc_files
-
-
 rule tc_day:
     input:
-        os.path.join(paths.analysis_path,'{file}_preproc.hdf5'),
-        # match_rig_selector,
+        os.path.join(paths.analysis_path, '{file}_preproc.hdf5')
     output:
-        os.path.join(paths.analysis_path,'{file}_tcday.hdf5'),
+        os.path.join(paths.analysis_path, '{file}_tcday.hdf5')
     params:
-        file_info = config["file_info"],
+        file_info = config["file_info"]
     script:
         "snakemake_scripts/wf_tc_calculate.py"
 
@@ -455,32 +430,34 @@ def matched_tc_files(wildcards):
     day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y').strftime('%m_%d_%Y')
     animal = '_'.join([name_parts[7].upper()] + name_parts[8:10])
 
-    info_list = [yaml.load(config["file_info"][el],Loader=yaml.FullLoader) for el in config["file_info"]]
+    if os.path.isfile(os.path.join(paths.analysis_path, f'{day[0]}_{animal[0]}_tcconsolidate.hdf5')):
+        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
 
-    # leave only the files with calcium data on that given day for that mouse
-    match_tc_files = np.unique([el['avi_path'].replace('.avi', '_tcday.hdf5').replace('VRExperiment', 'AnalyzedData') for el in info_list
-                               if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
-                               (animal in el['mouse']) & (day in el['slug'])])
-    return match_tc_files
+    else:
+        info_list = [yaml.load(config["file_info"][el],Loader=yaml.FullLoader) for el in config["file_info"]]
+
+        # leave only the tuning curve files on a given day for that mouse
+        match_tc_files = [el['avi_path'].replace('.avi', '_tcday.hdf5').replace('VRExperiment', 'AnalyzedData') for el in info_list
+                         if (animal in el['mouse']) & (day in el['slug'])]
+        return match_tc_files
 
 
 rule tc_day_combine:
     """Combines TC files for matched experiments"""
     input:
         matched_tc_files,
-        # match_rig_selector
-    params:
-        info = lambda wildcards: config["file_info"][wildcards.file]
-        # date=lambda wildcards: config["file_info"][wildcards.file]["slug"][:10],
-        # mouse=lambda wildcards: config["file_info"][wildcards.file]["mouse"]
+        match_rig_selector
     output:
-        os.path.join(paths.analysis_path, "{file}"+'_tcdummy.txt')
+        temp(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"))
+    params:
+        info=lambda wildcards: config["file_info"][wildcards.file]
     script:
         "snakemake_scripts/wf_tc_consolidate.py"
 
+
 rule tuning_run:
     input:
-          expand(os.path.join(paths.analysis_path,"{file}"+'_tcdummy.txt'), file=config['files'])
+          expand(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"), file=config['files'])
     output:
           os.path.join(paths.analysis_path, "tuning_run.txt")
     params:
