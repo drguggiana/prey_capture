@@ -40,8 +40,10 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
         fit, fit_curve, pref_angle, real_pref_angle = fit_function(norm_trial_activity[tuning_kind].to_numpy(),
                                                                    norm_trial_activity[cell].to_numpy(),
                                                                    mean=mean_guess)
-        fit_r2 = tuning.fit_r2(norm_trial_activity[tuning_kind].to_numpy(), norm_trial_activity[cell].to_numpy(),
-                               fit_curve[:, 0], fit_curve[:, 1])
+        fit_gof = tuning.goodness_of_fit(norm_trial_activity[tuning_kind].to_numpy(),
+                                          norm_trial_activity[cell].to_numpy(),
+                                          fit_curve[:, 0], fit_curve[:, 1],
+                                          type=processing_parameters.gof_type)
 
         # -- Get resultant vector and response variance-- #
         thetas = np.deg2rad(norm_trial_activity[tuning_kind].to_numpy())
@@ -57,12 +59,11 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
 
         # -- Run permutation tests -- #
         # Calculate fit on subset of data
-        bootstrap_r2, bootstrap_pref_angle, bootstrap_real_pref = \
+        bootstrap_gof, bootstrap_pref_angle, bootstrap_real_pref = \
             tuning.bootstrap_tuning_curve(norm_trial_activity[[tuning_kind, 'trial_num', cell]], fit_function,
+                                          gof_type=processing_parameters.gof_type,
                                           num_shuffles=bootstrap_shuffles, mean=mean_guess)
-        p_r2 = percentileofscore(bootstrap_r2, fit_r2, kind='mean') / 100.
-        p_pa = percentileofscore(bootstrap_pref_angle, fit_r2, kind='mean') / 100.
-        p_rpa = percentileofscore(bootstrap_real_pref, fit_r2, kind='mean') / 100.
+        p_gof = percentileofscore(bootstrap_gof, fit_gof, kind='mean') / 100.
 
         # Shuffle the trial IDs and compare the real selectivity index to the bootstrapped distribution
         bootstrap_responsivity = tuning.bootstrap_responsivity(thetas, magnitudes, num_shuffles=bootstrap_shuffles)
@@ -74,23 +75,20 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                      np.vstack([unique_angles, norm_mean_resp[cell].to_numpy()]).T,
                      std_resp[cell].to_numpy(), norm_std_resp[cell].to_numpy(),
                      sem_resp[cell].to_numpy(), norm_sem_resp[cell].to_numpy(),
-                     fit, fit_curve, fit_r2,
-                     pref_angle, bootstrap_pref_angle, p_pa,
-                     real_pref_angle, bootstrap_real_pref, p_rpa,
-                     (resultant_length, resultant_angle), circ_var, responsivity,
-                     bootstrap_r2, p_r2,
-                     bootstrap_responsivity, p_res]
+                     fit, fit_curve, fit_gof, bootstrap_gof, p_gof,
+                     pref_angle, bootstrap_pref_angle, real_pref_angle, bootstrap_real_pref,
+                     (resultant_length, resultant_angle),
+                     circ_var, responsivity, bootstrap_responsivity, p_res]
 
         cell_data_list.append(cell_data)
 
     # -- Assemble large dataframe -- #
-    data_cols = ['trial_resp', 'trial_resp_norm', 'mean', 'mean_norm', 'std', 'std_norm', 'sem', 'sem_norm',
-                 'fit', 'fit_curve', 'fit_r2',
-                 'pref', 'bootstrap_pref', 'p_pref',
-                 'shown_pref', 'bootstrap_shown_pref', 'p_shown_pref',
-                 'resultant', 'circ_var', 'responsivity',
-                 'bootstrap_fit_r2', 'p_r2',
-                 'bootstrap_responsivity', 'p_responsivity']
+    data_cols = ['trial_resp', 'trial_resp_norm',
+                 'mean', 'mean_norm', 'std', 'std_norm', 'sem', 'sem_norm',
+                 'fit', 'fit_curve', 'gof', 'bootstrap_gof', 'p_gof',
+                 'pref', 'bootstrap_pref', 'shown_pref', 'bootstrap_shown_pref',
+                 'resultant',
+                 'circ_var', 'responsivity', 'bootstrap_responsivity', 'p_responsivity']
 
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
     return data_df

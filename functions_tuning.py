@@ -2,9 +2,8 @@ import numpy as np
 import pandas as pd
 import pycircstat as circ
 from scipy.special import i0
-from scipy.stats import sem, norm, binned_statistic, percentileofscore, ttest_1samp, ttest_ind
 from scipy.optimize import least_squares
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_squared_error
 import functions_kinematic as fk
 from functions_misc import find_nearest
 
@@ -294,14 +293,15 @@ def bootstrap_responsivity(angles, magnitudes, num_shuffles=1000):
     return shuffled_responsivity
 
 
-def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, **kwargs):
+def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, gof_type='rmse', **kwargs):
     columns = list(responses.columns)
     tuning_kind = columns[0]
     cell = columns[2]
 
-    r2_list = []
+    gof_list = []
     pref_angle_list = []
     real_pref_angle_list = []
+
     for i in np.arange(num_shuffles):
         test_trials = responses.groupby([tuning_kind])['trial_num'].apply(
             lambda x: np.random.choice(x, 2)).iloc[1:].to_list()
@@ -316,18 +316,19 @@ def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, **kwargs):
             fit, fit_curve, pref_angle, real_pref_angle = fit_function(train_set[tuning_kind].to_numpy(),
                                                                        train_set[cell].to_numpy(),
                                                                        **kwargs)
-            r2 = fit_r2(test_set[tuning_kind].to_numpy(), test_set[cell].to_numpy(),
-                        fit_curve[:, 0], fit_curve[:, 1])
+
+            gof = goodness_of_fit(test_set[tuning_kind].to_numpy(), test_set[cell].to_numpy(),
+                                  fit_curve[:, 0], fit_curve[:, 1], type=gof_type)
         except ValueError:
-            r2 = 0.0
+            gof = 0.0
             pref_angle = 0.0
             real_pref_angle = 0.0
 
-        r2_list.append(r2)
+        gof_list.append(gof)
         pref_angle_list.append(pref_angle)
         real_pref_angle_list.append(real_pref_angle)
 
-    return np.array(r2_list), np.array(pref_angle_list), np.array(real_pref_angle_list)
+    return np.array(gof_list), np.array(pref_angle_list), np.array(real_pref_angle_list)
 
 def polar_vector_sum(magnitudes, thetas):
     thetas = np.deg2rad(thetas)
@@ -340,17 +341,29 @@ def polar_vector_sum(magnitudes, thetas):
     
     return mag, angle
 
+
 ### --- Misc. --- ###
-def fit_r2(angles, responses, fit_angles, fit_values):
+def goodness_of_fit(angles, responses, fit_angles, fit_values, type='rmse'):
     pred_resp = []
     for angle in angles:
         i, _ = find_nearest(fit_angles, angle)
         pred_resp.append(fit_values[i])
-    r2 = r2_score(responses, np.array(pred_resp))
-    return r2
+    pred_resp = np.array(pred_resp)
+
+    if type == 'rmse':
+        gof = mean_squared_error(responses, pred_resp, squared=False)
+    elif type == 'mse':
+        gof = mean_squared_error(responses, pred_resp)
+    elif type == 'r2':
+        gof = r2_score(responses, np.array(pred_resp))
+    else:
+        gof = 0.0
+
+    return gof
+
 
 def wrap_sort_negative(angles, values, bound=180):
-    wrapped_angles = fk.wrap_negative(angles)
+    wrapped_angles = fk.wrap_negative(angles, bound=bound)
     sorted_index = np.argsort(wrapped_angles)
     sorted_values = values[sorted_index]
     sorted_wrapped_angles = wrapped_angles[sorted_index]
@@ -358,7 +371,7 @@ def wrap_sort_negative(angles, values, bound=180):
 
 
 def wrap_sort(angles, bound=360):
-    wrapped_angles = fk.wrap(angles)
+    wrapped_angles = fk.wrap(angles, bound=bound)
     sort_idx = np.argsort(wrapped_angles)
     angles_sorted = wrapped_angles[sort_idx]
     return angles_sorted, sort_idx
