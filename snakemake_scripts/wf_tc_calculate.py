@@ -95,12 +95,12 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
 def parse_kinematic_data(matched_calcium):
     # Calculate orientation explicitly
     if 'orientation' not in matched_calcium.columns:
-        ori = matched_calcium['direction'].to_numpy()
-        ori[(ori > -180) & (ori < 0)] += 180
+        ori = matched_calcium['direction'].copy().to_numpy()
+        ori[(ori >= -180) & (ori < 0)] += 180
         matched_calcium['orientation'] = ori
 
     # Apply wrapping for directions to get range [0, 360]
-    matched_calcium['direction_wrapped'] = matched_calcium['direction']
+    matched_calcium['direction_wrapped'] = matched_calcium['direction'].copy()
     mask = matched_calcium['direction_wrapped'] > -1000
     matched_calcium.loc[mask, 'direction_wrapped'] = matched_calcium.loc[mask, 'direction_wrapped'].apply(fk.wrap)
 
