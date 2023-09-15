@@ -1,15 +1,10 @@
-import os
-import paths
-import numpy as np
-import pandas as pd
 import pycircstat as circ
 from scipy.stats import percentileofscore, sem
 
-import processing_parameters
-import functions_bondjango as bd
 import functions_kinematic as fk
 import functions_tuning as tuning
 from tc_calculate import *
+
 
 def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bootstrap_shuffles=500):
     # Get the mean response per trial and drop the inter-trial interval from df
@@ -62,10 +57,12 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
 
         # -- Run permutation tests -- #
         # Calculate fit on subset of data
-        bootstrap_r2 = tuning.bootstrap_tuning_curve(norm_trial_activity[[tuning_kind, 'trial_num', cell]],
-                                                     fit_function,
-                                                     num_shuffles=bootstrap_shuffles, mean=mean_guess)
+        bootstrap_r2, bootstrap_pref_angle, bootstrap_real_pref = \
+            tuning.bootstrap_tuning_curve(norm_trial_activity[[tuning_kind, 'trial_num', cell]], fit_function,
+                                          num_shuffles=bootstrap_shuffles, mean=mean_guess)
         p_r2 = percentileofscore(bootstrap_r2, fit_r2, kind='mean') / 100.
+        p_pa = percentileofscore(bootstrap_pref_angle, fit_r2, kind='mean') / 100.
+        p_rpa = percentileofscore(bootstrap_real_pref, fit_r2, kind='mean') / 100.
 
         # Shuffle the trial IDs and compare the real selectivity index to the bootstrapped distribution
         bootstrap_responsivity = tuning.bootstrap_responsivity(thetas, magnitudes, num_shuffles=bootstrap_shuffles)
@@ -77,16 +74,23 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                      np.vstack([unique_angles, norm_mean_resp[cell].to_numpy()]).T,
                      std_resp[cell].to_numpy(), norm_std_resp[cell].to_numpy(),
                      sem_resp[cell].to_numpy(), norm_sem_resp[cell].to_numpy(),
-                     fit, fit_curve, fit_r2, pref_angle, real_pref_angle,
+                     fit, fit_curve, fit_r2,
+                     pref_angle, bootstrap_pref_angle, p_pa,
+                     real_pref_angle, bootstrap_real_pref, p_rpa,
                      (resultant_length, resultant_angle), circ_var, responsivity,
-                     bootstrap_r2, p_r2, bootstrap_responsivity, p_res]
+                     bootstrap_r2, p_r2,
+                     bootstrap_responsivity, p_res]
 
         cell_data_list.append(cell_data)
 
     # -- Assemble large dataframe -- #
     data_cols = ['trial_resp', 'trial_resp_norm', 'mean', 'mean_norm', 'std', 'std_norm', 'sem', 'sem_norm',
-                 'fit', 'fit_curve', 'fit_r2', 'pref', 'shown_pref', 'resultant', 'circ_var', 'responsivity',
-                 'bootstrap_fit_r2', 'p_r2', 'bootstrap_responsivity', 'p_responsivity']
+                 'fit', 'fit_curve', 'fit_r2',
+                 'pref', 'bootstrap_pref', 'p_pref',
+                 'shown_pref', 'bootstrap_shown_pref', 'p_shown_pref',
+                 'resultant', 'circ_var', 'responsivity',
+                 'bootstrap_fit_r2', 'p_r2',
+                 'bootstrap_responsivity', 'p_responsivity']
 
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
     return data_df
@@ -157,7 +161,7 @@ if __name__ == '__main__':
         name_parts = os.path.basename(out_path).split('_')
         day = '_'.join(name_parts[:3])
         animal = '_'.join(name_parts[3:6])
-        rig = name_parts[6]
+        rigs = [name_parts[6]]
 
     except NameError:
         # get the search query
@@ -166,20 +170,20 @@ if __name__ == '__main__':
         # get the paths from the database
         data_all = bd.query_database('analyzed_data', search_string)
         data_all = [el for el in data_all if '_preproc' in el['slug']]
-        input_path = [el['analysis_path'] for el in data_all if '_preproc' in el['slug']]
+        input_path = [el['analysis_path'] for el in data_all]
         # get the day, animal and rig
         day = '_'.join(data_all[0]['slug'].split('_')[0:3])
-        rig = data_all[0]['rig']
+        rigs = [el['rig'] for el in data_all]
         animal = data_all[0]['slug'].split('_')[7:10]
         animal = '_'.join([animal[0].upper()] + animal[1:])
 
+    for idx, file in enumerate(input_path):
+        # allocate memory for the data
+        raw_data = []
+
+        rig = rigs[idx]
         # assemble the output path
         out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'tcday.hdf5')))
-
-    # allocate memory for the data
-    raw_data = []
-
-    for idx, file in enumerate(input_path):
 
         # Load the data
         with pd.HDFStore(file, mode='r') as h:
@@ -355,4 +359,6 @@ if __name__ == '__main__':
               (output_entry.status_code, output_entry.reason))
         if output_entry.status_code in [500, 400]:
             print(entry_data)
+
+    print("Done calculating tuning curves!")
 
