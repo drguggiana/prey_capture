@@ -331,7 +331,7 @@ def trace_raster(data, cells=None, ds_factor=1):
 
 
 def rand_jitter(arr):
-    stdev = .01 * (max(arr) - min(arr))
+    stdev = .001 * (max(arr) - min(arr))
     return arr + np.random.randn(len(arr)) * stdev
 
 
@@ -349,7 +349,7 @@ def plot_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_angle=Non
         ax.axvline(pref_angle, color='k', linewidth=1)
 
     if trials is not None:
-        ax.scatter(trials[:, 0], rand_jitter(trials[:, 1]), marker='.', c='k', alpha=0.5)
+        ax.scatter(rand_jitter(trials[:, 0]), trials[:, 1], marker='.', c='k', alpha=0.5)
 
     return tuning
 
@@ -367,7 +367,7 @@ def plot_polar_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_ang
         ax.plot(np.deg2rad(fit[:, 0]), fit[:, 1], c='r')
 
     if trials is not None:
-        ax.scatter(np.deg2rad(trials[:, 0]), rand_jitter(trials[:, 1]), marker='.', color='k', alpha=0.5)
+        ax.scatter(rand_jitter(np.deg2rad(trials[:, 0])), trials[:, 1], marker='.', color='k', alpha=0.5)
 
     if pref_angle is not None:
         ax.axvline(np.deg2rad(pref_angle), color='k', linewidth=1)

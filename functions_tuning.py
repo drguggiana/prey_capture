@@ -2,13 +2,13 @@ import numpy as np
 import pandas as pd
 import pycircstat as circ
 from scipy.special import i0
-from scipy.optimize import least_squares
+from scipy.optimize import least_squares, curve_fit
 from sklearn.metrics import r2_score, mean_squared_error
 import functions_kinematic as fk
 from functions_misc import find_nearest
 
 
-### --- Gaussian fitting --- ###
+# --- Gaussian fitting --- #
 def gaussian(x, c, mu, sigma):
     #     (c, mu, sigma) = params
     return c * np.exp(- (x - mu) ** 2.0 / (2.0 * sigma ** 2.0))
@@ -38,7 +38,7 @@ def get_HWHM(sigma):
     return np.sqrt(2 * np.log(2)) * np.abs(sigma)
 
 
-### --- Von Mises fitting --- ###
+# --- Von Mises fitting --- #
 def von_mises(theta, a, mu, kappa):
     """
         pdf_von_Mises(theta,mu,kappa)
@@ -89,7 +89,7 @@ def fit_double_von_mises_pdf(params, x, y_data):
     return fit - y_data
 
 
-### --- Tuning curve calculations --- ###
+# --- Tuning curve calculations --- #
 def calculate_pref_direction(angles, tuning_curve, **kwargs):
     # --- Fit double gaussian ---#
 
@@ -205,8 +205,7 @@ def calculate_pref_direction_vm(angles, tuning_curve, **kwargs):
     # --- Fit double gaussian ---#
 
     # Shift baseline to zero for fitting the data
-    amp_min = tuning_curve.min(axis=0)
-    curve_to_fit = tuning_curve - amp_min
+    curve_to_fit = tuning_curve - tuning_curve.min()
 
     # Approximate parameters for the fit
     amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
@@ -219,7 +218,7 @@ def calculate_pref_direction_vm(angles, tuning_curve, **kwargs):
     mean2 = fk.wrap(mean + 180)
 
     init_params = [amp, np.deg2rad(mean), kappa, amp, np.deg2rad(mean2), kappa]
-    lower_bound = [amp_min, 0, 0, amp_min, 0, 0]
+    lower_bound = [0, 0, 0, 0, 0, 0]
     upper_bound = [1, 2*np.pi, 10, 1, 2*np.pi, 10]
 
     # Run regression
@@ -245,27 +244,15 @@ def calculate_pref_direction_vm(angles, tuning_curve, **kwargs):
 def generate_response_vector(responses, function, **kwargs):
     columns = list(responses.columns)
     tuning_kind = columns[0]
-    trial_nums = columns[1]
     cell_ids = columns[2:]
 
     # Get response across trials
     resp = responses.groupby([tuning_kind])[cell_ids].agg(function, **kwargs).reset_index()
+    angles = resp[tuning_kind].to_numpy()
+    resp = resp[cell_ids]
 
-    # Wrap angles from [-180, 180] to [0, 360] for direction tuning, and sort angles and cell responses
-    # Needed for pycircstat toolbox
-    resp[tuning_kind] = fk.wrap(resp[tuning_kind].to_numpy())
-    resp_sorted = resp.sort_values(tuning_kind)
+    return resp, angles
 
-    if 'direction' in tuning_kind:
-        # Make sure to explicitly represent 360 degrees in the data if looking at direction tuning.
-        # This is done by duplicating the 0 degrees value
-        dup = resp_sorted.loc[resp_sorted[tuning_kind] == 0]
-        dup.at[0, tuning_kind] = 360.
-        resp_sorted = pd.concat([resp_sorted, dup], ignore_index=True)
-
-    sorted_angles = resp_sorted[tuning_kind].to_numpy()
-
-    return resp_sorted, sorted_angles
 
 def bootstrap_responsivity(angles, magnitudes, num_shuffles=1000):
     
@@ -311,10 +298,13 @@ def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, gof_type='
         test_set = responses[responses.trial_num.isin(test_trials)]
         train_set = responses[responses.trial_num.isin(train_trials)]
 
+        test_mean, unique_angles = generate_response_vector(test_set, np.nanmean)
+        train_mean, _ = generate_response_vector(train_set, np.nanmean)
+
         # Sometimes the data cannot be fit - catch that here
         try:
-            fit, fit_curve, pref_angle, real_pref_angle = fit_function(train_set[tuning_kind].to_numpy(),
-                                                                       train_set[cell].to_numpy(),
+            fit, fit_curve, pref_angle, real_pref_angle = fit_function(unique_angles,
+                                                                       train_mean[cell].to_numpy(),
                                                                        **kwargs)
 
             gof = goodness_of_fit(test_set[tuning_kind].to_numpy(), test_set[cell].to_numpy(),
@@ -330,6 +320,7 @@ def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, gof_type='
 
     return np.array(gof_list), np.array(pref_angle_list), np.array(real_pref_angle_list)
 
+
 def polar_vector_sum(magnitudes, thetas):
     thetas = np.deg2rad(thetas)
 
@@ -342,7 +333,7 @@ def polar_vector_sum(magnitudes, thetas):
     return mag, angle
 
 
-### --- Misc. --- ###
+# --- Misc. --- #
 def goodness_of_fit(angles, responses, fit_angles, fit_values, type='rmse'):
     pred_resp = []
     for angle in angles:
@@ -377,12 +368,15 @@ def wrap_sort(angles, bound=360):
     return angles_sorted, sort_idx
 
 
-def append_360(sorted_angles, data):
+def append_angle(sorted_angles, data, angle=360.):
+    """Duplicates the 0 degree angle and appends it to the end of the sorted
+    angles and data arrays to have a continuous tuning curve
+    """
     
     idx_0 = np.argwhere(sorted_angles == 0)[0][0]
-    trace_360 = data[idx_0]
-    sorted_angles = np.append(sorted_angles, 360.)
-    data_360 = np.append(data, [trace_360], axis=0)
+    trace_append = data[idx_0]
+    sorted_angles = np.append(sorted_angles, angle)
+    data_360 = np.append(data, [trace_append], axis=0)
     return data_360, sorted_angles
 
 

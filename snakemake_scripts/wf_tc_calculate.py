@@ -7,22 +7,39 @@ from tc_calculate import *
 
 
 def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bootstrap_shuffles=500):
-    # Get the mean response per trial and drop the inter-trial interval from df
+    # define the clipping threshold in percentile of baseline
+    clip_threshold = 8
+    # do the cell clipping
     cells = [col for col in activity_df.columns if 'cell' in col]
+    activity_df[cells] = activity_df.loc[:, cells].apply(clipping_function, axis=1, raw=True,
+                                                         threshold=clip_threshold)
+
+    # Get the mean response per trial and drop the inter-trial interval from df
     mean_trial_activity = activity_df.groupby([tuning_kind, 'trial_num'])[cells].agg(np.nanmean).reset_index()
     mean_trial_activity = mean_trial_activity.drop(mean_trial_activity[mean_trial_activity.trial_num == 0].index)
+
+    # Make sure to explicitly represent 180 or 360 degrees in the data.
+    # This is done by duplicating the 0 degrees value
+    if 'direction' in tuning_kind:
+        dup_angle = 360.
+    else:
+        dup_angle = 180.
+
+    dup = mean_trial_activity.loc[mean_trial_activity[tuning_kind] == 0].copy()
+    dup.loc[:, tuning_kind] = dup_angle
+    mean_trial_activity = pd.concat([mean_trial_activity, dup], ignore_index=True)
 
     # -- Create the response vectors --#
     mean_resp, unique_angles = tuning.generate_response_vector(mean_trial_activity, np.nanmean)
     sem_resp, _ = tuning.generate_response_vector(mean_trial_activity, sem, nan_policy='omit')
-    std_resp, _ = tuning.generate_response_vector(mean_trial_activity, np.std)
+    std_resp, _ = tuning.generate_response_vector(mean_trial_activity, np.nanstd)
 
-    # Normalize the responses of each cell to the maximum response of the cell on any given trial
+    # Normalize the responses of each cell to the maximum mean response of the cell on any given trial
     norm_trial_activity = mean_trial_activity.copy()
     norm_trial_activity[cells] = norm_trial_activity[cells].apply(tuning.normalize)
     norm_mean_resp, _ = tuning.generate_response_vector(norm_trial_activity, np.nanmean)
     norm_sem_resp, _ = tuning.generate_response_vector(norm_trial_activity, sem, nan_policy='omit')
-    norm_std_resp, _ = tuning.generate_response_vector(norm_trial_activity, np.std)
+    norm_std_resp, _ = tuning.generate_response_vector(norm_trial_activity, np.nanstd)
 
     # -- Fit tuning curves to get preference-- #
     if 'direction' in tuning_kind:
@@ -31,19 +48,23 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
         else:
             fit_function = tuning.calculate_pref_direction
     else:
+        # if tuning_fit == 'von_mises':
+        #     fit_function = tuning.calculate_pref_orientation_vm
+        # else:
         fit_function = tuning.calculate_pref_orientation
 
     cell_data_list = []
     for cell in cells:
         # -- Calculate fit and responsivity using all trials -- #
         mean_guess = unique_angles[np.argmax(norm_mean_resp[cell], axis=0)]
-        fit, fit_curve, pref_angle, real_pref_angle = fit_function(norm_trial_activity[tuning_kind].to_numpy(),
-                                                                   norm_trial_activity[cell].to_numpy(),
+        fit, fit_curve, pref_angle, real_pref_angle = fit_function(unique_angles,
+                                                                   norm_mean_resp[cell].to_numpy(),
                                                                    mean=mean_guess)
+
         fit_gof = tuning.goodness_of_fit(norm_trial_activity[tuning_kind].to_numpy(),
-                                          norm_trial_activity[cell].to_numpy(),
-                                          fit_curve[:, 0], fit_curve[:, 1],
-                                          type=processing_parameters.gof_type)
+                                         norm_trial_activity[cell].to_numpy(),
+                                         fit_curve[:, 0], fit_curve[:, 1],
+                                         type=processing_parameters.gof_type)
 
         # -- Get resultant vector and response variance-- #
         thetas = np.deg2rad(norm_trial_activity[tuning_kind].to_numpy())
@@ -95,16 +116,16 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
 
 
 def parse_kinematic_data(matched_calcium):
-    # Calculate orientation explicitly
-    if 'orientation' not in matched_calcium.columns:
-        ori = matched_calcium['direction'].copy().to_numpy()
-        ori[(ori >= -180) & (ori < 0)] += 180
-        matched_calcium['orientation'] = ori
-
     # Apply wrapping for directions to get range [0, 360]
     matched_calcium['direction_wrapped'] = matched_calcium['direction'].copy()
     mask = matched_calcium['direction_wrapped'] > -1000
     matched_calcium.loc[mask, 'direction_wrapped'] = matched_calcium.loc[mask, 'direction_wrapped'].apply(fk.wrap)
+
+    # Calculate orientation explicitly
+    if 'orientation' not in matched_calcium.columns:
+        matched_calcium['orientation'] = matched_calcium['direction_wrapped'].copy()
+        mask = matched_calcium['orientation'] > -1000
+        matched_calcium.loc[mask, 'orientation'] = matched_calcium.loc[mask, 'orientation'].apply(fk.wrap, bound=180)
 
     # For all data
     if rig in ['VWheel', 'VWheelWF']:
