@@ -353,6 +353,11 @@ def plot_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_angle=Non
     if trials is not None:
         ax.scatter(rand_jitter(trials[:, 0]), trials[:, 1], marker='.', c='k', alpha=0.5)
 
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+
     return tuning
 
 

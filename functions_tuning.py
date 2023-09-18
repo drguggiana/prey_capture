@@ -19,9 +19,9 @@ def fit_gaussian(params, x, y_data):
     return fit - y_data
 
 
-def double_gaussian(x, c1, mu1, c2, mu2):
-    res = c1 * np.exp(-(x - mu1) ** 2.0 / (2.0 * 16. ** 2.0)) \
-          + c2 * np.exp(-(x - mu2) ** 2.0 / (2.0 * 16. ** 2.0))
+def double_gaussian(x, sigma1, c1, mu1, sigma2, c2, mu2):
+    res = c1 * np.exp(-(x - mu1) ** 2.0 / (2.0 * sigma1 ** 2.0)) \
+          + c2 * np.exp(-(x - mu2) ** 2.0 / (2.0 * sigma2 ** 2.0))
     return res
 
 
@@ -77,9 +77,9 @@ def fit_von_mises_pdf(params, x, y_data):
     return fit - y_data
 
 
-def double_von_mises(theta, a1, mu1, a2, mu2):
-    pdf = a1 * np.exp(10. * np.cos(theta - mu1)) / (2.0 * np.pi * i0(10.)) \
-        + a2 * np.exp(10. * np.cos(theta - mu2)) / (2.0 * np.pi * i0(10.))
+def double_von_mises(theta, kappa1, a1, mu1, kappa2, a2, mu2):
+    pdf = a1 * np.exp(kappa1 * np.cos(theta - mu1)) / (2.0 * np.pi * i0(kappa1)) \
+        + a2 * np.exp(kappa2 * np.cos(theta - mu2)) / (2.0 * np.pi * i0(kappa2))
     
     return pdf
 
@@ -103,6 +103,7 @@ def calculate_pref_gaussian(angles, tuning_curve, fit_kind, **kwargs):
 
     # Approximate parameters for the fit
     amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
+    width = kwargs.get('width', 25)
     mean = kwargs.get('mean', angles[np.argmax(curve_to_fit)])
 
     # Following Carandini and Ferster, 2000, (https://doi.org/10.1523%2FJNEUROSCI.20-01-00470.2000)
@@ -110,9 +111,9 @@ def calculate_pref_gaussian(angles, tuning_curve, fit_kind, **kwargs):
     # if wrapping on [-180, 180] domain, use fk.wrap(mean + mean_shift, bound=180) - mean_shift
     mean2 = fk.wrap(mean + 180)
 
-    init_params = [amp, mean, amp, mean2]
-    lower_bound = [0, 0, 0, 0]
-    upper_bound = [1, 360, 1, 360]
+    init_params = [amp, mean, width, amp, mean2, width]
+    lower_bound = [0, 0, 10, 0, 0, 10]
+    upper_bound = [1, 360, 40, 1, 360, 40]
 
     # Run regression
     fit = least_squares(fit_double_gaussian, init_params,
@@ -236,12 +237,17 @@ def calculate_pref_von_mises(angles, tuning_curve, fit_kind, **kwargs):
 
     # Approximate parameters for the fit
     amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
-    mean = kwargs.get('mean', angles[np.argmax(curve_to_fit)])
+    kappa = kwargs.get('kappa', 5)
+    mean = kwargs.get('mean', angles[np.argmax(curve_to_fit, axis=0)])
+
+    # Following Carandini and Ferster, 2000, (https://doi.org/10.1523%2FJNEUROSCI.20-01-00470.2000)
+    # initialize the double gaussian with the same width and amplitude, but shift the center of the second gaussian
+    # if wrapping on [-180, 180] domain, use fk.wrap(center + center_shift, bound=180) - center_shift
     mean2 = fk.wrap(mean + 180)
 
-    init_params = [amp, np.deg2rad(mean), amp, np.deg2rad(mean2)]
-    lower_bound = [0, 0, 0, 0]
-    upper_bound = [1, 2 * np.pi, 1, 2 * np.pi]
+    init_params = [amp, np.deg2rad(mean), kappa, amp, np.deg2rad(mean2), kappa]
+    lower_bound = [0, 0, 0, 0, 0, 0]
+    upper_bound = [1, 2*np.pi, 10, 1, 2*np.pi, 10]
 
     # Run regression
     fit = least_squares(fit_double_von_mises_pdf, init_params,
