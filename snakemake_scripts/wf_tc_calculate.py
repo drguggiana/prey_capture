@@ -169,7 +169,7 @@ if __name__ == '__main__':
         # get the slugs
         slug_list = [os.path.basename(el).replace('_preproc.hdf5', '') for el in input_path]
         # read the output path and the input file urls
-        out_path = snakemake.output
+        out_path = snakemake.output[0]
         data_all = snakemake.params.file_info
         # get the parts for the file naming
         name_parts = os.path.basename(out_path).split('_')
