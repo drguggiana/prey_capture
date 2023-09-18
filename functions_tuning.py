@@ -9,9 +9,9 @@ from functions_misc import find_nearest
 
 
 # --- Gaussian fitting --- #
-def gaussian(x, c, mu, sigma):
+def gaussian(x, c, mu):
     #     (c, mu, sigma) = params
-    return c * np.exp(- (x - mu) ** 2.0 / (2.0 * sigma ** 2.0))
+    return c * np.exp(- (x - mu) ** 2.0 / (2.0 * 16. ** 2.0))
 
 
 def fit_gaussian(params, x, y_data):
@@ -19,9 +19,9 @@ def fit_gaussian(params, x, y_data):
     return fit - y_data
 
 
-def double_gaussian(x, c1, mu1, sigma1, c2, mu2, sigma2):
-    res = c1 * np.exp(-(x - mu1) ** 2.0 / (2.0 * sigma1 ** 2.0)) \
-          + c2 * np.exp(-(x - mu2) ** 2.0 / (2.0 * sigma2 ** 2.0))
+def double_gaussian(x, c1, mu1, c2, mu2):
+    res = c1 * np.exp(-(x - mu1) ** 2.0 / (2.0 * 16. ** 2.0)) \
+          + c2 * np.exp(-(x - mu2) ** 2.0 / (2.0 * 16. ** 2.0))
     return res
 
 
@@ -39,7 +39,7 @@ def get_HWHM(sigma):
 
 
 # --- Von Mises fitting --- #
-def von_mises(theta, a, mu, kappa):
+def von_mises(theta, a, mu):
     """
         pdf_von_Mises(theta,mu,kappa)
         =============================
@@ -67,7 +67,7 @@ def von_mises(theta, a, mu, kappa):
 
     """
 
-    pdf = a * np.exp(kappa * np.cos(theta - mu)) / (2.0 * np.pi * i0(kappa))
+    pdf = a * np.exp(5 * np.cos(theta - mu)) / (2.0 * np.pi * i0(8.))
 
     return pdf
 
@@ -77,9 +77,9 @@ def fit_von_mises_pdf(params, x, y_data):
     return fit - y_data
 
 
-def double_von_mises(theta, a1, mu1, kappa1, a2, mu2, kappa2):
-    pdf = a1 * np.exp(kappa1 * np.cos(theta - mu1)) / (2.0 * np.pi * i0(kappa1)) \
-        + a2 * np.exp(kappa2 * np.cos(theta - mu2)) / (2.0 * np.pi * i0(kappa2)) 
+def double_von_mises(theta, a1, mu1, a2, mu2):
+    pdf = a1 * np.exp(10. * np.cos(theta - mu1)) / (2.0 * np.pi * i0(10.)) \
+        + a2 * np.exp(10. * np.cos(theta - mu2)) / (2.0 * np.pi * i0(10.))
     
     return pdf
 
@@ -90,6 +90,55 @@ def fit_double_von_mises_pdf(params, x, y_data):
 
 
 # --- Tuning curve calculations --- #
+def calculate_pref_gaussian(angles, tuning_curve, fit_kind, **kwargs):
+    # --- Fit double gaussian ---#
+
+    # Shift baseline to zero for fitting the data
+    curve_to_fit = tuning_curve - tuning_curve.min()
+
+    if fit_kind == 'orientation':
+        # Duplicate the tuning curve to properly fit the double von mises
+        curve_to_fit = np.tile(curve_to_fit, 2)
+        angles = np.concatenate((angles, angles + 180))
+
+    # Approximate parameters for the fit
+    amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
+    mean = kwargs.get('mean', angles[np.argmax(curve_to_fit)])
+
+    # Following Carandini and Ferster, 2000, (https://doi.org/10.1523%2FJNEUROSCI.20-01-00470.2000)
+    # initialize the double gaussian with the same width and amplitude, but shift the mean of the second gaussian
+    # if wrapping on [-180, 180] domain, use fk.wrap(mean + mean_shift, bound=180) - mean_shift
+    mean2 = fk.wrap(mean + 180)
+
+    init_params = [amp, mean, amp, mean2]
+    lower_bound = [0, 0, 0, 0]
+    upper_bound = [1, 360, 1, 360]
+
+    # Run regression
+    fit = least_squares(fit_double_gaussian, init_params,
+                        args=(angles, curve_to_fit),
+                        bounds=(lower_bound, upper_bound),
+                        loss='linear')
+
+    # Generate a fit curve
+    x = np.linspace(0, 360, 500, endpoint=True)
+    fit_curve = double_gaussian(x, *fit.x)
+    fit_curve += tuning_curve.min()  # Shift baseline back to match real data
+
+    if fit_kind == 'orientation':
+        # Cut the fit curve in half
+        x = x[:len(x) // 2]
+        fit_curve = fit_curve[:len(fit_curve) // 2]
+
+    # Find the preferred orientation/direction from the fit
+    pref = x[np.argmax(fit_curve)]
+
+    # Find the direction/orientation of the grating that was shown
+    real_pref = angles[np.argmin(np.abs(angles - pref))]
+
+    return fit, np.vstack((x, fit_curve)).T, pref, real_pref
+
+
 def calculate_pref_direction(angles, tuning_curve, **kwargs):
     # --- Fit double gaussian ---#
 
@@ -107,9 +156,13 @@ def calculate_pref_direction(angles, tuning_curve, **kwargs):
     # if wrapping on [-180, 180] domain, use fk.wrap(mean + mean_shift, bound=180) - mean_shift
     mean2 = fk.wrap(mean + 180)
 
-    init_params = [amp, mean, width, amp, mean2, width]
-    lower_bound = [0, 0, 10, 0, 0, 10]
-    upper_bound = [1, 360, 40, 1, 360, 40]
+    # init_params = [amp, mean, width, amp, mean2, width]
+    # lower_bound = [0, 0, 10, 0, 0, 10]
+    # upper_bound = [1, 360, 40, 1, 360, 40]
+
+    init_params = [amp, mean, amp, mean2]
+    lower_bound = [0, 0, 0, 0]
+    upper_bound = [1, 360, 1, 360]
 
     # Run regression
     fit = least_squares(fit_double_gaussian, init_params,
@@ -139,12 +192,16 @@ def calculate_pref_orientation(angles, tuning_curve, **kwargs):
 
     # Approximate parameters for the fit
     amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
-    width = kwargs.get('width', 10)
+    width = kwargs.get('width', 16)
     mean = kwargs.get('mean', angles[np.argmax(curve_to_fit)])
 
-    init_params = [amp, mean, width]
-    lower_bound = [0, 0, 10]
-    upper_bound = [1, 180, 30]
+    # init_params = [amp, mean, width]
+    # lower_bound = [0, 0, 10]
+    # upper_bound = [1, 180, 30]
+
+    init_params = [amp, mean]
+    lower_bound = [0, 0]
+    upper_bound = [1, 180]
 
     # Run regression
     fit = least_squares(fit_gaussian, init_params,
@@ -166,23 +223,77 @@ def calculate_pref_orientation(angles, tuning_curve, **kwargs):
     return fit, np.vstack((x, fit_curve)).T, pref, real_pref
 
 
+def calculate_pref_von_mises(angles, tuning_curve, fit_kind, **kwargs):
+    # --- Fit double gaussian ---#
+
+    # Shift baseline to zero for fitting the data
+    curve_to_fit = tuning_curve - tuning_curve.min()
+
+    if fit_kind == 'orientation':
+        # Duplicate the tuning curve to properly fit the double von mises
+        curve_to_fit = np.tile(curve_to_fit, 2)
+        angles = np.concatenate((angles, angles + 180))
+
+    # Approximate parameters for the fit
+    amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
+    mean = kwargs.get('mean', angles[np.argmax(curve_to_fit)])
+    mean2 = fk.wrap(mean + 180)
+
+    init_params = [amp, np.deg2rad(mean), amp, np.deg2rad(mean2)]
+    lower_bound = [0, 0, 0, 0]
+    upper_bound = [1, 2 * np.pi, 1, 2 * np.pi]
+
+    # Run regression
+    fit = least_squares(fit_double_von_mises_pdf, init_params,
+                        args=(np.deg2rad(angles), curve_to_fit),
+                        bounds=(lower_bound, upper_bound),
+                        loss='linear')
+
+    # Generate a fit curve
+    x = np.linspace(0, 2 * np.pi, 500, endpoint=True)
+    fit_curve = double_von_mises(x, *fit.x)
+    fit_curve += tuning_curve.min()  # Shift baseline back to match real data
+
+    if fit_kind == 'orientation':
+        # Cut the fit curve in half
+        x = x[:len(x) // 2]
+        fit_curve = fit_curve[:len(fit_curve) // 2]
+
+    # Find the preferred orientation/direction from the fit
+    pref = np.rad2deg(x[np.argmax(fit_curve)])
+
+    # Find the direction/orientation of the grating that was shown
+    real_pref = angles[np.argmin(np.abs(angles - pref))]
+
+    return fit, np.vstack((np.rad2deg(x), fit_curve)).T, pref, real_pref
+
+
 def calculate_pref_orientation_vm(angles, tuning_curve, **kwargs):
     # --- Fit double gaussian ---#
 
     # Shift baseline to zero for fitting the data
     curve_to_fit = tuning_curve - tuning_curve.min()
 
+    # Duplicate the tuning curve to properly fit the double von mises
+    curve_to_fit = np.tile(curve_to_fit, 2)
+    angles = angles.append(angles + 180)
+
     # Approximate parameters for the fit
     amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
     kappa = kwargs.get('kappa', 5)
     mean = kwargs.get('mean', angles[np.argmax(curve_to_fit)])
+    mean2 = fk.wrap(mean + 180)
 
-    init_params = [amp, np.deg2rad(mean), kappa]
-    lower_bound = [0, 0, 0]
-    upper_bound = [1, np.pi, 10]
+    # init_params = [amp, np.deg2rad(mean), kappa]
+    # lower_bound = [0, 0, 0]
+    # upper_bound = [1, np.pi, 10]
+
+    init_params = [amp, np.deg2rad(mean), amp, np.deg2rad(mean2)]
+    lower_bound = [0, 0, 0, 0]
+    upper_bound = [1, 2 * np.pi, 1, 2 * np.pi]
 
     # Run regression
-    fit = least_squares(fit_von_mises_pdf, init_params,
+    fit = least_squares(fit_double_von_mises_pdf, init_params,
                         args=(np.deg2rad(angles), curve_to_fit),
                         bounds=(lower_bound, upper_bound),
                         loss='linear')
@@ -217,9 +328,13 @@ def calculate_pref_direction_vm(angles, tuning_curve, **kwargs):
     # if wrapping on [-180, 180] domain, use fk.wrap(center + center_shift, bound=180) - center_shift
     mean2 = fk.wrap(mean + 180)
 
-    init_params = [amp, np.deg2rad(mean), kappa, amp, np.deg2rad(mean2), kappa]
-    lower_bound = [0, 0, 0, 0, 0, 0]
-    upper_bound = [1, 2*np.pi, 10, 1, 2*np.pi, 10]
+    # init_params = [amp, np.deg2rad(mean), kappa, amp, np.deg2rad(mean2), kappa]
+    # lower_bound = [0, 0, 0, 0, 0, 0]
+    # upper_bound = [1, 2*np.pi, 10, 1, 2*np.pi, 10]
+
+    init_params = [amp, np.deg2rad(mean), amp, np.deg2rad(mean2)]
+    lower_bound = [0, 0, 0, 0]
+    upper_bound = [1, 2 * np.pi, 1, 2 * np.pi]
 
     # Run regression
     fit = least_squares(fit_double_von_mises_pdf, init_params,
@@ -305,14 +420,15 @@ def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, gof_type='
         try:
             fit, fit_curve, pref_angle, real_pref_angle = fit_function(unique_angles,
                                                                        train_mean[cell].to_numpy(),
+                                                                       tuning_kind,
                                                                        **kwargs)
 
             gof = goodness_of_fit(test_set[tuning_kind].to_numpy(), test_set[cell].to_numpy(),
                                   fit_curve[:, 0], fit_curve[:, 1], type=gof_type)
         except ValueError:
-            gof = 0.0
-            pref_angle = 0.0
-            real_pref_angle = 0.0
+            gof = np.nan
+            pref_angle = np.nan
+            real_pref_angle = np.nan
 
         gof_list.append(gof)
         pref_angle_list.append(pref_angle)
@@ -348,7 +464,7 @@ def goodness_of_fit(angles, responses, fit_angles, fit_values, type='rmse'):
     elif type == 'r2':
         gof = r2_score(responses, np.array(pred_resp))
     else:
-        gof = 0.0
+        raise NameError('Invalid goodness of fit type')
 
     return gof
 

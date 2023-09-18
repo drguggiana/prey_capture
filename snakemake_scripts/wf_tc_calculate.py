@@ -42,16 +42,10 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
     norm_std_resp, _ = tuning.generate_response_vector(norm_trial_activity, np.nanstd)
 
     # -- Fit tuning curves to get preference-- #
-    if 'direction' in tuning_kind:
-        if tuning_fit == 'von_mises':
-            fit_function = tuning.calculate_pref_direction_vm
-        else:
-            fit_function = tuning.calculate_pref_direction
+    if tuning_fit == 'von_mises':
+        fit_function = tuning.calculate_pref_von_mises
     else:
-        # if tuning_fit == 'von_mises':
-        #     fit_function = tuning.calculate_pref_orientation_vm
-        # else:
-        fit_function = tuning.calculate_pref_orientation
+        fit_function = tuning.calculate_pref_gaussian
 
     cell_data_list = []
     for cell in cells:
@@ -59,6 +53,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
         mean_guess = unique_angles[np.argmax(norm_mean_resp[cell], axis=0)]
         fit, fit_curve, pref_angle, real_pref_angle = fit_function(unique_angles,
                                                                    norm_mean_resp[cell].to_numpy(),
+                                                                   tuning_kind,
                                                                    mean=mean_guess)
 
         fit_gof = tuning.goodness_of_fit(norm_trial_activity[tuning_kind].to_numpy(),
@@ -84,7 +79,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
             tuning.bootstrap_tuning_curve(norm_trial_activity[[tuning_kind, 'trial_num', cell]], fit_function,
                                           gof_type=processing_parameters.gof_type,
                                           num_shuffles=bootstrap_shuffles, mean=mean_guess)
-        p_gof = percentileofscore(bootstrap_gof, fit_gof, kind='mean') / 100.
+        p_gof = percentileofscore(bootstrap_gof[~np.isnan(bootstrap_gof)], fit_gof, kind='mean') / 100.
 
         # Shuffle the trial IDs and compare the real selectivity index to the bootstrapped distribution
         bootstrap_responsivity = tuning.bootstrap_responsivity(thetas, magnitudes, num_shuffles=bootstrap_shuffles)

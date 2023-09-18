@@ -340,13 +340,15 @@ def plot_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_angle=Non
         fig = plt.figure(dpi=300, figsize=(10, 6))
         ax = fig.add_subplot(111)
 
-    tuning = ax.errorbar(tuning_curve[:, 0], tuning_curve[:, 1], yerr=error, elinewidth=0.5, **kwargs)
+    tuning = ax.errorbar(tuning_curve[:, 0], tuning_curve[:, 1],
+                         c='k', alpha=0.5, yerr=error, elinewidth=1,
+                         **kwargs)
 
     if fit is not None:
-        ax.plot(fit[:, 0], fit[:, 1], c='r')
+        ax.plot(fit[:, 0], fit[:, 1], c='#1f77b4')
 
     if pref_angle is not None:
-        ax.axvline(pref_angle, color='k', linewidth=1)
+        ax.axvline(pref_angle, color='r', linewidth=1)
 
     if trials is not None:
         ax.scatter(rand_jitter(trials[:, 0]), trials[:, 1], marker='.', c='k', alpha=0.5)
@@ -361,21 +363,27 @@ def plot_polar_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_ang
         fig = plt.figure(dpi=300, figsize=(10, 6))
         ax = fig.add_subplot(111, projection='polar')
 
-    tuning = ax.errorbar(np.deg2rad(tuning_curve[:, 0]), tuning_curve[:, 1], yerr=error, elinewidth=0.5, **kwargs)
+    tuning = ax.errorbar(np.deg2rad(tuning_curve[:, 0]), tuning_curve[:, 1],
+                         c='k', alpha=0.5, yerr=error, elinewidth=1,
+                         **kwargs)
 
     if fit is not None:
-        ax.plot(np.deg2rad(fit[:, 0]), fit[:, 1], c='r')
+        ax.plot(np.deg2rad(fit[:, 0]), fit[:, 1], c='#1f77b4')
 
     if trials is not None:
         ax.scatter(rand_jitter(np.deg2rad(trials[:, 0])), trials[:, 1], marker='.', color='k', alpha=0.5)
 
     if pref_angle is not None:
-        ax.axvline(np.deg2rad(pref_angle), color='k', linewidth=1)
+        ax.axvline(np.deg2rad(pref_angle), color='r', linewidth=1)
 
     ax.set_thetamax(theta_max)
     ax.set_theta_zero_location("W")
     ax.set_theta_direction(-1)
-    ax.set_rlabel_position(180)
+    # ax.set_rorigin(0)
+    # radial_ticks = [0.25, 0.50, 0.75, 1.00]
+    # ax.set_rticks(radial_ticks, color='black', size=8)
+    # ax.set_yticklabels(radial_ticks, rotation=45)
+    # ax.set_rlabel_position(155)
 
     return tuning
 
