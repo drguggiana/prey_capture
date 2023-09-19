@@ -169,12 +169,12 @@ if __name__ == '__main__':
         # get the slugs
         slug_list = [os.path.basename(el).replace('_preproc.hdf5', '') for el in input_path]
         # read the output path and the input file urls
-        out_path = snakemake.output[0]
+        out_path = snakemake.output
         data_all = snakemake.params.file_info
         # get the parts for the file naming
-        name_parts = os.path.basename(out_path).split('_')
+        name_parts = os.path.basename(input_path).split('_')
         day = '_'.join(name_parts[:3])
-        animal = '_'.join(name_parts[3:6])
+        animal = '_'.join([name_parts[7].upper()] + name_parts[8:10])
         rigs = [name_parts[6]]
 
     except NameError:
