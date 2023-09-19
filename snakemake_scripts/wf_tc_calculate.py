@@ -1,3 +1,5 @@
+import os.path
+
 import pycircstat as circ
 from scipy.stats import percentileofscore, sem
 
@@ -169,38 +171,37 @@ if __name__ == '__main__':
         # get the slugs
         slug_list = [os.path.basename(el).replace('_preproc.hdf5', '') for el in input_path]
         # read the output path and the input file urls
-        out_path = snakemake.output[0]
-        data_all = snakemake.params.file_info
+        out_path = [snakemake.output[0]]
+        data_all = [yaml.load(snakemake.params.file_info, Loader=yaml.FullLoader)]
         # get the parts for the file naming
-        name_parts = os.path.basename(out_path).split('_')
-        day = '_'.join(name_parts[:3])
-        rigs = [name_parts[6]]
-        animal = '_'.join([name_parts[7].upper()] + name_parts[8:10])
+        rigs = [d['rig'] for d in data_all]
+        animals = [slug.split('_')[7:10] for slug in slug_list]
+        animals = ['_'.join([animal[0].upper()] + animal[1:]) for animal in animals]
+        days = [slug[:10] for slug in slug_list]
 
     except NameError:
-        # get the search query
-        search_string = processing_parameters.search_string
 
         # get the paths from the database
-        data_all = bd.query_database('analyzed_data', search_string)
+        data_all = bd.query_database('analyzed_data', processing_parameters.search_string)
         data_all = [el for el in data_all if '_preproc' in el['slug']]
         input_path = [el['analysis_path'] for el in data_all]
+        out_path = [os.path.join(paths.analysis_path, os.path.basename(path).replace('preproc', 'tcday')) for
+                    path in input_path]
         # get the day, animal and rig
-        day = '_'.join(data_all[0]['slug'].split('_')[0:3])
+        days = ['_'.join(d['slug'].split('_')[0:3]) for d in data_all]
         rigs = [el['rig'] for el in data_all]
-        animal = data_all[0]['slug'].split('_')[7:10]
-        animal = '_'.join([animal[0].upper()] + animal[1:])
+        animals = [d['slug'].split('_')[7:10] for d in data_all]
+        animals = ['_'.join([animal[0].upper()] + animal[1:]) for animal in animals]
 
-    for idx, file in enumerate(input_path):
+    for idx, (in_file, out_file) in enumerate(zip(input_path, out_path)):
         # allocate memory for the data
         raw_data = []
-
         rig = rigs[idx]
-        # assemble the output path
-        out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'tcday.hdf5')))
+        animal = animals[idx]
+        day = days[idx]
 
         # Load the data
-        with pd.HDFStore(file, mode='r') as h:
+        with pd.HDFStore(in_file, mode='r') as h:
 
             if '/cell_matches' in h.keys():
                 # concatenate the latents
@@ -211,28 +212,28 @@ if __name__ == '__main__':
                 dataframe = h['matched_calcium']
 
                 # store
-                raw_data.append((file, dataframe.fillna(0)))
+                raw_data.append((in_file, dataframe.fillna(0)))
 
         # skip processing if the file is empty
         if len(raw_data) == 0:
             # save an empty file and end
             empty = pd.DataFrame([])
-            empty.to_hdf(out_path, 'no_ROIs')
+            empty.to_hdf(out_file, 'no_ROIs')
 
         else:
             # --- Process visual tuning --- #
             kinematics, raw_spikes, raw_fluor = parse_kinematic_data(raw_data[0][-1])
 
             # Calculate dFF and normalize other neural data
-            actvity_ds_dict = {}
+            activity_ds_dict = {}
             dff = tuning.calculate_dff(raw_fluor)
             norm_spikes = tuning.normalize_responses(raw_spikes)
             norm_fluor = tuning.normalize_responses(raw_fluor)
             norm_dff = tuning.normalize_responses(dff)
-            actvity_ds_dict['dff'] = dff
-            actvity_ds_dict['norm_spikes'] = norm_spikes
-            actvity_ds_dict['norm_fluor'] = norm_fluor
-            actvity_ds_dict['norm_dff'] = norm_dff
+            activity_ds_dict['dff'] = dff
+            activity_ds_dict['norm_spikes'] = norm_spikes
+            activity_ds_dict['norm_fluor'] = norm_fluor
+            activity_ds_dict['norm_dff'] = norm_dff
 
             # Filter trials by head pitch if freely moving
             if rig in ['VTuningWF', 'VTuning']:
@@ -253,9 +254,9 @@ if __name__ == '__main__':
                 norm_spikes_viewed = norm_spikes.copy()
                 norm_dff_viewed = norm_dff.copy()
 
-            actvity_ds_dict['raw_spikes_viewed'] = raw_spikes_viewed
-            actvity_ds_dict['norm_spikes_viewed'] = norm_spikes_viewed
-            actvity_ds_dict['norm_dff_viewed'] = norm_dff_viewed
+            activity_ds_dict['raw_spikes_viewed'] = raw_spikes_viewed
+            activity_ds_dict['norm_spikes_viewed'] = norm_spikes_viewed
+            activity_ds_dict['norm_dff_viewed'] = norm_dff_viewed
 
             # Filter trials by running speed
             if rig == 'VTuningWF':
@@ -275,15 +276,15 @@ if __name__ == '__main__':
             norm_spikes_viewed_still = norm_spikes_viewed.loc[norm_spikes_viewed.trial_num.isin(still_trials)]
             norm_dff_viewed_still = norm_dff_viewed.loc[norm_dff_viewed.trial_num.isin(still_trials)]
 
-            actvity_ds_dict['raw_spikes_viewed_still'] = raw_spikes_viewed_still
-            actvity_ds_dict['norm_spikes_viewed_still'] = norm_spikes_viewed_still
-            actvity_ds_dict['norm_dff_viewed_still'] = norm_dff_viewed_still
+            activity_ds_dict['raw_spikes_viewed_still'] = raw_spikes_viewed_still
+            activity_ds_dict['norm_spikes_viewed_still'] = norm_spikes_viewed_still
+            activity_ds_dict['norm_dff_viewed_still'] = norm_dff_viewed_still
 
             # Run the visual tuning loop
             print('Calculating visual tuning curves...')
             vis_prop_dict = {}
             for ds_name in processing_parameters.activity_datasets:
-                activity_ds = actvity_ds_dict[ds_name]
+                activity_ds = activity_ds_dict[ds_name]
                 for tuning_type in ['direction_wrapped', 'orientation']:
                     props = calculate_visual_tuning(activity_ds, tuning_type,
                                                     bootstrap_shuffles=processing_parameters.bootstrap_repeats)
@@ -292,7 +293,7 @@ if __name__ == '__main__':
 
             # Save visual features to hdf5 file
             for key in vis_prop_dict.keys():
-                vis_prop_dict[key].to_hdf(out_path, key)
+                vis_prop_dict[key].to_hdf(out_file, key)
 
             # --- Process kinematic tuning --- #
             # This is lifted directly from tc_calculate.py
@@ -331,17 +332,17 @@ if __name__ == '__main__':
             # # get the tc quality
             # tcs_qual = extract_quality(tcs_full, features)
             # convert the outputs into a dataframe
-            tcs_dict, tcs_counts_dict, _ = convert_to_dataframe(tcs_half, tcs_full, tc_count, tcs_resp,
+            tcs_dict, tcs_counts_dict, tcs_bins_dict = convert_to_dataframe(tcs_half, tcs_full, tc_count, tcs_resp,
                                                                 tcs_cons, tc_bins, day, animal, rig)
 
             # for all the features
             for feature in tcs_dict.keys():
-                tcs_dict[feature].to_hdf(out_path, feature)
-                tcs_counts_dict[feature].to_hdf(out_path, feature + '_counts')
-                # tcs_bins_dict[feature].to_hdf(out_path, feature + '_edges')
+                tcs_dict[feature].to_hdf(out_file, feature)
+                tcs_counts_dict[feature].to_hdf(out_file, feature + '_counts')
+                tcs_bins_dict[feature].to_hdf(out_file, feature + '_edges')
 
             # --- save the metadata --- #
-            cell_matches.to_hdf(out_path, 'cell_matches')
+            cell_matches.to_hdf(out_file, 'cell_matches')
             # meta_data = pd.DataFrame(np.vstack(meta_list), columns=processing_parameters.meta_fields)
             # meta_data.to_hdf(out_path, 'meta_data')
 
@@ -350,14 +351,14 @@ if __name__ == '__main__':
 
         entry_data = {
             'analysis_type': 'tc_analysis',
-            'analysis_path': out_path,
+            'analysis_path': out_file,
             'date': '',
             'pic_path': '',
-            'result': 'multi',
-            'rig': rig,
-            'lighting': 'multi',
-            'imaging': 'multi',
-            'slug': fm.slugify(os.path.basename(out_path)[:-5]),
+            'result': str(data_all[idx]['result']),
+            'rig': str(data_all[idx]['rig']),
+            'lighting': str(data_all[idx]['lighting']),
+            'imaging': 'wirefree',
+            'slug': fm.slugify(os.path.basename(out_file)[:-5]),
 
         }
 

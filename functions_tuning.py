@@ -246,8 +246,8 @@ def calculate_pref_von_mises(angles, tuning_curve, fit_kind, **kwargs):
     mean2 = fk.wrap(mean + 180)
 
     init_params = [amp, np.deg2rad(mean), kappa, amp, np.deg2rad(mean2), kappa]
-    lower_bound = [0, 0, 0, 0, 0, 0]
-    upper_bound = [1, 2*np.pi, 10, 1, 2*np.pi, 10]
+    lower_bound = [0, 0, 1, 0, 0, 1]
+    upper_bound = [2, 2*np.pi, 15, 2, 2*np.pi, 15]
 
     # Run regression
     fit = least_squares(fit_double_von_mises_pdf, init_params,

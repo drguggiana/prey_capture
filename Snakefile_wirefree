@@ -12,7 +12,7 @@ from itertools import product
 def yaml_to_json(wildcards):
 
     """Dumps a single YAML into to a JSON dict for later processing"""
-    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    python_dict = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
     # escape the double quotes inside the json
     json_dict = json.dumps(python_dict).replace('"', '\\"')
     return json_dict
@@ -53,13 +53,13 @@ rule dlc_extraction:
 
 def dlc_input_selector(wildcards):
     """Returns a path for the to-be created DLC file if dlc_flag is True"""
-    if config["dlc_flag"][wildcards.file]:
+    if config["dlc_flag"][wildcards.in_file]:
         return rules.dlc_extraction.output
     else:
-        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.csv')
+        return os.path.join(config["target_path"],config["files"][wildcards.in_file] + '.csv')
 
 def day_selector(wildcards):
-    name_parts = wildcards.file.split('_')
+    name_parts = wildcards.in_file.split('_')
     day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
     animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
@@ -72,7 +72,7 @@ def day_selector(wildcards):
 
 def day_animal_rig_trial_selector(wildcards):
     """"Used to select single experiments for a given mouse on a given day"""
-    file_info = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    file_info = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
     return file_info["tif_path"]
 
 
@@ -103,7 +103,7 @@ rule calcium_extract:
 
 
 def day_animal_rig_calcium_file(wildcards):
-    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    python_dict = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
     animal = python_dict['mouse']
     rig = python_dict['rig']
     day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
@@ -121,16 +121,16 @@ rule calcium_scatter:
         "snakemake_scripts/scatter_calcium_wirefree.py"
 
 def calcium_input_selector(wildcards):
-    if config["calcium_flag"][wildcards.file]:
+    if config["calcium_flag"][wildcards.in_file]:
         return rules.calcium_scatter.output
     else:
-        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
+        return os.path.join(config["target_path"],config["files"][wildcards.in_file] + '.avi')
 
 # --- Cell matching across  all experiments of a given animal --- #
 def matched_input(wildcards):
     """Find all paths associated with experiments from a given animal"""
 
-    name_parts = wildcards.file.split('_')
+    name_parts = wildcards.in_file.split('_')
     animal = '_'.join([name_parts[0].upper()] + name_parts[1:3])
 
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
@@ -174,22 +174,22 @@ def match_animal_selector(wildcards):
     """Returns a path for cell matching across all experiments for a given animal if calcium data is present for the
     file in question. This triggers the match_cells rule."""
 
-    if config["calcium_flag"][wildcards.file]:
+    if config["calcium_flag"][wildcards.in_file]:
         # return rules.calcium_extraction.output
-        python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+        python_dict = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
         animal = python_dict['mouse']
         # rig = python_dict['rig']
         return os.path.join(paths.analysis_path,'_'.join((animal, 'cellMatch.hdf5')))
         # return rules.match_cells.output
     else:
-        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
+        return os.path.join(config["target_path"],config["files"][wildcards.in_file] + '.avi')
 
 # --- Cell matching across the experiments of a given animal on a particular day --- #
 def matched_day(wildcards):
     """Finds the matching session for a given file from the same mouse on the same day. This matched files paths are
     fed to the rule match_cells_day"""
 
-    name_parts = wildcards.file.split('_')
+    name_parts = wildcards.in_file.split('_')
 
     day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%m_%d_%Y')
     animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
@@ -243,21 +243,21 @@ def match_day_selector(wildcards):
     for the file in question. This triggers the match_cells_day rule."""
 
     # If the experiment has calcium data, try matching
-    if config["calcium_flag"][wildcards.file]:
+    if config["calcium_flag"][wildcards.in_file]:
 
         # Check if multiple Ca2+ files from the day exist. If they do, proceed with the matching
         if check_multiple_exist_calcium_files:
-            python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+            python_dict = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
             animal = python_dict['mouse']
-            name_parts = wildcards.file.split('_')
+            name_parts = wildcards.in_file.split('_')
             day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y').strftime('%m_%d_%Y')
             return os.path.join(paths.analysis_path,'_'.join((day, animal, 'dayCellMatch.hdf5')))
 
         # Otherwise return the avi path
         else:
-            return os.path.join(config["target_path"],config["files"][wildcards.file] + '.avi')
+            return os.path.join(config["target_path"],config["files"][wildcards.in_file] + '.avi')
     else:
-        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
+        return os.path.join(config["target_path"],config["files"][wildcards.in_file] + '.avi')
 
 # --- Cell matching across all experiments of a given animal on a particular rig --- #
 def matched_rig(wildcards):
@@ -269,7 +269,7 @@ def matched_rig(wildcards):
     :return:
     '''
 
-    name_parts = wildcards.file.split('_')
+    name_parts = wildcards.in_file.split('_')
     animal = '_'.join([name_parts[0].upper()] + name_parts[1:3])
     rig = name_parts[-1]
 
@@ -298,14 +298,14 @@ rule match_cells_rig:
 def match_rig_selector(wildcards):
     """Returns a path for cell matching across all experiments for a given animal on a particular rig if calcium
     data is present for the file in question. This triggers the match_cells_rig rule."""
-    if config["calcium_flag"][wildcards.file]:
+    if config["calcium_flag"][wildcards.in_file]:
         # return rules.calcium_extraction.output
-        file_info = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+        file_info = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
         animal = file_info['mouse']
         rig = file_info['rig']
         return os.path.join(paths.analysis_path,'_'.join((animal, rig, 'rigCellMatch.hdf5')))
     else:
-        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
+        return os.path.join(config["target_path"],config["files"][wildcards.in_file] + '.avi')
 
 
 rule preprocess:
@@ -369,7 +369,7 @@ rule aggregate_preprocessed:
           "snakemake_scripts/aggregate.py"
 
 def files_to_day(wildcards):
-    name_parts = wildcards.file.split('_')
+    name_parts = wildcards.in_file.split('_')
     day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
     animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
@@ -382,7 +382,7 @@ def files_to_day(wildcards):
     return day_routes
 
 def days_to_file(wildcards):
-    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    python_dict = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
     animal = python_dict['mouse']
     day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
     rig = python_dict['rig']
@@ -417,7 +417,7 @@ rule tc_day:
     output:
         os.path.join(paths.analysis_path, '{file}_tcday.hdf5')
     params:
-        file_info = config["file_info"]
+        file_info = lambda wildcards: config["file_info"][wildcards.file]
     script:
         "snakemake_scripts/wf_tc_calculate.py"
 
@@ -425,13 +425,13 @@ def matched_tc_files(wildcards):
     """Finds the matching session for a given file from the same mouse on the same day. The matched files paths are
     fed to the rule tc_day_combine"""
 
-    name_parts = wildcards.file.split('_')
+    name_parts = wildcards.in_file.split('_')
 
     day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y').strftime('%m_%d_%Y')
     animal = '_'.join([name_parts[7].upper()] + name_parts[8:10])
 
     if os.path.isfile(os.path.join(paths.analysis_path, f'{day[0]}_{animal[0]}_tcconsolidate.hdf5')):
-        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
+        return os.path.join(config["target_path"],config["files"][wildcards.in_file] + '.avi')
 
     else:
         info_list = [yaml.load(config["file_info"][el],Loader=yaml.FullLoader) for el in config["file_info"]]
