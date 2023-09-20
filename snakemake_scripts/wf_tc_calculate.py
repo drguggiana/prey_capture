@@ -1,11 +1,14 @@
 import os.path
-
 import pycircstat as circ
 from scipy.stats import percentileofscore, sem
+import warnings
 
 import functions_kinematic as fk
 import functions_tuning as tuning
 from tc_calculate import *
+
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+warnings.simplefilter(action='ignore', category=UserWarning)
 
 
 def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bootstrap_shuffles=500):
@@ -69,9 +72,9 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
         else:
             multiplier = 2.
 
-        thetas = np.deg2rad(norm_trial_activity[tuning_kind].to_numpy())
+        thetas = np.deg2rad(norm_trial_activity[tuning_kind].copy().to_numpy())
         theta_sep = np.mean(np.diff(thetas))
-        magnitudes = norm_trial_activity[cell].to_numpy()
+        magnitudes = norm_trial_activity[cell].copy().to_numpy()
 
         resultant_length = circ.resultant_vector_length(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
         resultant_angle = circ.mean(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
