@@ -64,16 +64,22 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                                          type=processing_parameters.gof_type)
 
         # -- Get resultant vector and response variance-- #
+        if 'direction' in tuning_kind:
+            multiplier = 1.
+        else:
+            multiplier = 2.
+
         thetas = np.deg2rad(norm_trial_activity[tuning_kind].to_numpy())
         theta_sep = np.mean(np.diff(thetas))
         magnitudes = norm_trial_activity[cell].to_numpy()
 
-        resultant_length = circ.resultant_vector_length(thetas, w=magnitudes, d=theta_sep)
-        resultant_angle = circ.mean(thetas, w=magnitudes, d=theta_sep)
+        resultant_length = circ.resultant_vector_length(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
+        resultant_angle = circ.mean(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
         resultant_angle = np.rad2deg(resultant_angle)
 
-        circ_var = circ.var(thetas, w=magnitudes, d=theta_sep)
-        responsivity = 1 - circ_var
+        circ_var = 1 - resultant_length
+        responsivity = resultant_length
+
 
         # -- Run permutation tests -- #
         # Calculate fit on subset of data
@@ -84,7 +90,8 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
         p_gof = percentileofscore(bootstrap_gof[~np.isnan(bootstrap_gof)], fit_gof, kind='mean') / 100.
 
         # Shuffle the trial IDs and compare the real selectivity index to the bootstrapped distribution
-        bootstrap_responsivity = tuning.bootstrap_responsivity(thetas, magnitudes, num_shuffles=bootstrap_shuffles)
+        bootstrap_responsivity = tuning.bootstrap_responsivity(thetas, magnitudes, multiplier,
+                                                               num_shuffles=bootstrap_shuffles)
         p_res = percentileofscore(bootstrap_responsivity, responsivity, kind='mean') / 100.
 
         cell_data = [mean_trial_activity[[tuning_kind, cell]].to_numpy(),
@@ -96,7 +103,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                      fit, fit_curve, fit_gof, bootstrap_gof, p_gof,
                      pref_angle, bootstrap_pref_angle, real_pref_angle, bootstrap_real_pref,
                      (resultant_length, resultant_angle),
-                     circ_var, responsivity, bootstrap_responsivity, p_res]
+                     circ_var, responsivity, bootstrap_responsivity, p_res, is_resp]
 
         cell_data_list.append(cell_data)
 
@@ -106,7 +113,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                  'fit', 'fit_curve', 'gof', 'bootstrap_gof', 'p_gof',
                  'pref', 'bootstrap_pref', 'shown_pref', 'bootstrap_shown_pref',
                  'resultant',
-                 'circ_var', 'responsivity', 'bootstrap_responsivity', 'p_responsivity']
+                 'circ_var', 'responsivity', 'bootstrap_responsivity', 'p_responsivity', 'Resp_test']
 
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
     return data_df
