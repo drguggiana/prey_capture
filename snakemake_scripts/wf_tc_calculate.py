@@ -80,7 +80,6 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
         circ_var = 1 - resultant_length
         responsivity = resultant_length
 
-
         # -- Run permutation tests -- #
         # Calculate fit on subset of data
         bootstrap_gof, bootstrap_pref_angle, bootstrap_real_pref = \
@@ -103,7 +102,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                      fit, fit_curve, fit_gof, bootstrap_gof, p_gof,
                      pref_angle, bootstrap_pref_angle, real_pref_angle, bootstrap_real_pref,
                      (resultant_length, resultant_angle),
-                     circ_var, responsivity, bootstrap_responsivity, p_res, is_resp]
+                     circ_var, responsivity, bootstrap_responsivity, p_res]
 
         cell_data_list.append(cell_data)
 
@@ -113,7 +112,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                  'fit', 'fit_curve', 'gof', 'bootstrap_gof', 'p_gof',
                  'pref', 'bootstrap_pref', 'shown_pref', 'bootstrap_shown_pref',
                  'resultant',
-                 'circ_var', 'responsivity', 'bootstrap_responsivity', 'p_responsivity', 'Resp_test']
+                 'circ_var', 'responsivity', 'bootstrap_responsivity', 'p_responsivity']
 
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
     return data_df
