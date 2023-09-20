@@ -156,6 +156,14 @@ def parse_kinematic_data(matched_calcium):
     else:
         kinematics = matched_calcium.loc[:, stimulus_cols + motive_tracking_cols + mouse_kinem_cols]
 
+    # Convert to cm
+    for col in ['wheel_speed', 'wheel_acceleration', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m', 'head_height',
+                'mouse_speed', 'mouse_acceleration']:
+        if col in kinematics.columns:
+            kinematics[col] = kinematics[col] * 100.
+        else:
+            pass
+
     raw_spikes = matched_calcium.loc[:, stimulus_cols + spikes_cols]
     raw_spikes.columns = [key.rsplit('_', 1)[0] if 'spikes' in key else key for key in raw_spikes.columns]
     raw_fluor = matched_calcium.loc[:, stimulus_cols + fluor_cols]
@@ -308,8 +316,17 @@ if __name__ == '__main__':
             # define the pairs to quantify
             if rig in ['VWheel', 'VWheelWF']:
                 variable_names = processing_parameters.variable_list_fixed
+                dataframe['wheel_speed_abs'] = np.abs(dataframe['wheel_speed'])
             else:
                 variable_names = processing_parameters.variable_list_free
+
+            # Convert to cm
+            for col in ['wheel_speed', 'wheel_speed_abs', 'wheel_acceleration', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                        'head_height', 'mouse_speed', 'mouse_acceleration']:
+                if col in dataframe.columns:
+                    dataframe[col] = dataframe[col] * 100.
+                else:
+                    pass
 
             # clip the calcium traces
             clipped_data = clip_calcium([('', dataframe)])
