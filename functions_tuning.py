@@ -247,7 +247,7 @@ def calculate_pref_von_mises(angles, tuning_curve, fit_kind, **kwargs):
 
     init_params = [amp, np.deg2rad(mean), kappa, amp, np.deg2rad(mean2), kappa]
     lower_bound = [0, 0, 1, 0, 0, 1]
-    upper_bound = [1, 2*np.pi, 12, 1, 2*np.pi, 12]
+    upper_bound = [2, 2*np.pi, 12, 2, 2*np.pi, 12]
 
     # Run regression
     fit = least_squares(fit_double_von_mises_pdf, init_params,
@@ -378,26 +378,17 @@ def generate_response_vector(responses, function, **kwargs):
 def bootstrap_responsivity(angles, magnitudes, multiplier, num_shuffles=1000):
     
     shuffled_responsivity = []
-    shuffled_circ_var = []
-    
+
     angle_sep = np.mean(np.diff(angles))
     
     for i in range(0, num_shuffles):
         # Shuffle stimulus labels and reassign
         np.random.shuffle(angles)
-
-        # # Generate mean response vector from shuffled data
-        # shuffled_response_vector, angles = generate_response_vector(shuffled_responses, np.nanmean, tuning_kind)
         
-         #-- Get response circular variance --#
-        resultant_length = circ.resultant_vector_length(angles, w=magnitudes, d=angle_sep, axial_correction=multiplier)
-        circ_var = 1 - resultant_length
-        responsivity = resultant_length
-
-        shuffled_circ_var.append(circ_var)
+        # -- Get response circular variance -- #
+        responsivity = circ.resultant_vector_length(angles, w=magnitudes, d=angle_sep, axial_correction=multiplier)
         shuffled_responsivity.append(responsivity)
         
-    shuffled_circ_var = np.array(shuffled_circ_var)
     shuffled_responsivity = np.array(shuffled_responsivity)
     
     return shuffled_responsivity
