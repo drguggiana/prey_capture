@@ -406,6 +406,7 @@ def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, gof_type='
     for i in np.arange(num_shuffles):
         test_trials = responses.groupby([tuning_kind])['trial_num'].apply(
             lambda x: np.random.choice(x, 2)).iloc[1:].to_list()
+
         test_trials = np.concatenate(test_trials)
         train_trials = np.setdiff1d(responses.trial_num.unique(), test_trials)
 
