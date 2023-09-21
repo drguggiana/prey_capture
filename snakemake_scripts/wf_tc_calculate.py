@@ -72,9 +72,9 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
         else:
             multiplier = 2.
 
-        thetas = np.deg2rad(norm_trial_activity[tuning_kind].copy().to_numpy())
+        thetas = np.deg2rad(unique_angles)
         theta_sep = np.mean(np.diff(thetas))
-        magnitudes = norm_trial_activity[cell].copy().to_numpy()
+        magnitudes = norm_mean_resp[cell].copy().to_numpy()
 
         resultant_length = circ.resultant_vector_length(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
         resultant_angle = circ.mean(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
