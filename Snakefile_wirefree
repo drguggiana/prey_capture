@@ -425,7 +425,7 @@ def matched_tc_files(wildcards):
     """Finds the matching session for a given file from the same mouse on the same day. The matched files paths are
     fed to the rule tc_day_combine"""
 
-    name_parts = wildcards.in_file.split('_')
+    name_parts = wildcards.file.split('_')
 
     day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y').strftime('%m_%d_%Y')
     animal = '_'.join([name_parts[7].upper()] + name_parts[8:10])
@@ -446,7 +446,9 @@ rule tc_day_combine:
     """Combines TC files for matched experiments"""
     input:
         matched_tc_files,
-        match_rig_selector
+        # match_rig_selector
+    # wildcard_constraints:
+    #     query=".*_agg.*"
     output:
         temp(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"))
     params:
@@ -457,7 +459,7 @@ rule tc_day_combine:
 
 rule tuning_run:
     input:
-          expand(os.path.join(paths.analysis_path, "{file}_tcday.hdf5"), file=config['files'])
+          expand(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"), file=config['files'])
     output:
           os.path.join(paths.analysis_path, "tuning_run.txt")
     params:
