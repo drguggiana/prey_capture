@@ -368,7 +368,7 @@ def generate_response_vector(responses, function, **kwargs):
     cell_ids = columns[2:]
 
     # Get response across trials
-    resp = responses.groupby([tuning_kind])[cell_ids].agg(function, **kwargs).reset_index()
+    resp = responses.groupby([tuning_kind])[cell_ids].agg(function, **kwargs).fillna(0).reset_index()
     angles = resp[tuning_kind].to_numpy()
     resp = resp[cell_ids]
 

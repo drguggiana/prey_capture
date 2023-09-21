@@ -55,7 +55,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
     cell_data_list = []
     for cell in cells:
         # -- Calculate fit and responsivity using all trials -- #
-        mean_guess = unique_angles[np.argmax(norm_mean_resp[cell], axis=0)]
+        mean_guess = unique_angles[np.argmax(norm_mean_resp[cell].fillna(0), axis=0)]
         fit, fit_curve, pref_angle, real_pref_angle = fit_function(unique_angles,
                                                                    norm_mean_resp[cell].to_numpy(),
                                                                    tuning_kind,
