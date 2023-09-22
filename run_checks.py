@@ -28,7 +28,7 @@ def find_matched_files(target_directory, animals, regex_pattern, exp_to_match):
 
     print('The following animals have matched experimental data for these many days')
     for key, value in matched_experiments.items():
-        print(f"{key}: {value}")
+        print(f"    {key}: {value}")
 
 
 def find_unmatched_files(target_directory, animals, regex_pattern, exp_to_match):
@@ -76,6 +76,35 @@ def find_extra_session_files(target_directory, animals, regex_pattern, exp_to_ma
     print(f'The following {len(extra_experiments)} files need to be checked for validity:')
     if len(extra_experiments) > 0:
         for exp in extra_experiments:
+            print('    ' + exp)
+    else:
+        print('    No excess experiments!\n')
+
+
+def find_repeated_session_files(target_directory, animals, regex_pattern, exp_to_match):
+    all_files = glob(join(target_directory, regex_pattern))
+    keep_files = [file for file in all_files if any(exp in file for exp in exp_to_match)]
+    keep_file_basenames = [os.path.basename(file).split('.')[0] for file in keep_files]
+    repeated_experiments = []
+
+    for animal in animals:
+        animal_filenames = [file for file in keep_file_basenames if animal in file]
+        animal_filenames.sort()
+        dates = [filename[:10] for filename in animal_filenames]
+        date_values, _ = np.unique(dates, return_counts=True)
+
+        for date in date_values:
+            day_exps = [file for file in animal_filenames if date in file]
+            rigs = [filename.split('_')[6] for filename in day_exps]
+            values, counts = np.unique(rigs, return_counts=True)
+            if len(values) > 1:
+                pass
+            else:
+                repeated_experiments.extend(day_exps)
+
+    print(f'The following {len(repeated_experiments)} files have repeated sessions:')
+    if len(repeated_experiments) > 0:
+        for exp in repeated_experiments:
             print('    ' + exp)
     else:
         print('    No excess experiments!\n')
@@ -140,25 +169,28 @@ def list_conflict_slugs(target_directory, regex_pattern, exp_to_match):
 
 base_dir = r'Z:\Prey_capture\VRExperiment'
 conflict_dir = r"Z:\Prey_capture\conflict_files\VTuningWF"
-animals = ["MM_220915_a", "MM_220928_a", "MM_221109_a", "MM_221110_a", 'MM_230518_b', 'MM_230705_b', 'MM_230706_a',
-           'MM_230706_b']
+animals = ["MM_220915_a", "MM_220928_a", "MM_221109_a", "MM_221110_a",
+           'MM_230518_b', 'MM_230705_b', 'MM_230706_a', 'MM_230706_b']
+rigs = ['VWheelWF', 'VTuningWF']
 
+# Get session with repeated fixed or free recordings
+find_repeated_session_files(base_dir, animals, r'*.avi', rigs)
 
 # Get matched files and counts per animal
-find_matched_files(base_dir, animals, r'*.avi', ['VWheelWF', 'VTuningWF'])
+find_matched_files(base_dir, animals, r'*.avi', rigs)
 
 # Get unmatched files
-find_unmatched_files(base_dir, animals, r'*.avi', ['VWheelWF', 'VTuningWF'])
+find_unmatched_files(base_dir, animals, r'*.avi', rigs)
 
 # Find experiments more than one of the same kind of session
-find_extra_session_files(base_dir, animals, r'*.avi', ['VWheelWF', 'VTuningWF'])
+find_extra_session_files(base_dir, animals, r'*.avi', rigs)
 
 # Find files with missing calcium tif
-find_files_with_missing_ca(base_dir, r'*.avi', ['VWheelWF', 'VTuningWF'])
+find_files_with_missing_ca(base_dir, r'*.avi', rigs)
 
-list_conflict_slugs(conflict_dir, r'*.avi', ['VWheelWF', 'VTuningWF'])
+list_conflict_slugs(conflict_dir, r'*.avi', rigs)
 
 # Find experiments where no ROIs were found
-# find_empty_ROIS(base_dir, r'*_calcium.hdf5', ['VWheelWF', 'VTuningWF'])
+# find_empty_ROIS(base_dir, r'*_calcium.hdf5', rigs)
 
 print("done!")

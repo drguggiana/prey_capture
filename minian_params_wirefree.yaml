@@ -489,7 +489,7 @@ MM_230706_b:
 
     param_first_temporal:
       noise_freq: 0.2
-      sparse_penal: 1
+      sparse_penal: 0.3
       p: 2
       add_lag: 5
       jac_thres: 0.5
@@ -497,11 +497,11 @@ MM_230706_b:
     param_second_spatial:
       dl_wnd: 5
       sparse_penal: 0.005
-      size_thres: !!python/tuple [230, 400]
+      size_thres: !!python/tuple [30, 400]
 
     param_second_temporal:
       noise_freq: 0.2
-      sparse_penal: 1
+      sparse_penal: 0.3
       p: 2
       add_lag: 5
       jac_thres: 0.5
