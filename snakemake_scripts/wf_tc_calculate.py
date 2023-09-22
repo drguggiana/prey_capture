@@ -12,6 +12,8 @@ warnings.simplefilter(action='ignore', category=UserWarning)
 
 
 def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bootstrap_shuffles=500):
+
+
     # define the clipping threshold in percentile of baseline
     clip_threshold = 8
     # do the cell clipping
@@ -127,11 +129,18 @@ def parse_kinematic_data(matched_calcium):
     mask = matched_calcium['direction_wrapped'] > -1000
     matched_calcium.loc[mask, 'direction_wrapped'] = matched_calcium.loc[mask, 'direction_wrapped'].apply(fk.wrap)
 
+    # Now find the direction relative to the ground plane
+    matched_calcium['direction_rel_ground'] = matched_calcium['direction_wrapped'].copy()
+    matched_calcium.loc[mask, 'direction_rel_ground'] = matched_calcium.loc[mask, 'direction_rel_ground'] + \
+                                                        matched_calcium.loc[mask, 'head_roll']
+
     # Calculate orientation explicitly
     if 'orientation' not in matched_calcium.columns:
         matched_calcium['orientation'] = matched_calcium['direction_wrapped'].copy()
+        matched_calcium['orientation_rel_ground'] = matched_calcium['direction_rel_ground'].copy()
         mask = matched_calcium['orientation'] > -1000
         matched_calcium.loc[mask, 'orientation'] = matched_calcium.loc[mask, 'orientation'].apply(fk.wrap, bound=180)
+        matched_calcium.loc[mask, 'orientation_rel_ground'] = matched_calcium.loc[mask, 'orientation_rel_ground'].apply(fk.wrap, bound=180)
 
     # For all data
     if rig in ['VWheel', 'VWheelWF']:
@@ -144,7 +153,8 @@ def parse_kinematic_data(matched_calcium):
     motive_tracking_cols = ['mouse_y_m', 'mouse_z_m', 'mouse_x_m', 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m']
 
     # If there is more than one spatial or temporal frequency, include it, othewise don't
-    stimulus_cols = ['trial_num', 'time_vector', 'direction', 'direction_wrapped', 'orientation', 'grating_phase']
+    stimulus_cols = ['trial_num', 'time_vector', 'direction', 'direction_wrapped', 'direction_rel_ground',
+                     'orientation', 'orientation_rel_ground', 'grating_phase']
 
     # For headfixed data
     eye_cols = ['eye_horizontal_vector_x', 'eye_horizontal_vector_y', 'eye_midpoint_x', 'eye_midpoint_y',
