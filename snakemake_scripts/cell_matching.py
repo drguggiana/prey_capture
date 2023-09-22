@@ -86,7 +86,6 @@ for files in calcium_path:
         calcium_data = calcium_data[keep_vector, :, :]
 
         # format and masks and store for matching
-
         footprint_list.append(np.moveaxis(calcium_data, 0, -1).reshape((-1, calcium_data.shape[0])))
         size_list.append(calcium_data.shape[1:])
         template_list.append(np.zeros(size_list[0]))
@@ -106,7 +105,7 @@ for files in calcium_path:
 try:
     # run the matching software
     spatial_union, assignments, matchings = register_multisession(
-        A=footprint_list, dims=size_list[0], templates=template_list, thresh_cost=0.7)
+        A=footprint_list, dims=size_list[0], templates=template_list, thresh_cost=0.7, max_dist=15)
 except Exception:
     # generate an empty array for saving
     assignments = np.ones((len(date_list), 1))
