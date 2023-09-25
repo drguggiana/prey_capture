@@ -394,6 +394,40 @@ def bootstrap_responsivity(angles, magnitudes, multiplier, num_shuffles=1000):
     return shuffled_responsivity
 
 
+def bootstrap_resultant(responses, multiplier, num_shuffles=1000):
+    columns = list(responses.columns)
+    tuning_kind = columns[0]
+    cell = columns[-1]
+
+    # Get the counts per angle
+    angle_counts = responses[tuning_kind].value_counts()
+    unique_angles = angle_counts.index.to_numpy()
+    min_presentations = np.min(angle_counts.to_numpy())
+    trial_nums_by_angle = responses.groupby(tuning_kind).trial_num.agg(list)
+
+    thetas = np.deg2rad(unique_angles)
+    theta_sep = np.mean(np.diff(thetas))
+
+    shuffled_resultant_angle = []
+    shuffled_resultant_length = []
+    for i in np.arange(num_shuffles):
+        # select subset of trials, guaranteeing that each angle is represented the same number of times
+        trial_subset = trial_nums_by_angle.apply(np.random.choice, size=min_presentations, replace=False).explode().to_numpy(dtype=int)
+        theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
+        magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
+
+        resultant_length = circ.resultant_vector_length(theta_subset, w=magnitude_subset, d=theta_sep, axial_correction=multiplier)
+        resultant_angle = circ.mean(theta_subset, w=magnitude_subset, d=theta_sep, axial_correction=multiplier)
+        resultant_angle = np.rad2deg(resultant_angle)
+
+        shuffled_resultant_length.append(resultant_length)
+        shuffled_resultant_angle.append(resultant_angle)
+
+    shuffled_resultant_length = np.array(shuffled_resultant_length)
+    shuffled_resultant_angle = np.array(shuffled_resultant_angle)
+    shuffled_resultant = np.vstack((shuffled_resultant_length, shuffled_resultant_angle)).T
+    return shuffled_resultant
+
 def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, gof_type='rmse', **kwargs):
     columns = list(responses.columns)
     tuning_kind = columns[0]

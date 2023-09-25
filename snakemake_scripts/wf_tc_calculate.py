@@ -98,6 +98,11 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                                                                num_shuffles=bootstrap_shuffles)
         p_res = percentileofscore(bootstrap_responsivity, responsivity, kind='mean') / 100.
 
+        # Bootstrap resultant length and angle while guaranteeing the same number of presentations per angle
+        # This is what Joel does for significant shifts in tuning curves
+        bootstrap_resultant = tuning.bootstrap_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]],
+                                                         multiplier=multiplier, num_shuffles=bootstrap_shuffles)
+
         cell_data = [mean_trial_activity[[tuning_kind, cell]].to_numpy(),
                      norm_trial_activity[[tuning_kind, cell]].to_numpy(),
                      np.vstack([unique_angles, mean_resp[cell].to_numpy()]).T,
@@ -106,7 +111,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                      sem_resp[cell].to_numpy(), norm_sem_resp[cell].to_numpy(),
                      fit, fit_curve, fit_gof, bootstrap_gof, p_gof,
                      pref_angle, bootstrap_pref_angle, real_pref_angle, bootstrap_real_pref,
-                     (resultant_length, resultant_angle),
+                     (resultant_length, resultant_angle), bootstrap_resultant,
                      circ_var, responsivity, bootstrap_responsivity, p_res]
 
         cell_data_list.append(cell_data)
@@ -116,7 +121,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                  'mean', 'mean_norm', 'std', 'std_norm', 'sem', 'sem_norm',
                  'fit', 'fit_curve', 'gof', 'bootstrap_gof', 'p_gof',
                  'pref', 'bootstrap_pref', 'shown_pref', 'bootstrap_shown_pref',
-                 'resultant',
+                 'resultant', 'bootstrap_resultant',
                  'circ_var', 'responsivity', 'bootstrap_responsivity', 'p_responsivity']
 
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
