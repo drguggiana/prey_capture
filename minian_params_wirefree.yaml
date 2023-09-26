@@ -30,7 +30,7 @@ default:
     add_lag: 20
     jac_thres: 0.5
 
-### --- Cohort 1 (CamKII-Cre--- ###
+### --- Cohort 1 (CamKII-Cre)--- ###
 
 MM_220915_a:
   VTuningWF:
@@ -105,26 +105,26 @@ MM_220928_a:
 
     param_first_spatial:
       dl_wnd: 5
-      sparse_penal: 0.005
-      size_thres: !!python/tuple [20, 400]
+      sparse_penal: 0.003
+      size_thres: !!python/tuple [25, 400]
 
     param_first_temporal:
       noise_freq: 0.05
-      sparse_penal: 1.0
+      sparse_penal: 1.5
       p: 2
       add_lag: 10
       jac_thres: 0.5
 
     param_second_spatial:
       dl_wnd: 5
-      sparse_penal: 0.0025
-      size_thres: !!python/tuple [20, 400]
+      sparse_penal: 0.003
+      size_thres: !!python/tuple [25, 400]
 
     param_second_temporal:
       noise_freq: 0.05
-      sparse_penal: 0.75
+      sparse_penal: 1.5
       p: 2
-      add_lag: 10
+      add_lag: 5
       jac_thres: 0.5
 
   VWheelWF:
@@ -137,19 +137,19 @@ MM_220928_a:
     param_first_spatial:
       dl_wnd: 5
       sparse_penal: 0.005
-      size_thres: !!python/tuple [20, 400]
+      size_thres: !!python/tuple [25, 400]
 
     param_first_temporal:
       noise_freq: 0.05
       sparse_penal: 1.0
       p: 2
-      add_lag: 10
+      add_lag: 5
       jac_thres: 0.5
 
     param_second_spatial:
       dl_wnd: 5
       sparse_penal: 0.005
-      size_thres: !!python/tuple [20, 400]
+      size_thres: !!python/tuple [25, 400]
 
     param_second_temporal:
       noise_freq: 0.05
