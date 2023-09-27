@@ -186,7 +186,7 @@ def match_animal_selector(wildcards):
 
 # --- Cell matching across the experiments of a given animal on a particular day --- #
 def matched_day(wildcards):
-    """Finds the matching session for a given file from the same mouse on the same day. This matched files paths are
+    """Finds the matching session for a given file from the same mouse on the same day. The matched files paths are
     fed to the rule match_cells_day"""
 
     name_parts = wildcards.file.split('_')

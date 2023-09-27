@@ -69,6 +69,10 @@ if __name__ == '__main__':
 
     if 'control' in input_paths[0]:
         result = 'control'
+    elif 'repeat' in input_paths[0]:
+        result = 'repeat'
+    elif 'fullfield' in input_paths[0]:
+        result = 'fullfield'
     else:
         result = 'multi'
 
