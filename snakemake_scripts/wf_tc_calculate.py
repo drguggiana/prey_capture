@@ -129,15 +129,24 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
 
 
 def parse_kinematic_data(matched_calcium, rig):
+    # For all data
+    if rig in ['VWheel', 'VWheelWF']:
+        exp_type = 'fixed'
+    else:
+        exp_type = 'free'
+
     # Apply wrapping for directions to get range [0, 360]
     matched_calcium['direction_wrapped'] = matched_calcium['direction'].copy()
     mask = matched_calcium['direction_wrapped'] > -1000
     matched_calcium.loc[mask, 'direction_wrapped'] = matched_calcium.loc[mask, 'direction_wrapped'].apply(fk.wrap)
 
     # Now find the direction relative to the ground plane
-    matched_calcium['direction_rel_ground'] = matched_calcium['direction_wrapped'].copy()
-    matched_calcium.loc[mask, 'direction_rel_ground'] = matched_calcium.loc[mask, 'direction_rel_ground'] + \
-                                                        matched_calcium.loc[mask, 'head_roll']
+    if exp_type == 'free':
+        matched_calcium['direction_rel_ground'] = matched_calcium['direction_wrapped'].copy()
+        matched_calcium.loc[mask, 'direction_rel_ground'] = matched_calcium.loc[mask, 'direction_rel_ground'] + \
+                                                            matched_calcium.loc[mask, 'head_roll']
+    else:
+        matched_calcium['direction_rel_ground'] = matched_calcium['direction_wrapped'].copy()
 
     # Calculate orientation explicitly
     if 'orientation' not in matched_calcium.columns:
@@ -146,12 +155,6 @@ def parse_kinematic_data(matched_calcium, rig):
         mask = matched_calcium['orientation'] > -1000
         matched_calcium.loc[mask, 'orientation'] = matched_calcium.loc[mask, 'orientation'].apply(fk.wrap, bound=180)
         matched_calcium.loc[mask, 'orientation_rel_ground'] = matched_calcium.loc[mask, 'orientation_rel_ground'].apply(fk.wrap, bound=180)
-
-    # For all data
-    if rig in ['VWheel', 'VWheelWF']:
-        exp_type = 'fixed'
-    else:
-        exp_type = 'free'
 
     spikes_cols = [key for key in matched_calcium.keys() if 'spikes' in key]
     fluor_cols = [key for key in matched_calcium.keys() if 'fluor' in key]
