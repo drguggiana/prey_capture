@@ -128,7 +128,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
     return data_df
 
 
-def parse_kinematic_data(matched_calcium):
+def parse_kinematic_data(matched_calcium, rig):
     # Apply wrapping for directions to get range [0, 360]
     matched_calcium['direction_wrapped'] = matched_calcium['direction'].copy()
     mask = matched_calcium['direction_wrapped'] > -1000
@@ -254,7 +254,7 @@ if __name__ == '__main__':
 
         else:
             # --- Process visual tuning --- #
-            kinematics, raw_spikes, raw_fluor = parse_kinematic_data(raw_data[0][-1])
+            kinematics, raw_spikes, raw_fluor = parse_kinematic_data(raw_data[0][-1], rig)
 
             # Calculate dFF and normalize other neural data
             activity_ds_dict = {}

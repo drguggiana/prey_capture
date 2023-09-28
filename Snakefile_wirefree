@@ -459,7 +459,7 @@ rule tc_day_combine:
 
 rule tuning_run:
     input:
-          expand(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"), file=config['files'])
+          expand(os.path.join(paths.analysis_path, "{file}_tcday.hdf5"), file=config['files'])
     output:
           os.path.join(paths.analysis_path, "tuning_run.txt")
     params:
