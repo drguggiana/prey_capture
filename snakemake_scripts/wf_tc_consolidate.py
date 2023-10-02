@@ -45,7 +45,8 @@ if __name__ == '__main__':
         rigs = np.unique([slug.split('_')[6] for slug in slugs])
         day = np.unique([slug[:10] for slug in slugs])
         mouse = np.unique(["_".join(slug.split('_')[7:10]) for slug in slugs])
-        results = np.unique([slug.split('_')[11] for slug in slugs])
+        results = [el for slug in slugs for el in slug.split('_') if
+                   any(exp in el for exp in processing_parameters.wf_exp_types)]
         # read the output path and the input file urls
         out_path = os.path.join(paths.analysis_path, f'{day[0]}_{mouse[0]}_tcconsolidate.hdf5')
         dummy_out = snakemake.output[0]
@@ -62,7 +63,8 @@ if __name__ == '__main__':
         slugs = [os.path.basename(el) for el in input_paths]
         day = np.unique([el[:10] for el in slugs])
         rigs = np.unique([el.split('_')[6] for el in slugs])
-        results = np.unique([slug.split('_')[11] for slug in slugs])
+        results = [el for slug in slugs for el in slug.split('_') if
+                   any(exp in el for exp in processing_parameters.wf_exp_types)]
 
         # assemble the output path
         out_path = os.path.join(paths.analysis_path, 'test_tcconsolidate.hdf5')
