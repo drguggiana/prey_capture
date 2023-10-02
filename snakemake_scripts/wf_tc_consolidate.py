@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 import warnings
+warnings.simplefilter(action='ignore')
 
 import paths
 import processing_parameters
@@ -9,8 +10,6 @@ import functions_bondjango as bd
 import functions_data_handling as dh
 import functions_misc as fm
 from functions_kinematic import wrap_negative, wrap
-
-warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 
 def kine_fraction_responsive(ds):
@@ -43,9 +42,10 @@ if __name__ == '__main__':
         # get the input
         input_paths = snakemake.input
         slugs = [os.path.basename(el).replace('_tcday.hdf5', '') for el in input_paths]
-        rigs = [slug.split('_')[6] for slug in slugs]
+        rigs = np.unique([slug.split('_')[6] for slug in slugs])
         day = np.unique([slug[:10] for slug in slugs])
         mouse = np.unique(["_".join(slug.split('_')[7:10]) for slug in slugs])
+        results = np.unique([slug.split('_')[11] for slug in slugs])
         # read the output path and the input file urls
         out_path = os.path.join(paths.analysis_path, f'{day[0]}_{mouse[0]}_tcconsolidate.hdf5')
         dummy_out = snakemake.output[0]
@@ -59,9 +59,10 @@ if __name__ == '__main__':
         all_path = bd.query_database('analyzed_data', search_string)
         input_paths = np.array([el['analysis_path'] for el in all_path if ('_tcday' in el['slug']) and
                                 (parsed_search['mouse'].lower() in el['slug'])])
-        day = np.unique([path[:4] for path in input_paths])
-        slug = [os.path.basename(el) for el in input_paths]
-        rigs = np.array([el.split('_')[6] for el in slug])
+        slugs = [os.path.basename(el) for el in input_paths]
+        day = np.unique([el[:10] for el in slugs])
+        rigs = np.unique([el.split('_')[6] for el in slugs])
+        results = np.unique([slug.split('_')[11] for slug in slugs])
 
         # assemble the output path
         out_path = os.path.join(paths.analysis_path, 'test_tcconsolidate.hdf5')
@@ -80,6 +81,18 @@ if __name__ == '__main__':
         lighting = 'dark'
     else:
         lighting = 'normal'
+
+    # If repeat experiments, rigs aren't unique, and so aren't useful for identifying matches.
+    # Instead, use the result
+    if result == 'repeat':
+        id_flags = results
+        rig = rigs[0]
+    else:
+        id_flags = rigs
+        rig = 'multi'
+
+    # Sort the input paths by id_flag so they are in the same order
+    input_paths = [path for id in id_flags for path in input_paths if id in path]
 
     # cycle through the files
     matches = None
@@ -112,14 +125,14 @@ if __name__ == '__main__':
             matches.to_hdf(out_path, 'cell_matches')
 
         visual_shifts = {}
-        for data, rig in zip(data_list, rigs):
+        for data, id_flag in zip(data_list, id_flags):
             all_cells_summary_stats = {}
             matched_summary_stats = {}
             unmatched_summary_stats = {}
             multimodal_tuning = {}
 
             # get matches and save
-            match_col = np.where([rig in el for el in matches.columns])[0][0]
+            match_col = np.where([id_flag in el for el in matches.columns])[0][0]
             match_idxs = matches.iloc[:, match_col].to_numpy(dtype=int)
             num_cells = len(data['norm_spikes_viewed_direction_props'].index)
 
@@ -134,18 +147,18 @@ if __name__ == '__main__':
 
             for feature in kine_features:
                 # Save the whole dataset
-                data[feature].to_hdf(out_path, f'{rig}/all_cells/{feature}')
+                data[feature].to_hdf(out_path, f'{id_flag}/all_cells/{feature}')
                 all_cells_summary_stats[f"frac_resp_{feature}"] = kine_fraction_responsive(data[feature])
                 multimodal_tuning[feature] = data[feature]['Qual_test']
 
                 # Save matched TCs
                 matched_feature = data[feature].iloc[match_idxs, :].reset_index(names=['original_cell_id'])
-                matched_feature.to_hdf(out_path, f'{rig}/matched/{feature}')
+                matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
                 matched_summary_stats[f"frac_resp_{feature}"] = kine_fraction_responsive(matched_feature)
 
                 # save unmatched tcs
                 unmatched_feature = data[feature].drop(match_idxs, axis=0)
-                unmatched_feature.to_hdf(out_path, f'{rig}/unmatched/{feature}')
+                unmatched_feature.to_hdf(out_path, f'{id_flag}/unmatched/{feature}')
                 unmatched_summary_stats[f"frac_resp_{feature}"] = kine_fraction_responsive(unmatched_feature)
 
             exp_vis_features = {}
@@ -154,7 +167,7 @@ if __name__ == '__main__':
                 # Save the whole dataset
                 all_is_resp, all_frac_resp = vis_frac_responsive(data[feature])
                 data[feature]['Resp_test'] = all_is_resp
-                data[feature].reset_index(names=['original_cell_id']).to_hdf(out_path, f'{rig}/all_cells/{feature}')
+                data[feature].reset_index(names=['original_cell_id']).to_hdf(out_path, f'{id_flag}/all_cells/{feature}')
                 all_cells_summary_stats[f"frac_resp_{feat}"] = all_frac_resp
 
                 # Need to drop the index to match the kine features
@@ -162,7 +175,7 @@ if __name__ == '__main__':
 
                 # Save matched TCs
                 matched_feature = data[feature].iloc[match_idxs, :].reset_index(names=['original_cell_id'])
-                matched_feature.to_hdf(out_path, f'{rig}/matched/{feature}')
+                matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
                 _, matched_frac_resp = vis_frac_responsive(matched_feature)
                 matched_summary_stats[f"frac_resp_{feat}"] = matched_frac_resp
 
@@ -171,26 +184,26 @@ if __name__ == '__main__':
 
                 # save unmatched tcs
                 unmatched_feature = data[feature].reset_index(names=['original_cell_id']).drop(index=match_idxs)
-                unmatched_feature.to_hdf(out_path, f'{rig}/unmatched/{feature}')
+                unmatched_feature.to_hdf(out_path, f'{id_flag}/unmatched/{feature}')
                 _, unmatched_frac_resp = vis_frac_responsive(unmatched_feature)
                 unmatched_summary_stats[f"frac_resp_{feat}"] = unmatched_frac_resp
 
             summary_stats = dicts_to_dataframe([all_cells_summary_stats, matched_summary_stats, unmatched_summary_stats],
                                                ['all_cells', 'matched', 'unmatched'])
-            summary_stats.to_hdf(out_path, f'{rig}/summary_stats')
+            summary_stats.to_hdf(out_path, f'{id_flag}/summary_stats')
 
-            visual_shifts[rig] = exp_vis_features
+            visual_shifts[id_flag] = exp_vis_features
 
             # Make multimodal tuning dataframe
             multimodal_tuned = pd.DataFrame(multimodal_tuning, dtype=int)
-            multimodal_tuned.to_hdf(out_path, f'{rig}/multimodal_tuned')
+            multimodal_tuned.to_hdf(out_path, f'{id_flag}/multimodal_tuned')
 
         # Calculate delta prefs for all matched cells
         # use the fixed rig as the reference
         delta_pref = pd.DataFrame()
-        for tuning_type in visual_shifts[rigs[0]].keys():
-            fixed = visual_shifts[rigs[0]][tuning_type]
-            free = visual_shifts[rigs[1]][tuning_type]
+        for tuning_type in visual_shifts[id_flags[0]].keys():
+            fixed = visual_shifts[id_flags[0]][tuning_type]
+            free = visual_shifts[id_flags[1]][tuning_type]
             diff = free.loc[:, ['pref']].subtract(fixed.loc[:, ['pref']]).to_numpy().flatten()
             if 'direction' in tuning_type:
                 diff = wrap_negative(diff)
@@ -199,14 +212,14 @@ if __name__ == '__main__':
             delta_pref[f"delta_{tuning_type}"] = diff
 
         # Now do the same, but with the still fixed session as the reference
-        still_tuning = [el for el in visual_shifts[rigs[0]].keys() if 'still' in el]
-        all_tuning = [el for el in visual_shifts[rigs[0]].keys() if 'still' not in el]
+        still_tuning = [el for el in visual_shifts[id_flags[0]].keys() if 'still' in el]
+        all_tuning = [el for el in visual_shifts[id_flags[0]].keys() if 'still' not in el]
         for still_tuning, moving_tuning in zip(still_tuning, all_tuning):
-            fixed_still = visual_shifts[rigs[0]][still_tuning]
-            free_still = visual_shifts[rigs[1]][still_tuning]
+            fixed_still = visual_shifts[id_flags[0]][still_tuning]
+            free_still = visual_shifts[id_flags[1]][still_tuning]
 
-            fixed_all = visual_shifts[rigs[0]][moving_tuning]
-            free_all = visual_shifts[rigs[1]][moving_tuning]
+            fixed_all = visual_shifts[id_flags[0]][moving_tuning]
+            free_all = visual_shifts[id_flags[1]][moving_tuning]
 
             diff_rig = free_still.loc[:, ['pref']].subtract(fixed_still.loc[:, ['pref']]).to_numpy().flatten()
             diff_moving_fixed = fixed_all.loc[:, ['pref']].subtract(fixed_still.loc[:, ['pref']]).to_numpy().flatten()
@@ -234,7 +247,7 @@ if __name__ == '__main__':
         'date': '',
         'pic_path': '',
         'result': result,
-        'rig': 'multi',
+        'rig': rig,
         'lighting': lighting,
         'imaging': 'wirefree',
         'slug': fm.slugify(os.path.basename(out_path)[:-5]),
