@@ -80,7 +80,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
 
         resultant_length = circ.resultant_vector_length(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
         resultant_angle = circ.mean(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
-        resultant_angle = np.rad2deg(resultant_angle)
+        resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
 
         circ_var = 1 - resultant_length
         responsivity = resultant_length

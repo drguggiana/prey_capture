@@ -418,7 +418,7 @@ def bootstrap_resultant(responses, multiplier, num_shuffles=1000):
 
         resultant_length = circ.resultant_vector_length(theta_subset, w=magnitude_subset, d=theta_sep, axial_correction=multiplier)
         resultant_angle = circ.mean(theta_subset, w=magnitude_subset, d=theta_sep, axial_correction=multiplier)
-        resultant_angle = np.rad2deg(resultant_angle)
+        resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
 
         shuffled_resultant_length.append(resultant_length)
         shuffled_resultant_angle.append(resultant_angle)

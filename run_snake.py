@@ -110,7 +110,6 @@ for idx, target_entries in enumerate(full_queries):
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working,
-                              '--latency-wait', '60',
                               # '--use-conda',
                               # '-F',         # (hard) force rerun everything
                               # '-f',         # (soft) force rerun last step

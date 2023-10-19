@@ -164,7 +164,7 @@ if __name__ == "__main__":
 
         return out_path_tif, out_path_log, im_1
 
-    base_path = r"D:\minian_test\wirefree_fullstack\new"
+    base_path = r"D:\minian_test\wirefree_fullstack\MM_220928_a"
     sub_dirs = os.listdir(base_path)
     sub_dirs = [os.path.join(base_path, d) for d in sub_dirs]
 

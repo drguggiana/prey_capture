@@ -4,7 +4,7 @@ import xarray as xr
 from os.path import join
 
 from ast import literal_eval
-from functions_kinematic import wrap
+from functions_kinematic import wrap, wrap_negative, smooth_trace
 import paths
 
 
@@ -49,15 +49,17 @@ class WirefreeExperiment(DataContainer):
         if 'preproc' in filename:
             self._load_preprocessing(filename, use_xarray)
 
-        # if 'tcday' in filename:
-        #     self._load_tc(filename)
+        if 'tcday' in filename:
+            self._load_tc(filename)
 
         print(f'Loaded experiment from {filename}')
 
         self.cells = [el for el in self.raw_spikes.columns if "cell" in el]
 
 
-    # def load_cell_properties(self, file):
+    # def _load_tc(self, file):
+        # with pd.HDFStore(file, 'r') as tc:
+
 
     def save_hdf(self, file, attributes):
         for attribute in attributes:
@@ -114,8 +116,8 @@ class WirefreeExperiment(DataContainer):
         matched_calcium.loc[mask, 'direction_wrapped'] = matched_calcium.loc[mask, 'direction_wrapped'].apply(wrap)
            
         # For all data
-        self.metadata.rig = matched_calcium['mouse'].values[0].split('_', 1)[0]
-        if self.metadata.rig in ['VWheel', 'VWheelWF']:
+        self.metadata.id_flag = matched_calcium['mouse'].values[0].split('_', 1)[0]
+        if self.metadata.id_flag in ['VWheel', 'VWheelWF']:
             self.metadata.exp_type = 'fixed'
         else:
             self.metadata.exp_type = 'free'
@@ -157,6 +159,16 @@ class WirefreeExperiment(DataContainer):
             self.kinematics = matched_calcium.loc[:, stimulus_cols + motive_tracking_cols + eye_cols + wheel_cols]
         else:
             self.kinematics = matched_calcium.loc[:, stimulus_cols + motive_tracking_cols + mouse_kinem_cols]
+
+        if 'head_pitch' not in self.kinematics.columns:
+            pitch = -wrap_negative(self.kinematics.mouse_xrot_m.values)
+            self.kinematics['head_pitch'] = smooth_trace(pitch, range=(-180, 180), kernel_size=10, discont=2 * np.pi)
+
+            yaw = wrap_negative(self.kinematics.mouse_zrot_m.values)
+            self.kinematics['head_yaw'] = smooth_trace(yaw, range=(-180, 180), kernel_size=10, discont=2 * np.pi)
+
+            roll = wrap_negative(self.kinematics.mouse_yrot_m.values)
+            self.kinematics['head_roll'] = smooth_trace(roll, range=(-180, 180), kernel_size=10, discont=2 * np.pi)
             
         self.raw_spikes = matched_calcium.loc[:, stimulus_cols + spikes_cols]
         self.raw_spikes.columns = [key.rsplit('_', 1)[0] if 'spikes' in key else key for key in self.raw_spikes.columns]

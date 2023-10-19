@@ -9,7 +9,7 @@ import processing_parameters
 
 
 def yaml_to_json(wildcards):
-    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    python_dict = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
     # escape the double quotes inside the json
     json_dict = json.dumps(python_dict).replace('"', '\\"')
     return json_dict
@@ -51,14 +51,14 @@ rule dlc_extraction:
 
 
 def dlc_input_selector(wildcards):
-    if config["dlc_flag"][wildcards.file]:
+    if config["dlc_flag"][wildcards.in_file]:
         return rules.dlc_extraction.output
     else:
-        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.csv')
+        return os.path.join(config["target_path"],config["files"][wildcards.in_file] + '.csv')
 
 
 def day_selector(wildcards):
-    name_parts = wildcards.file.split('_')
+    name_parts = wildcards.in_file.split('_')
     day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
     animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
@@ -71,7 +71,7 @@ def day_selector(wildcards):
 
 
 def day_animal_calcium_file(wildcards):
-    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    python_dict = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
     animal = python_dict['mouse']
     day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
     # rig = python_dict['rig']
@@ -102,14 +102,14 @@ rule calcium_scatter:
 
 
 def calcium_input_selector(wildcards):
-    if config["calcium_flag"][wildcards.file]:
+    if config["calcium_flag"][wildcards.in_file]:
         return rules.calcium_scatter.output
     else:
-        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
+        return os.path.join(config["target_path"],config["files"][wildcards.in_file] + '.avi')
 
 
 def matched_input(wildcards):
-    name_parts = wildcards.file.split('_')
+    name_parts = wildcards.in_file.split('_')
     # day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
     animal = '_'.join([name_parts[0].upper()] + name_parts[1:3])
     # rig = name_parts[3]
@@ -141,14 +141,14 @@ rule match_cells:
 
 
 def match_selector(wildcards):
-    if config["calcium_flag"][wildcards.file]:
+    if config["calcium_flag"][wildcards.in_file]:
         # return rules.calcium_extraction.output
-        python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+        python_dict = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
         animal = python_dict['mouse']
         # rig = python_dict['rig']
         return os.path.join(paths.analysis_path,'_'.join((animal, 'cellMatch.hdf5')))
     else:
-        return os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
+        return os.path.join(config["target_path"],config["files"][wildcards.in_file] + '.avi')
 
 
 rule preprocess:
@@ -177,7 +177,7 @@ rule motifs:
 
 
 def motif_selector(wildcards):
-    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    python_dict = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
 
     if python_dict['rig'] == 'miniscope':
         return os.path.join(paths.analysis_path, "{file}_motifs.hdf5"),
@@ -225,7 +225,7 @@ rule triggered_averages:
 
 
 def files_to_day(wildcards):
-    name_parts = wildcards.file.split('_')
+    name_parts = wildcards.in_file.split('_')
     day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
     animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
     info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
@@ -239,7 +239,7 @@ def files_to_day(wildcards):
 
 
 def days_to_file(wildcards):
-    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    python_dict = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
     animal = python_dict['mouse']
     day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
     rig = python_dict['rig']
@@ -247,7 +247,7 @@ def days_to_file(wildcards):
 
 
 def days_to_file_neuron_drop(wildcards):
-    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    python_dict = yaml.load(config["file_info"][wildcards.in_file], Loader=yaml.FullLoader)
     animal = python_dict['mouse']
     day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
     rig = python_dict['rig']

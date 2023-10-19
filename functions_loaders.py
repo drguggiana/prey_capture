@@ -84,6 +84,7 @@ def load_preprocessing(input_path, data_all, latents_flag=True, matching_flag=Tr
                     print(f'No latents in file {el}')
 
             # if the matching flag is on, also load the ROI matching
+
             data_list.append(temp_data)
             frame_list.append([time_stamp, 0, temp_data.shape[0]])
         except KeyError:
