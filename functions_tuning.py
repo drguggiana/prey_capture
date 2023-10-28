@@ -540,7 +540,7 @@ def boostrap_dsi_osi_resultant(responses, use_equal_trial_nums=False, num_shuffl
     # Get the counts per angle
     trial_nums_by_angle = responses.groupby(tuning_kind).trial_num.agg(list)
     angle_counts = responses[tuning_kind].value_counts()
-    min_presentations = max(np.min(angle_counts.to_numpy()), 3)
+    min_presentations = np.min(angle_counts.to_numpy())
 
     shuffled_resultant_angle = []
     shuffled_resultant_length = []
