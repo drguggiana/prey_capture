@@ -6,9 +6,30 @@ import warnings
 import functions_kinematic as fk
 import functions_tuning as tuning
 from tc_calculate import *
+from processing_parameters import wf_frame_rate
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
+
+
+def parse_trial_frames(df):
+    trial_idx_frames = df[df.direction > -1000].groupby(['trial_num']).apply(lambda x: [x.index[0], x.index[0] + 5*wf_frame_rate])
+    trial_idx_frames = np.array(trial_idx_frames.to_list())
+
+    if trial_idx_frames[-1, 1] > df.index[-1]:
+        trial_idx_frames[-1, 1] = df.index[-1]
+    if trial_idx_frames[0, 0] < 0:
+        trial_idx_frames[0, 0] = 0
+
+    traces = []
+    for i, frame in enumerate(trial_idx_frames):
+        df_slice = df.iloc[frame[0]:frame[1], :].copy()
+        df_slice['trial_num'] = i + 1
+        traces.append(df_slice)
+    
+    traces = pd.concat(traces, axis=0).reset_index(drop=True)
+    return traces
+
 
 
 def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bootstrap_shuffles=500):
@@ -21,20 +42,19 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
     activity_df[cells] = activity_df.loc[:, cells].apply(clipping_function, axis=1, raw=True,
                                                          threshold=clip_threshold)
 
+    # Get trial_activity dataframe
+    activity_df = parse_trial_frames(activity_df)
     # Get the mean response per trial and drop the inter-trial interval from df
     mean_trial_activity = activity_df.groupby([tuning_kind, 'trial_num'])[cells].agg(np.nanmean).reset_index()
-    mean_trial_activity = mean_trial_activity.drop(mean_trial_activity[mean_trial_activity.trial_num == 0].index)
+    mean_trial_activity = mean_trial_activity.drop(mean_trial_activity[mean_trial_activity[tuning_kind] == -1000].index).sort_values('trial_num')
 
-    # Make sure to explicitly represent 180 or 360 degrees in the data.
+    # Make sure to explicitly represent 360 degrees in the data.
     # This is done by duplicating the 0 degrees value
     if 'direction' in tuning_kind:
         dup_angle = 360.
-    else:
-        dup_angle = 180.
-
-    dup = mean_trial_activity.loc[mean_trial_activity[tuning_kind] == 0].copy()
-    dup.loc[:, tuning_kind] = dup_angle
-    mean_trial_activity = pd.concat([mean_trial_activity, dup], ignore_index=True)
+        dup = mean_trial_activity.loc[mean_trial_activity[tuning_kind] == 0].copy()
+        dup.loc[:, tuning_kind] = dup_angle
+        mean_trial_activity = pd.concat([mean_trial_activity, dup], ignore_index=True)
 
     # -- Create the response vectors --#
     mean_resp, unique_angles = tuning.generate_response_vector(mean_trial_activity, np.nanmean)
@@ -68,7 +88,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                                          fit_curve[:, 0], fit_curve[:, 1],
                                          type=processing_parameters.gof_type)
 
-        # -- Get resultant vector and response variance-- #
+        # -- Get resultant vector and response variance using the tuning curve (trial response means) -- #
         if 'direction' in tuning_kind:
             multiplier = 1.
         else:
@@ -78,14 +98,52 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
         theta_sep = np.mean(np.diff(thetas))
         magnitudes = norm_mean_resp[cell].copy().to_numpy()
 
-        resultant_length = circ.resultant_vector_length(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
-        resultant_angle = circ.mean(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
-        resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
+        if 'direction' in tuning_kind:
+            dsi, osi, resultant_length, resultant_angle = tuning.calculate_dsi_osi_resultant(thetas, magnitudes)
+
+        else:
+            resultant_length = circ.resultant_vector_length(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
+            resultant_angle = circ.mean(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
+            resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
+
+            dsi = np.nan
+            osi = np.nan
 
         circ_var = 1 - resultant_length
         responsivity = resultant_length
 
-        # -- Run permutation tests -- #
+        # -- Run permutation tests using single trial mean responses-- #
+        # 1. Shuffle the trial IDs and compare the real selectivity index to the bootstrapped distribution
+        # 2. Bootstrap resultant length and angle while guaranteeing the same number of presentations per angle
+        #    This is what Joel does for significant shifts in tuning curves 
+        # 3. Calculate regression fit on a subset of data and compare to bootstrapped distribution
+
+        if 'direction' in tuning_kind:
+            bootstrap_dsi, bootstrap_osi, bootstrap_responsivity = \
+                tuning.boostrap_dsi_osi_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]], use_equal_trial_nums=False,
+                                                  num_shuffles=bootstrap_shuffles)
+            
+            p_dsi = percentileofscore(bootstrap_dsi, dsi, kind='mean') / 100.
+            p_osi = percentileofscore(bootstrap_osi, osi, kind='mean') / 100.
+            bootstrap_responsivity = bootstrap_responsivity[:, 0]
+            p_res = percentileofscore(bootstrap_responsivity, responsivity, kind='mean') / 100.
+
+            _, _, bootstrap_resultant = tuning.boostrap_dsi_osi_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]], 
+                                                                          use_equal_trial_nums=True, num_shuffles=bootstrap_shuffles)
+
+        else:
+            bootstrap_responsivity = tuning.bootstrap_responsivity(thetas, magnitudes, multiplier, 
+                                                                   num_shuffles=bootstrap_shuffles)
+            p_res = percentileofscore(bootstrap_responsivity, responsivity, kind='mean') / 100.
+
+            bootstrap_resultant = tuning.bootstrap_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]],
+                                                            multiplier=multiplier, num_shuffles=bootstrap_shuffles)
+
+            bootstrap_dsi = np.nan
+            bootstrap_osi = np.nan
+            p_dsi = np.nan
+            p_osi = np.nan
+
         # Calculate fit on subset of data
         bootstrap_gof, bootstrap_pref_angle, bootstrap_real_pref = \
             tuning.bootstrap_tuning_curve(norm_trial_activity[[tuning_kind, 'trial_num', cell]], fit_function,
@@ -93,16 +151,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                                           num_shuffles=bootstrap_shuffles, mean=mean_guess)
         p_gof = percentileofscore(bootstrap_gof[~np.isnan(bootstrap_gof)], fit_gof, kind='mean') / 100.
 
-        # Shuffle the trial IDs and compare the real selectivity index to the bootstrapped distribution
-        bootstrap_responsivity = tuning.bootstrap_responsivity(thetas, magnitudes, multiplier,
-                                                               num_shuffles=bootstrap_shuffles)
-        p_res = percentileofscore(bootstrap_responsivity, responsivity, kind='mean') / 100.
-
-        # Bootstrap resultant length and angle while guaranteeing the same number of presentations per angle
-        # This is what Joel does for significant shifts in tuning curves
-        bootstrap_resultant = tuning.bootstrap_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]],
-                                                         multiplier=multiplier, num_shuffles=bootstrap_shuffles)
-
+        # -- Assemble data -- #
         cell_data = [mean_trial_activity[[tuning_kind, cell]].to_numpy(),
                      norm_trial_activity[[tuning_kind, cell]].to_numpy(),
                      np.vstack([unique_angles, mean_resp[cell].to_numpy()]).T,
@@ -112,7 +161,8 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                      fit, fit_curve, fit_gof, bootstrap_gof, p_gof,
                      pref_angle, bootstrap_pref_angle, real_pref_angle, bootstrap_real_pref,
                      (resultant_length, resultant_angle), bootstrap_resultant,
-                     circ_var, responsivity, bootstrap_responsivity, p_res]
+                     circ_var, responsivity, bootstrap_responsivity, p_res,
+                     dsi, bootstrap_dsi, p_dsi, osi, bootstrap_osi, p_osi]
 
         cell_data_list.append(cell_data)
 
@@ -122,7 +172,8 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                  'fit', 'fit_curve', 'gof', 'bootstrap_gof', 'p_gof',
                  'pref', 'bootstrap_pref', 'shown_pref', 'bootstrap_shown_pref',
                  'resultant', 'bootstrap_resultant',
-                 'circ_var', 'responsivity', 'bootstrap_responsivity', 'p_responsivity']
+                 'circ_var', 'responsivity', 'bootstrap_responsivity', 'p_responsivity',
+                 'dsi', 'bootstrap_dsi', 'p_dsi', 'osi', 'bootstrap_osi', 'p_osi']
 
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
     return data_df

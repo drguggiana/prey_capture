@@ -428,6 +428,7 @@ def bootstrap_resultant(responses, multiplier, num_shuffles=1000):
     shuffled_resultant = np.vstack((shuffled_resultant_length, shuffled_resultant_angle)).T
     return shuffled_resultant
 
+
 def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, gof_type='rmse', **kwargs):
     columns = list(responses.columns)
     tuning_kind = columns[0]
@@ -481,6 +482,94 @@ def polar_vector_sum(magnitudes, thetas):
     angle = np.angle(t)
     
     return mag, angle
+
+
+# --- DSI and OSI --- #
+def calculate_dsi_osi_resultant(angles, magnitudes):
+
+    theta_sep = np.mean(np.diff(angles))
+
+    half_period_angles_1 = angles[angles <= np.pi]
+    half_period_angles_2 = angles[angles >= np.pi] - np.pi
+    half_period_mags_1 = magnitudes[angles <= np.pi]
+    half_period_mags_2 = magnitudes[angles >= np.pi]
+
+    resultant_length_1 = circ.resultant_vector_length(half_period_angles_1, w=half_period_mags_1, d=theta_sep, axial_correction=1) 
+    resultant_angle_1 = circ.mean(half_period_angles_1, w=half_period_mags_1, d=theta_sep, axial_correction=1)
+
+    resultant_length_2 = circ.resultant_vector_length(half_period_angles_2, w=half_period_mags_2, d=theta_sep, axial_correction=1) 
+    resultant_angle_2 = circ.mean(half_period_angles_2, w=half_period_mags_2, d=theta_sep, axial_correction=1)
+    resultant_angle_2 = fk.wrap(resultant_angle_2, bound=np.pi) + np.pi
+
+    if resultant_length_1 > resultant_length_2:
+        pref = resultant_angle_1
+        null = resultant_angle_2
+        resultant_length = resultant_length_1
+    else:
+        pref = resultant_angle_2
+        null = resultant_angle_1
+        resultant_length = resultant_length_2
+
+    closest_idx_to_pref = np.argmin(np.abs(angles - pref))
+    resp_pref = magnitudes[closest_idx_to_pref]
+
+    # for dsi
+    closest_idx_to_null = np.argmin(np.abs(angles - (pref + np.pi)))
+    resp_null = angles[closest_idx_to_null]
+    dsi = (resp_pref - resp_null) / (resp_pref + resp_null)
+
+    # for osi
+    closest_idx_to_null_1 = np.argmin(np.abs(angles - fk.wrap(pref + np.pi/2)))
+    closest_idx_to_null_2 = np.argmin(np.abs(angles - fk.wrap(pref - np.pi/2)))
+    resp_null_1 = magnitudes[closest_idx_to_null_1]
+    resp_null_2 = magnitudes[closest_idx_to_null_2]
+    resp_null_osi = np.nanmean([resp_null_1, resp_null_2])
+    osi = (resp_pref - resp_null_osi) / (resp_pref + resp_null_osi)
+    
+    return dsi, osi, resultant_length, pref
+
+
+def boostrap_dsi_osi_resultant(responses, use_equal_trial_nums=False, num_shuffles=1000):
+    # DSI calculation from https://doi.org/10.1038/nature19818
+    # OSI calculation from https://doi.org/10.1523/JNEUROSCI.0095-13.2013
+
+    columns = list(responses.columns)
+    tuning_kind = columns[0]
+    cell = columns[-1]
+
+    # Get the counts per angle
+    trial_nums_by_angle = responses.groupby(tuning_kind).trial_num.agg(list)
+    angle_counts = responses[tuning_kind].value_counts()
+    min_presentations = max(np.min(angle_counts.to_numpy()), 3)
+
+    shuffled_resultant_angle = []
+    shuffled_resultant_length = []
+    shuffled_dsi = []
+    shuffled_osi = []
+
+    for i in np.arange(num_shuffles):
+        if use_equal_trial_nums:
+            # select subset of trials, guaranteeing that each angle is represented the same number of times
+            trial_subset = trial_nums_by_angle.apply(np.random.choice, size=min_presentations, replace=False).explode().to_numpy(dtype=int)
+            theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
+            magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
+        else:
+            theta_subset = responses[tuning_kind].apply(np.deg2rad).to_numpy()
+            magnitude_subset = responses[cell].to_numpy()
+
+        dsi, osi, resultant_length, resultant_angle = calculate_dsi_osi_resultant(theta_subset, magnitude_subset)
+        shuffled_dsi.append(dsi)
+        shuffled_osi.append(osi)
+        shuffled_resultant_length.append(resultant_length)
+        shuffled_resultant_angle.append(resultant_angle)
+
+    shuffled_dsi = np.array(shuffled_dsi)
+    shuffled_osi = np.array(shuffled_osi)
+    shuffled_resultant_length = np.array(shuffled_resultant_length)
+    shuffled_resultant_angle = np.array(shuffled_resultant_angle)
+    shuffled_resultant = np.vstack((shuffled_resultant_length, shuffled_resultant_angle)).T
+
+    return shuffled_dsi, shuffled_osi, shuffled_resultant
 
 
 # --- Misc. --- #
@@ -575,17 +664,19 @@ def normalize_responses(ds, quantile=0.07):
     return ds_norm
 
 
-def calculate_dff(ds, baseline_type='iti', **kwargs):
+def calculate_dff(ds, baseline_type='iti', inplace=True, **kwargs):
     
     cells = [el for el in ds.columns if "cell" in el]
-    raw = ds.copy().fillna(0)
-    dff = ds.copy().fillna(0)
+    ds_copy = ds.copy()
 
     if baseline_type == 'iti':
-        baselines = raw.loc[raw.trial_num == 0][cells].mean()
+        baselines = ds.loc[ds.trial_num == 0][cells].copy().mean()
     elif baseline_type == 'percentile':
-        baselines = raw[cells].apply(np.percentile, axis=1, args=(kwargs.get('percentile', 8)))
+        baselines = ds[cells].copy().apply(np.percentile, axis=1, args=(kwargs.get('percentile', 8)))
     
-    dff[cells] = raw[cells].subtract(baselines, axis=1).div(baselines, axis=1)
-    
-    return dff
+    if inplace:
+        ds[cells] = ds[cells].subtract(baselines, axis=1).div(baselines, axis=1)
+        return ds
+    else:
+        ds_copy[cells] = ds_copy[cells].subtract(baselines, axis=1).div(baselines, axis=1)
+        return ds_copy
