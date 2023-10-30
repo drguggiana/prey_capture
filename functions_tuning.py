@@ -553,10 +553,10 @@ def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=2, num_shu
     trial_nums_by_angle = responses.groupby(tuning_kind).trial_num.agg(list)
     angle_counts = responses[tuning_kind].value_counts()
     min_presentations = angle_counts.min()
-    if min_presentations < min_trials:
-        if sampling_method == 'equal_trial_nums':
-            print('Not enough presentations per angle to calculate DSI/OSI')
-            return np.nan, np.nan, np.nan, np.nan, np.nan
+    # if min_presentations < min_trials:
+    #     if sampling_method == 'equal_trial_nums':
+    #         print('Not enough presentations per angle to calculate DSI/OSI')
+    #         return np.nan, np.nan, np.nan, np.nan, np.nan
 
     shuffled_null_angle = np.zeros(num_shuffles)
     shuffled_resultant = np.zeros((num_shuffles, 2))

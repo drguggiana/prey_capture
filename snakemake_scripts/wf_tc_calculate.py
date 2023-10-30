@@ -10,6 +10,7 @@ from processing_parameters import wf_frame_rate
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
+warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 
 def parse_trial_frames(df):
