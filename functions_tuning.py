@@ -485,54 +485,66 @@ def polar_vector_sum(magnitudes, thetas):
 
 
 # --- DSI and OSI --- #
-def calculate_dsi_osi_resultant(angles, magnitudes):
+def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
+    # Note all angles must be in radians
+    # This is only used on direction data, because it assumes that the angles are on the domain [0, 2pi]
+    # DSI calculation from https://doi.org/10.1038/nature19818
+    # OSI calculation from https://doi.org/10.1523/JNEUROSCI.0095-13.2013
+
+    if bootstrap:
+        unique_angles = np.unique(angles)
+        tc = [np.nanmean(magnitudes[angles == angle]) for angle in unique_angles]
+        angles = unique_angles
+        magnitudes = np.array(tc)
 
     theta_sep = np.mean(np.diff(angles))
 
+    # Get half periods
     half_period_angles_1 = angles[angles <= np.pi]
-    half_period_angles_2 = angles[angles >= np.pi] - np.pi
     half_period_mags_1 = magnitudes[angles <= np.pi]
+
+    half_period_angles_2 = angles[angles >= np.pi] - np.pi
     half_period_mags_2 = magnitudes[angles >= np.pi]
 
-    resultant_length_1 = circ.resultant_vector_length(half_period_angles_1, w=half_period_mags_1, d=theta_sep, axial_correction=1) 
-    resultant_angle_1 = circ.mean(half_period_angles_1, w=half_period_mags_1, d=theta_sep, axial_correction=1)
+    res_mag_1 = circ.resultant_vector_length(half_period_angles_1, w=half_period_mags_1, d=theta_sep,
+                                             axial_correction=2)
+    res_angle_1 = circ.mean(half_period_angles_1, w=half_period_mags_1, d=theta_sep, axial_correction=2)
 
-    resultant_length_2 = circ.resultant_vector_length(half_period_angles_2, w=half_period_mags_2, d=theta_sep, axial_correction=1) 
-    resultant_angle_2 = circ.mean(half_period_angles_2, w=half_period_mags_2, d=theta_sep, axial_correction=1)
-    resultant_angle_2 = fk.wrap(resultant_angle_2, bound=np.pi) + np.pi
+    res_mag_2 = circ.resultant_vector_length(half_period_angles_2, w=half_period_mags_2, d=theta_sep,
+                                             axial_correction=2)
+    res_angle_2 = circ.mean(half_period_angles_2, w=half_period_mags_2, d=theta_sep, axial_correction=2)
+    res_angle_2 = fk.wrap(res_angle_2, bound=np.pi) + np.pi
 
-    if resultant_length_1 > resultant_length_2:
-        pref = resultant_angle_1
-        null = resultant_angle_2
-        resultant_length = resultant_length_1
+    if res_mag_1 > res_mag_2:
+        pref = res_angle_1
+        null = res_angle_2
+        resultant_length = res_mag_1
     else:
-        pref = resultant_angle_2
-        null = resultant_angle_1
-        resultant_length = resultant_length_2
+        pref = res_angle_2
+        null = res_angle_1
+        resultant_length = res_mag_2
 
     closest_idx_to_pref = np.argmin(np.abs(angles - pref))
     resp_pref = magnitudes[closest_idx_to_pref]
 
     # for dsi
-    closest_idx_to_null = np.argmin(np.abs(angles - (pref + np.pi)))
-    resp_null = angles[closest_idx_to_null]
-    dsi = (resp_pref - resp_null) / (resp_pref + resp_null)
+    closest_idx_to_null = np.argmin(np.abs(angles - fk.wrap(pref + np.pi, bound=2*np.pi)))
+    resp_null = magnitudes[closest_idx_to_null]
+    dsi_nasal_temporal = (resp_pref - resp_null) / (resp_pref + resp_null)
+    dsi_abs = 1 - (resp_null/resp_pref)
 
     # for osi
-    closest_idx_to_null_1 = np.argmin(np.abs(angles - fk.wrap(pref + np.pi/2)))
-    closest_idx_to_null_2 = np.argmin(np.abs(angles - fk.wrap(pref - np.pi/2)))
+    closest_idx_to_null_1 = np.argmin(np.abs(angles - fk.wrap(pref + np.pi/2, bound=2*np.pi)))
+    closest_idx_to_null_2 = np.argmin(np.abs(angles - fk.wrap(pref - np.pi/2, bound=2*np.pi)))
     resp_null_1 = magnitudes[closest_idx_to_null_1]
     resp_null_2 = magnitudes[closest_idx_to_null_2]
     resp_null_osi = np.nanmean([resp_null_1, resp_null_2])
     osi = (resp_pref - resp_null_osi) / (resp_pref + resp_null_osi)
     
-    return dsi, osi, resultant_length, pref
+    return dsi_nasal_temporal, dsi_abs, osi, resultant_length, pref, null
 
 
-def boostrap_dsi_osi_resultant(responses, use_equal_trial_nums=False, num_shuffles=1000):
-    # DSI calculation from https://doi.org/10.1038/nature19818
-    # OSI calculation from https://doi.org/10.1523/JNEUROSCI.0095-13.2013
-
+def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=2, num_shuffles=1000):
     columns = list(responses.columns)
     tuning_kind = columns[0]
     cell = columns[-1]
@@ -540,36 +552,42 @@ def boostrap_dsi_osi_resultant(responses, use_equal_trial_nums=False, num_shuffl
     # Get the counts per angle
     trial_nums_by_angle = responses.groupby(tuning_kind).trial_num.agg(list)
     angle_counts = responses[tuning_kind].value_counts()
-    min_presentations = np.min(angle_counts.to_numpy())
+    min_presentations = angle_counts.min()
+    if min_presentations < min_trials:
+        if sampling_method == 'equal_trial_nums':
+            print('Not enough presentations per angle to calculate DSI/OSI')
+            return np.nan, np.nan, np.nan, np.nan, np.nan
 
-    shuffled_resultant_angle = []
-    shuffled_resultant_length = []
-    shuffled_dsi = []
-    shuffled_osi = []
+    shuffled_null_angle = np.zeros(num_shuffles)
+    shuffled_resultant = np.zeros((num_shuffles, 2))
+    shuffled_dsi_nasal_temporal = np.zeros(num_shuffles)
+    shuffled_dsi_abs = np.zeros(num_shuffles)
+    shuffled_osi = np.zeros(num_shuffles)
 
     for i in np.arange(num_shuffles):
-        if use_equal_trial_nums:
+
+        if sampling_method == 'shuffle_trials':
+            theta_subset = responses[tuning_kind].apply(np.deg2rad).to_numpy()
+            np.random.shuffle(theta_subset)
+            magnitude_subset = responses[cell].to_numpy()
+
+        else:
             # select subset of trials, guaranteeing that each angle is represented the same number of times
             trial_subset = trial_nums_by_angle.apply(np.random.choice, size=min_presentations, replace=False).explode().to_numpy(dtype=int)
             theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
             magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
-        else:
-            theta_subset = responses[tuning_kind].apply(np.deg2rad).to_numpy()
-            magnitude_subset = responses[cell].to_numpy()
 
-        dsi, osi, resultant_length, resultant_angle = calculate_dsi_osi_resultant(theta_subset, magnitude_subset)
-        shuffled_dsi.append(dsi)
-        shuffled_osi.append(osi)
-        shuffled_resultant_length.append(resultant_length)
-        shuffled_resultant_angle.append(resultant_angle)
+        dsi_nasal_temporal, dsi_abs, osi, resultant_length, resultant_angle, null_angle = \
+            calculate_dsi_osi_resultant(theta_subset, magnitude_subset, bootstrap=True)
 
-    shuffled_dsi = np.array(shuffled_dsi)
-    shuffled_osi = np.array(shuffled_osi)
-    shuffled_resultant_length = np.array(shuffled_resultant_length)
-    shuffled_resultant_angle = np.array(shuffled_resultant_angle)
-    shuffled_resultant = np.vstack((shuffled_resultant_length, shuffled_resultant_angle)).T
+        shuffled_dsi_nasal_temporal[i] = dsi_nasal_temporal
+        shuffled_dsi_abs[i] = dsi_abs
+        shuffled_osi[i] = osi
+        shuffled_resultant[i, 0] = resultant_length
+        shuffled_resultant[i, 1] = np.rad2deg(resultant_angle)
+        shuffled_null_angle[i] = np.rad2deg(null_angle)
 
-    return shuffled_dsi, shuffled_osi, shuffled_resultant
+    return shuffled_dsi_nasal_temporal, shuffled_dsi_abs, shuffled_osi, shuffled_resultant, shuffled_null_angle
 
 
 # --- Misc. --- #

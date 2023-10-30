@@ -471,7 +471,7 @@ def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std', 
                          **plot_kwargs
                          )
 
-    axes[0].axvline(np.deg2rad(wrap(ds[columns[5]][-1], bound=360/multiplier)), color='green', linewidth=1)
+    axes[0].axvline(wrap(ds[columns[5]][-1], bound=360/multiplier), color='green', linewidth=1)
     # axes[0].set_title(f"Pref: {ds[columns[4]]: .1f}$^\circ$")
     axes[0].set_xticks(np.deg2rad(np.linspace(0,  plot_kwargs['theta_max'], int(4/multiplier), endpoint=False)))
 

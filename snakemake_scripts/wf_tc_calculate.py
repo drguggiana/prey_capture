@@ -34,7 +34,7 @@ def parse_trial_frames(df):
 
 def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bootstrap_shuffles=500):
 
-
+    # --- Threshold data and parse trials --- #
     # define the clipping threshold in percentile of baseline
     clip_threshold = 8
     # do the cell clipping
@@ -42,14 +42,14 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
     activity_df[cells] = activity_df.loc[:, cells].apply(clipping_function, axis=1, raw=True,
                                                          threshold=clip_threshold)
 
-    # Get trial_activity dataframe
+    # Correctly parse trials since the data has some errors
     activity_df = parse_trial_frames(activity_df)
+
     # Get the mean response per trial and drop the inter-trial interval from df
     mean_trial_activity = activity_df.groupby([tuning_kind, 'trial_num'])[cells].agg(np.nanmean).reset_index()
     mean_trial_activity = mean_trial_activity.drop(mean_trial_activity[mean_trial_activity[tuning_kind] == -1000].index).sort_values('trial_num')
 
-    # Make sure to explicitly represent 360 degrees in the data.
-    # This is done by duplicating the 0 degrees value
+    # Make sure to explicitly represent 360 degrees in the data by duplicating the 0 degrees value
     if 'direction' in tuning_kind:
         dup_angle = 360.
         dup = mean_trial_activity.loc[mean_trial_activity[tuning_kind] == 0].copy()
@@ -74,14 +74,18 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
     else:
         fit_function = tuning.calculate_pref_gaussian
 
+    # For all cells
     cell_data_list = []
     for cell in cells:
         # -- Calculate fit and responsivity using all trials -- #
-        mean_guess = unique_angles[np.argmax(norm_mean_resp[cell].fillna(0), axis=0)]
-        fit, fit_curve, pref_angle, real_pref_angle = fit_function(unique_angles,
-                                                                   norm_mean_resp[cell].to_numpy(),
-                                                                   tuning_kind,
-                                                                   mean=mean_guess)
+        try:
+            mean_guess = unique_angles[np.argmax(norm_mean_resp[cell].fillna(0), axis=0)]
+        except:
+            # Sometimes this throws an error if there are no responses
+            mean_guess = unique_angles[len(unique_angles) // 2]
+
+        fit, fit_curve, pref_angle, real_pref_angle = \
+            fit_function(unique_angles, norm_mean_resp[cell].to_numpy(), tuning_kind, mean=mean_guess)
 
         fit_gof = tuning.goodness_of_fit(norm_trial_activity[tuning_kind].to_numpy(),
                                          norm_trial_activity[cell].to_numpy(),
@@ -99,59 +103,72 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
         magnitudes = norm_mean_resp[cell].copy().to_numpy()
 
         if 'direction' in tuning_kind:
-            dsi, osi, resultant_length, resultant_angle = tuning.calculate_dsi_osi_resultant(thetas, magnitudes)
+            dsi_nasal_temporal, dsi_abs, osi, resultant_length, resultant_angle, null_angle = \
+                tuning.calculate_dsi_osi_resultant(thetas, magnitudes)
+            resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
+            null_angle = fk.wrap(np.rad2deg(null_angle), bound=360/multiplier)
 
         else:
             resultant_length = circ.resultant_vector_length(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
             resultant_angle = circ.mean(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
             resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
 
-            dsi = np.nan
+            dsi_nasal_temporal = np.nan
+            dsi_abs = np.nan
             osi = np.nan
+            null_angle = np.nan
 
-        circ_var = 1 - resultant_length
-        responsivity = resultant_length
+        circ_var = circ.var(thetas, w=magnitudes, d=theta_sep)
+        responsivity = 1 - circ_var
 
         # -- Run permutation tests using single trial mean responses-- #
-        # 1. Shuffle the trial IDs and compare the real selectivity index to the bootstrapped distribution
+        # 1. Shuffle the trial IDs and compare the real selectivity indices to the bootstrapped distribution
         # 2. Bootstrap resultant length and angle while guaranteeing the same number of presentations per angle
         #    This is what Joel does for significant shifts in tuning curves 
         # 3. Calculate regression fit on a subset of data and compare to bootstrapped distribution
 
         if 'direction' in tuning_kind:
-            bootstrap_dsi, bootstrap_osi, bootstrap_responsivity = \
-                tuning.boostrap_dsi_osi_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]], use_equal_trial_nums=False,
-                                                  num_shuffles=bootstrap_shuffles)
-            
-            p_dsi = percentileofscore(bootstrap_dsi, dsi, kind='mean') / 100.
-            p_osi = percentileofscore(bootstrap_osi, osi, kind='mean') / 100.
+            # 1. Shuffle trial IDs
+            bootstrap_dsi_nasal_temporal, bootstrap_dsi_abs, bootstrap_osi, bootstrap_responsivity, bootstrap_null_angle= \
+                tuning.boostrap_dsi_osi_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]],
+                                                  sampling_method='shuffle_trials', num_shuffles=bootstrap_shuffles)
+
             bootstrap_responsivity = bootstrap_responsivity[:, 0]
+            p_dsi_nasal_temporal = percentileofscore(bootstrap_dsi_nasal_temporal, dsi_nasal_temporal, kind='mean') / 100.
+            p_dsi_abs = percentileofscore(bootstrap_dsi_abs, dsi_abs, kind='mean') / 100.
+            p_osi = percentileofscore(bootstrap_osi, osi, kind='mean') / 100.
             p_res = percentileofscore(bootstrap_responsivity, responsivity, kind='mean') / 100.
 
-            _, _, bootstrap_resultant = tuning.boostrap_dsi_osi_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]], 
-                                                                          use_equal_trial_nums=True, num_shuffles=bootstrap_shuffles)
+            # 2. Bootstrap resultant vector
+            _, _, _, bootstrap_resultant, _ = \
+                tuning.boostrap_dsi_osi_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]],
+                                                  sampling_method='equal_trial_nums', num_shuffles=bootstrap_shuffles)
 
         else:
+            # 1. Shuffle trial IDs
             bootstrap_responsivity = tuning.bootstrap_responsivity(thetas, magnitudes, multiplier, 
                                                                    num_shuffles=bootstrap_shuffles)
             p_res = percentileofscore(bootstrap_responsivity, responsivity, kind='mean') / 100.
 
+            # 2. Bootstrap resultant vector
             bootstrap_resultant = tuning.bootstrap_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]],
                                                             multiplier=multiplier, num_shuffles=bootstrap_shuffles)
 
-            bootstrap_dsi = np.nan
+            bootstrap_dsi_nasal_temporal = np.nan
+            bootstrap_dsi_abs = np.nan
             bootstrap_osi = np.nan
-            p_dsi = np.nan
+            p_dsi_nasal_temporal = np.nan
+            p_dsi_abs = np.nan
             p_osi = np.nan
 
-        # Calculate fit on subset of data
+        # 3. Calculate fit on subset of data
         bootstrap_gof, bootstrap_pref_angle, bootstrap_real_pref = \
             tuning.bootstrap_tuning_curve(norm_trial_activity[[tuning_kind, 'trial_num', cell]], fit_function,
                                           gof_type=processing_parameters.gof_type,
                                           num_shuffles=bootstrap_shuffles, mean=mean_guess)
         p_gof = percentileofscore(bootstrap_gof[~np.isnan(bootstrap_gof)], fit_gof, kind='mean') / 100.
 
-        # -- Assemble data -- #
+        # -- Assemble data for saving -- #
         cell_data = [mean_trial_activity[[tuning_kind, cell]].to_numpy(),
                      norm_trial_activity[[tuning_kind, cell]].to_numpy(),
                      np.vstack([unique_angles, mean_resp[cell].to_numpy()]).T,
@@ -162,7 +179,9 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                      pref_angle, bootstrap_pref_angle, real_pref_angle, bootstrap_real_pref,
                      (resultant_length, resultant_angle), bootstrap_resultant,
                      circ_var, responsivity, bootstrap_responsivity, p_res,
-                     dsi, bootstrap_dsi, p_dsi, osi, bootstrap_osi, p_osi]
+                     dsi_nasal_temporal, bootstrap_dsi_nasal_temporal, p_dsi_nasal_temporal,
+                     dsi_abs, bootstrap_dsi_abs, p_dsi_abs,
+                     osi, bootstrap_osi, p_osi]
 
         cell_data_list.append(cell_data)
 
@@ -173,7 +192,9 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
                  'pref', 'bootstrap_pref', 'shown_pref', 'bootstrap_shown_pref',
                  'resultant', 'bootstrap_resultant',
                  'circ_var', 'responsivity', 'bootstrap_responsivity', 'p_responsivity',
-                 'dsi', 'bootstrap_dsi', 'p_dsi', 'osi', 'bootstrap_osi', 'p_osi']
+                 'dsi_nasal_temporal', 'bootstrap_dsi_nasal_temporal', 'p_dsi_nasal_temporal',
+                 'dsi_abs', 'bootstrap_dsi_abs', 'p_dsi_abs',
+                 'osi', 'bootstrap_osi', 'p_osi']
 
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
     return data_df
