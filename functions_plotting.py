@@ -443,7 +443,6 @@ def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std', 
         fig.suptitle(f"Cell {cell}", fontsize='x-large')
         subfig = fig.subfigures(nrows=1, ncols=1)
 
-
         if polar:
             ax1 = subfig.add_subplot(121, projection="polar")  # tuning
         else:
@@ -471,16 +470,33 @@ def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std', 
                          **plot_kwargs
                          )
 
-    axes[0].axvline(wrap(ds[columns[5]][-1], bound=360/multiplier), color='green', linewidth=1)
+    resultant = ds[columns[5]][-1]
+    # if resultant <= 180:
+    #     resultant *= 2
+    # else:
+    #     resultant = (360 - resultant)
+
+    # axes[0].axvline(resultant, color='green', linewidth=1)
     # axes[0].set_title(f"Pref: {ds[columns[4]]: .1f}$^\circ$")
     axes[0].set_xticks(np.deg2rad(np.linspace(0,  plot_kwargs['theta_max'], int(4/multiplier), endpoint=False)))
 
-    # Plot responsivity
-    hist_resp = ds['bootstrap_responsivity']
+    # Plot dsi or osi
+    if 'direction' in tuning_kind:
+        si = 'dsi_nasal_temporal'
+        title = 'DSI'
+        xlims = (-1.001, 1.001)
+        step = 0.05
+    else:
+        si = 'responsivity'
+        title = 'OSI'
+        xlims = (-0.05, 1.001)
+        step = 0.025
+
+    hist_resp = ds[f'bootstrap_{si}']
     hist_resp[np.isnan(hist_resp)] = -0.05
-    real_resp = ds['responsivity']
-    p_resp = ds['p_responsivity']
-    edges = np.arange(-0.05, 1.001, 0.025)
+    real_resp = ds[si]
+    p_resp = ds[f'p_{si}']
+    edges = np.arange(*xlims, step)
     axes[1].hist(hist_resp, bins=edges, edgecolor="black", color=holoviews_blue_rgb)
     axes[1].axvline(x=real_resp, color='r', linestyle='dashed', linewidth=2)
     # axes[1].text(1.0, 1.0, f"%ile={p_resp: .2f}", size=10, ha='right', va='bottom', transform=axes[1].transAxes)
@@ -488,7 +504,7 @@ def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std', 
     axes[1].spines['top'].set_visible(False)
     axes[1].xaxis.set_ticks_position('bottom')
     axes[1].yaxis.set_ticks_position('left')
-    axes[1].set_title('Responsivity')
+    axes[1].set_title(title)
 
     # Plot goodness of fit
     hist_gof = ds['bootstrap_gof']

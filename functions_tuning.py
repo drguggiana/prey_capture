@@ -509,23 +509,27 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     res_mag_1 = circ.resultant_vector_length(half_period_angles_1, w=half_period_mags_1, d=theta_sep,
                                              axial_correction=2)
     res_angle_1 = circ.mean(half_period_angles_1, w=half_period_mags_1, d=theta_sep, axial_correction=2)
+    closest_idx1 = np.argmin(np.abs(angles - res_angle_1))
+    resp1 = magnitudes[closest_idx1]
 
     res_mag_2 = circ.resultant_vector_length(half_period_angles_2, w=half_period_mags_2, d=theta_sep,
                                              axial_correction=2)
     res_angle_2 = circ.mean(half_period_angles_2, w=half_period_mags_2, d=theta_sep, axial_correction=2)
     res_angle_2 = fk.wrap(res_angle_2, bound=np.pi) + np.pi
 
-    if res_mag_1 > res_mag_2:
+    closest_idx2 = np.argmin(np.abs(angles - res_angle_2))
+    resp2 = magnitudes[closest_idx2]
+
+    if resp1 > resp2:
         pref = res_angle_1
+        resp_pref = resp1
         null = res_angle_2
         resultant_length = res_mag_1
     else:
         pref = res_angle_2
+        resp_pref = resp2
         null = res_angle_1
         resultant_length = res_mag_2
-
-    closest_idx_to_pref = np.argmin(np.abs(angles - pref))
-    resp_pref = magnitudes[closest_idx_to_pref]
 
     # for dsi
     closest_idx_to_null = np.argmin(np.abs(angles - fk.wrap(pref + np.pi, bound=2*np.pi)))

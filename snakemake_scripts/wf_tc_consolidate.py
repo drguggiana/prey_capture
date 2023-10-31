@@ -17,8 +17,16 @@ def kine_fraction_responsive(ds):
 
 
 def vis_frac_responsive(ds):
-    is_resp = ds['responsivity'] > 0.25
+    if 'dsi_nasal_temporal' in ds.columns:
+        is_ori_resp = ds['osi'] > 0.5
+        is_dir_resp = np.abs(ds['dsi_nasal_temporal']) > 0.5
+        is_resp = is_ori_resp + is_dir_resp
+        is_resp = is_resp > 0
+    else:
+        is_resp = ds['responsivity'] > 0.25
+
     frac_resp = is_resp.sum() / is_resp.count()
+
     return is_resp, frac_resp
 
 
