@@ -441,7 +441,7 @@ def matched_tc_files(wildcards):
                          if (animal in el['mouse']) & (day in el['slug'])]
 
         if (len(match_tc_files) < 2) or not all([os.path.isfile(tc_file) for tc_file in match_tc_files]):
-            print(f'Not all tuning curve files are present for {animal[0]} on {day[0]}')
+            print(f'Not all tuning curve files are present for {animal} on {day}')
             return os.path.join(config["target_path"],config["files"][wildcards.file] + '.avi')
 
         else:
@@ -474,7 +474,7 @@ rule agg_tcs:
 
 rule tuning_run:
     input:
-          expand(os.path.join(paths.analysis_path, "{file}_tcday.hdf5"), file=config['files'])
+          expand(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"), file=config['files'])
     output:
           os.path.join(paths.analysis_path, "tuning_run.txt")
     params:
