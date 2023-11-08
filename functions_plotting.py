@@ -12,7 +12,17 @@ from functions_kinematic import wrap
 
 # define in to cm
 constant_in2cm = 2.54
-holoviews_blue_rgb = tuple(np.array([42, 158, 210]) / 255.)
+
+# Define standard colors for holoviews
+hv_blue_rgb = tuple(np.array([42, 158, 210]) / 255.)
+hv_blue_hex = '#2a9ed2'
+hv_orange_rgb = tuple(np.array([255, 191, 134]) / 255.)
+hv_orange_hex = '#ffbf86'
+hv_mpi_green_rgb = tuple(np.array([0, 136, 122]) / 255.)
+hv_mpi_green_hex = '#00887a'
+hv_mpi_yellow_rgb = tuple(np.array([203, 219, 42]) / 255.)
+hv_mpi_yellow_hex = '#cbdb2a'
+
 # define the standard font sizes
 paper = '7pt'
 poster = '15pt'
@@ -448,10 +458,10 @@ def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std', 
         else:
             ax1 = subfig.add_subplot(121)  # tuning
 
-        ax2 = subfig.add_subplot(222)  # resp
-        ax3 = subfig.add_subplot(224)  # error
-        plt.subplots_adjust(wspace=0.4, hspace=0.4)
-        axes = [ax1, ax2, ax3]
+        ax2 = subfig.add_subplot(122)  # resp
+        # ax3 = subfig.add_subplot(224)  # error
+        # plt.subplots_adjust(wspace=0.4, hspace=0.4)
+        axes = [ax1, ax2]
 
     if polar:
         tuning_plot_func = plot_polar_tuning_curve
@@ -506,20 +516,20 @@ def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std', 
     axes[1].yaxis.set_ticks_position('left')
     axes[1].set_title(title)
 
-    # Plot goodness of fit
-    hist_gof = ds['bootstrap_gof']
-    hist_gof[np.isnan(hist_gof)] = -0.1
-    real_gof = ds['gof']
-    p_gof = ds['p_gof']
-    edges = np.arange(-0.1, 1.001, 0.025)
-    axes[2].hist(hist_gof, bins=edges, edgecolor="black", color=holoviews_blue_rgb)
-    axes[2].axvline(x=real_gof, color='r', linestyle='dashed', linewidth=2)
-    # axes[2].text(1.0, 1.0, f"%ile={p_gof: .2f}", size=10, ha='right', va='bottom', transform=axes[2].transAxes)
-    axes[2].spines['right'].set_visible(False)
-    axes[2].spines['top'].set_visible(False)
-    axes[2].xaxis.set_ticks_position('bottom')
-    axes[2].yaxis.set_ticks_position('left')
-    axes[2].set_title(gof_type.upper())
+    # # Plot goodness of fit
+    # hist_gof = ds['bootstrap_gof']
+    # hist_gof[np.isnan(hist_gof)] = -0.1
+    # real_gof = ds['gof']
+    # p_gof = ds['p_gof']
+    # edges = np.arange(-0.1, 1.001, 0.025)
+    # axes[2].hist(hist_gof, bins=edges, edgecolor="black", color=holoviews_blue_rgb)
+    # axes[2].axvline(x=real_gof, color='r', linestyle='dashed', linewidth=2)
+    # # axes[2].text(1.0, 1.0, f"%ile={p_gof: .2f}", size=10, ha='right', va='bottom', transform=axes[2].transAxes)
+    # axes[2].spines['right'].set_visible(False)
+    # axes[2].spines['top'].set_visible(False)
+    # axes[2].xaxis.set_ticks_position('bottom')
+    # axes[2].yaxis.set_ticks_position('left')
+    # axes[2].set_title(gof_type.upper())
 
     return axes
 
@@ -1039,9 +1049,9 @@ def holoviews_mods(figure_in, dpi, scale_factor):
             figure_in.opts(box_line_width=px2pt(violin_line_width, dpi, scale_factor))
             stats_line_width = props.get('stats_line_width', 0.5)
             figure_in.opts(stats_line_width=px2pt(stats_line_width, dpi, scale_factor))
-            outline_line_width = props.get('outline_line_width', 0.5)
+            outline_line_width = props.get('outline_line_width', 1)
             figure_in.opts(box_line_width=px2pt(outline_line_width, dpi, scale_factor))
-            box_line_width = props.get('box_line_width', 0.5)
+            box_line_width = props.get('box_line_width', 1)
             figure_in.opts(box_line_width=px2pt(box_line_width, dpi, scale_factor))
 
     return figure_in

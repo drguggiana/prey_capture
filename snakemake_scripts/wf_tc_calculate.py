@@ -14,7 +14,8 @@ warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 
 def parse_trial_frames(df):
-    trial_idx_frames = df[df.direction > -1000].groupby(['trial_num']).apply(lambda x: [x.index[0], x.index[0] + 5*wf_frame_rate])
+    trial_idx_frames = df[df.trial_num > 0].groupby(['trial_num']).apply(lambda x: [x.index[0], x.index[0] +
+                                                                                    5*wf_frame_rate])
     trial_idx_frames = np.array(trial_idx_frames.to_list())
 
     if trial_idx_frames[-1, 1] > df.index[-1]:
@@ -83,7 +84,7 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
             mean_guess = unique_angles[np.argmax(norm_mean_resp[cell].fillna(0), axis=0)]
         except:
             # Sometimes this throws an error if there are no responses
-            mean_guess = unique_angles[len(unique_angles) // 2]
+            mean_guess = 0
 
         fit, fit_curve, pref_angle, real_pref_angle = \
             fit_function(unique_angles, norm_mean_resp[cell].to_numpy(), tuning_kind, mean=mean_guess)
