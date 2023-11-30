@@ -23,7 +23,7 @@ def preprocess_selector(ref_path, file_info):
         # assemble the path here, in case the file wasn't in the database
         dlc_path = file_info['avi_path'].replace('.avi', '_dlc.h5')
         # select function depending on the rig
-        if files['rig'] == 'VWheel':
+        if files['rig'] in ['VWheel', 'VWheelWF'] :
             # use the eye specific function
             traces, corner_out, frame_b = s1.run_preprocess_eye(ref_path, dlc_path, file_info)
         else:
