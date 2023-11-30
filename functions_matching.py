@@ -787,6 +787,7 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     # load the calcium data (cells x time), transpose to get time x cells
     with h5py.File(calcium_path, mode='r') as f:
         calcium_data = np.array(f['calcium_data']).T
+
         # if there are no ROIs, skip
         if (type(calcium_data) == np.ndarray) and (calcium_data == 'no_ROIs'):
             return None, None
@@ -884,12 +885,139 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     return full_dataframe, roi_info
 
 
+def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
+    # load the calcium data (cells x time), transpose to get time x cells
+    with h5py.File(calcium_path, mode='r') as f:
+        calcium_data = np.array(f['calcium_data']).T
+        fluor_data = np.array(f['fluor_data']).T
+
+        # if there are no ROIs, skip
+        if (type(calcium_data) == np.ndarray) and np.any(calcium_data.astype(str) == 'no_ROIs'):
+            return None, None
+
+        roi_info = np.array(f['roi_info'])
+
+    # check if there are nans in the columns, if so, also skip
+    if kinematics_data.columns[0] == 'badFile':
+        print(f'File {os.path.basename(calcium_path)} not matched due to NaNs')
+        return None, None
+
+    # load the sync data
+    sync_data = pd.read_csv(sync_path, header=None)
+    if sync_data.shape[1] == 3:
+        sync_data.columns = ['Time', 'mini_frames', 'camera_frames']
+    elif sync_data.shape[1] == 6:
+        # TODO: only for files from 21.02.2022
+        sync_data.columns = ['Time', 'projector_frames', 'camera_frames',
+                             'sync_trigger', 'mini_frames', 'wheel_frames']
+    else:
+        sync_data.columns = ['Time', 'projector_frames', 'camera_frames',
+                             'sync_trigger', 'mini_frames', 'wheel_frames', 'projector_frames_2']
+
+    # get the camera frame times
+    frame_idx_camera_sync = kinematics_data['sync_frames'].to_numpy().astype(int)
+    frame_times_camera_sync = sync_data.loc[frame_idx_camera_sync, 'Time'].to_numpy()
+    # get the miniscope frame indexes from the sync file
+    frame_idx_mini_sync = np.argwhere(np.diff(np.round(sync_data.loc[:, 'mini_frames'])) > 0).squeeze() + 1
+    # interpolate missing triggers (based on experience)
+    frame_idx_mini_sync = np.round(interpolate_frame_triggers(frame_idx_mini_sync))
+
+    # correct for the calcium starting before and/or ending after the behavior
+    if frame_idx_mini_sync[0] < frame_idx_camera_sync[0]:
+        start_idx = np.argwhere(frame_idx_mini_sync > frame_idx_camera_sync[0])[0][0]
+        frame_idx_mini_sync = frame_idx_mini_sync[start_idx:]
+        calcium_data = calcium_data[start_idx:, :]
+        fluor_data = fluor_data[start_idx:, :]
+
+    if frame_idx_mini_sync[-1] > frame_idx_camera_sync[-1]:
+        end_idx = np.argwhere(frame_idx_mini_sync < frame_idx_camera_sync[-1])[-1][0] + 1
+        frame_idx_mini_sync = frame_idx_mini_sync[:end_idx]
+        calcium_data = calcium_data[:end_idx, :]
+        fluor_data = fluor_data[:end_idx, :]
+
+    # get the delta frames with the calcium
+    delta_frames = frame_idx_mini_sync.shape[0] - calcium_data.shape[0]
+
+    # remove extra detections coming from terminating the calcium mid frame (I think)
+    if delta_frames > 0:
+        print(f'There were {delta_frames} triggers more than frames on file {os.path.basename(calcium_path)}')
+        frame_idx_mini_sync = frame_idx_mini_sync[:-delta_frames]
+    elif delta_frames < 0:
+        print(f'There were {-delta_frames} more frames than triggers on file {os.path.basename(calcium_path)}')
+        calcium_data = calcium_data[:delta_frames, :]
+        fluor_data = fluor_data[:delta_frames, :]
+
+    # trim calcium according to the frames left within the behavior
+    calcium_data = calcium_data[frame_idx_mini_sync > frame_idx_camera_sync[0], :]
+    # do the same with fluorescence data
+    fluor_data = fluor_data[frame_idx_mini_sync > frame_idx_camera_sync[0], :]
+    # and then remove frames before the behavior starts
+    frame_idx_mini_sync = frame_idx_mini_sync[frame_idx_mini_sync > frame_idx_camera_sync[0]]
+
+    # get the actual mini times
+    frame_times_mini_sync = sync_data.loc[frame_idx_mini_sync, 'Time'].to_numpy()
+
+    # interpolate the bonsai traces to match the mini frames
+    matched_bonsai = kinematics_data.drop(['time_vector', 'sync_frames', 'mouse', 'datetime'],
+                                          axis=1).apply(interp_trace, raw=False, args=(frame_times_camera_sync,
+                                                                                       frame_times_mini_sync))
+    if trials is not None:
+
+        # repair the trial_num column
+        matched_bonsai.loc[:, 'trial_num'] = np.round(matched_bonsai.loc[:, 'trial_num'])
+
+        # now that the trials are reassigned, add the trial data
+        matched_bonsai = assign_trial_parameters(matched_bonsai, trials)
+
+    else:
+        # round the quadrant vector as it should be discrete
+        quadrant_columns = [el for el in matched_bonsai.columns if ('_quadrant' in el)]
+
+        for el in quadrant_columns:
+            matched_bonsai[el] = np.round(matched_bonsai[el])
+
+        # same for the hunt trace
+        if 'hunt_trace' in matched_bonsai.columns:
+            matched_bonsai.loc[:, 'hunt_trace'] = np.round(matched_bonsai.loc[:, 'hunt_trace'])
+
+    # add the correct time vector from the interpolated traces, plus mouse and datetime
+    matched_bonsai['time_vector'] = frame_times_mini_sync
+    matched_bonsai['mouse'] = kinematics_data.loc[0, 'mouse']
+    matched_bonsai['datetime'] = kinematics_data.loc[0, 'datetime']
+
+    # print a single dataframe with the calcium matched positions and timestamps
+    cell_column_names = ['_'.join(('cell', f'{el:04d}', 'spikes')) for el in range(calcium_data.shape[1])]
+    calcium_dataframe = pd.DataFrame(calcium_data, columns=cell_column_names)
+    cell_column_names = ['_'.join(('cell', f'{el:04d}', 'fluor')) for el in range(calcium_data.shape[1])]
+    fluorescence_dataframe = pd.DataFrame(fluor_data, columns=cell_column_names)
+    # concatenate both data frames
+    full_dataframe = pd.concat([matched_bonsai, calcium_dataframe, fluorescence_dataframe], axis=1)
+
+    # reset the time vector
+    old_time = full_dataframe['time_vector']
+    full_dataframe.loc[:, 'time_vector'] = np.array([el - old_time[0] for el in old_time])
+
+    # turn the roi info into a dataframe
+    roi_info = pd.DataFrame(roi_info, columns=['centroid_x', 'centroid_y',
+                                               'bbox_left', 'bbox_top', 'bbox_width', 'bbox_height', 'area'])
+
+    return full_dataframe, roi_info
+
+
 def match_wheel(file_info, filtered_traces, wheel_diameter=16):
     """Get the wheel speed and acceleration on each frame"""
     # load the sync data
-    sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'camera_frames',
-                                                           'sync_trigger', 'mini_frames', 'wheel_frames'],
-                            index_col=False)
+    sync_data = pd.read_csv(file_info['sync_path'], header=None)
+    if sync_data.shape[1] == 6:
+        sync_data.columns = ['Time', 'projector_frames', 'camera_frames',
+                             'sync_trigger', 'mini_frames', 'wheel_frames']
+    else:
+        sync_data.columns = ['Time', 'projector_frames', 'camera_frames',
+                             'sync_trigger', 'mini_frames', 'wheel_frames', 'projector_frames_2']
+    #
+    # sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'camera_frames',
+    #                                                        'sync_trigger', 'mini_frames', 'wheel_frames'],
+    #                         index_col=False)
     # get the wheel trace
     wheel_position = sync_data.loc[filtered_traces['sync_frames'], ['wheel_frames']]
     # convert the position to radians
@@ -1003,11 +1131,27 @@ def match_dlc(filtered_traces, file_info, file_date):
         # get the actual frame times
         time = sync_data.loc[cam_idx, 'Time'].to_numpy()
 
-    else:
+    elif (file_date > datetime.datetime(year=2021, month=12, day=14)) & \
+            (file_date <= datetime.datetime(year=2022, month=2, day=21)):
         # read the sync file
         sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'camera_frames',
                                                                'sync_trigger', 'mini_frames', 'wheel_frames'],
                                 index_col=False)
+        # get the cam frame times based on the triggers
+        # get the camera triggers
+        cam_idx = np.argwhere(np.diff(sync_data.loc[:, 'camera_frames']) > 1).squeeze() + 1
+        # filter them by the sync trigger
+        sync_start = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 1)[0]
+        sync_end = np.argwhere(sync_data.loc[:, 'sync_trigger'].to_numpy() == 2)[0]
+        cam_idx = cam_idx[(cam_idx > sync_start) & (cam_idx < sync_end)]
+        # get the actual frame times
+        time = sync_data.loc[cam_idx, 'Time'].to_numpy()
+
+    else:
+        # read the sync file
+        sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'camera_frames',
+                                                               'sync_trigger', 'mini_frames', 'wheel_frames',
+                                                               'projector_frames_2'], index_col=False)
         # get the cam frame times based on the triggers
         # get the camera triggers
         cam_idx = np.argwhere(np.diff(sync_data.loc[:, 'camera_frames']) > 1).squeeze() + 1

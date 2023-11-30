@@ -1,22 +1,28 @@
-import functions_bondjango as bd
-import paths
-import os
-from caiman.base.rois import register_multisession
-
-import h5py
 import numpy as np
-import functions_misc as fm
-import processing_parameters
+import os
 import sys
 import re
-import json
+import h5py
+from caiman.base.rois import register_multisession
+
+# Insert the cwd for local imports
+os.chdir(os.getcwd())
+sys.path.insert(0, os.getcwd())
+
+import paths
+import processing_parameters
+import functions_bondjango as bd
+import functions_misc as fm
 import functions_plotting as fplot
 
 # Main script
 try:
     # get the target video path
     video_path = sys.argv[1]
-    # find the occurrences of .tif terminators
+    # read the output path and the input file urls
+    out_path = sys.argv[2]
+
+    # find the occurrences of .hdf5 terminators
     ends = [el.start() for el in re.finditer('.hdf5', video_path)]
     # allocate the list of videos
     video_list = []
@@ -27,28 +33,24 @@ try:
         count = el + 6
     print(video_list)
     calcium_path = video_list
-    # read the output path and the input file urls
-    out_path = sys.argv[2]
-    # data_all = json.loads(sys.argv[3])
-    # get the parts for the file naming
-    name_parts = out_path.split('_')
-    animal = name_parts[:3]
-    rig = name_parts[3]
 
 except IndexError:
 
     # get the search string
     animal = processing_parameters.animal
+    day = processing_parameters.day
     rig = processing_parameters.rig
-    search_string = 'slug:%s, analysis_type:calciumday' % (fm.slugify(animal))
+
+    search_string = 'slug:%s, analysis_type:calciumraw' % (fm.slugify(animal))
     # query the database for data to plot
     data_all = bd.query_database('analyzed_data', search_string)
     # get the paths to the files
     calcium_path = [el['analysis_path'] for el in data_all if 'miniscope' not in el['slug']]
-    # # for testing, filter calcium path
-    # calcium_path = [el for el in calcium_path if ('03_24' in el) or ('03_23' in el) or ('03_29' in el)]
+    calcium_path.sort()
+
     # assemble the output path
     # out_path = os.path.join(paths.analysis_path, '_'.join((animal, rig, 'cellMatch.hdf5')))
+    # out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, 'cellMatch.hdf5')))
     out_path = os.path.join(paths.analysis_path, '_'.join((animal, 'cellMatch.hdf5')))
 
 # load the data for the matching
@@ -59,34 +61,51 @@ template_list = []
 # frame_lists = []
 # also store the date for each file
 date_list = []
+# store the rig for each file
+rig_list = []
 # load the calcium data
 for files in calcium_path:
     with h5py.File(files, mode='r') as f:
+
         try:
             calcium_data = np.array(f['A'])
         except KeyError:
             continue
 
         # if there are no ROIs, skip
-        if (type(calcium_data) == np.ndarray) and (calcium_data == 'no_ROIs'):
+        if (type(calcium_data) == np.ndarray) and np.any(calcium_data.astype(str) == 'no_ROIs'):
             continue
         # clear the rois that don't pass the size criteria
         areas = fm.get_roi_stats(calcium_data)[:, -1]
         keep_vector = (areas > processing_parameters.roi_parameters['area_min']) & \
                       (areas < processing_parameters.roi_parameters['area_max'])
+
+        if np.all(keep_vector == False):
+            continue
+
         calcium_data = calcium_data[keep_vector, :, :]
+
         # format and masks and store for matching
         footprint_list.append(np.moveaxis(calcium_data, 0, -1).reshape((-1, calcium_data.shape[0])))
         size_list.append(calcium_data.shape[1:])
         template_list.append(np.zeros(size_list[0]))
         # template_list.append(np.array(f['max_proj']))
-        date_list.append(os.path.basename(files)[:10])
+
+        date = os.path.basename(files)[:10]
+        rig = os.path.basename(files).split('_')[6]
+        if rig in ['VTuning', 'VWheel', 'VTuningWF', 'VWheelWF']:
+            trial = re.findall(r'fixed\d', files) + re.findall(r'free\d', files)
+            trial = trial[0]
+            date_list.append('_'.join((date, rig, trial)))
+            rig_list.append(rig)
+        else:
+            date_list.append(date)
         # frame_lists.append(np.array(f['frame_list']))
 
 try:
     # run the matching software
     spatial_union, assignments, matchings = register_multisession(
-        A=footprint_list, dims=size_list[0], templates=template_list, thresh_cost=0.9)
+        A=footprint_list, dims=size_list[0], templates=template_list, thresh_cost=0.7, max_dist=15)
 except Exception:
     # generate an empty array for saving
     assignments = np.ones((len(date_list), 1))
@@ -99,7 +118,13 @@ with h5py.File(out_path, 'w') as f:
     #     f.create_dataset(key, data=np.array(value))
     f.create_dataset('assignments', data=assignments)
     # f.create_dataset('matchings', data=np.array(matchings))
-    f.create_dataset('date_list', data=np.array(date_list).astype('S10'))
+    f.create_dataset('date_list', data=np.array(date_list).astype('S30'))
+
+# Check if there are unique rigs or not
+if len(set(rig_list)) == 1:
+    rig = rig_list[0]
+else:
+    rig = 'multi'
 
 # create the appropriate bondjango entry
 entry_data = {

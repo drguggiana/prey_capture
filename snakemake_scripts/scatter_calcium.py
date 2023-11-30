@@ -63,8 +63,8 @@ try:
         # if there are no ROIs, raise to generate an empty file
         if frame_list == 'no_ROIs':
             raise ValueError('empty file')
-        calcium_data = np.array(f['S'])
-        # calcium_data = np.array(f['C'])
+        calcium_data = np.array(f['S'])    # these are inferred spikes
+        # fluor_data = np.array(f['C'])     # This is raw fluorescence
         footprints = np.array(f['A'])
 
     # get the trials in the file

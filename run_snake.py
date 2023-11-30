@@ -4,7 +4,6 @@ import functions_bondjango as bd
 import paths
 import functions_data_handling as fd
 import os
-import numpy as np
 import processing_parameters
 
 
@@ -85,10 +84,12 @@ for idx, target_entries in enumerate(full_queries):
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
+                   'denoising_path': paths.ca_denoising_script,
                    'cnmfe_path': paths.calcium_script,
                    'interval': [2, 3],
                    'analysis_type': parsed_search['analysis_type'],
                    }
+
     # write the file
     with open(paths.snakemake_config, 'w') as f:
         target_file = yaml.dump(config_dict, f)
@@ -97,6 +98,8 @@ for idx, target_entries in enumerate(full_queries):
     if parsed_search['analysis_type'] == 'preprocessing_run':
         # feed the generic txt file for preprocessing
         out_path = os.path.join(paths.analysis_path, 'preprocessing_run.txt')
+    elif parsed_search['analysis_type'] == 'tuning_run':
+        out_path = os.path.join(paths.analysis_path, 'tuning_run.txt')
     elif parsed_search['analysis_type'] == 'combinedanalysis_run':
         out_path = os.path.join(paths.analysis_path, 'combinedanalysis_run.txt')
     else:
@@ -105,17 +108,20 @@ for idx, target_entries in enumerate(full_queries):
 
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
+                              '-s', paths.snakemake_scripts,
+                              '-d', paths.snakemake_working,
+                              # '--use-conda',
                               # '-F',         # (hard) force rerun everything
                               # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               '--rerun-incomplete',
                               '--verbose',  # make the output more verbose for debugging
                               # '--debug-dag',  # show the file selection operation, also for debugging
-                              # '--dryrun',  # generates the DAG and everything, but doesn't process
+                              # '--dryrun',  # generates the DAG and everything, but doesn't process,
                               # '--reason',  # print the reason for executing each job
-                              '-s', paths.snakemake_scripts,
-                              '-d', paths.snakemake_working],
-                             stdout=sp.PIPE)
+                              ],
+                             stdout=sp.PIPE,
+                             )
 
     stdout = preprocess_sp.communicate()[0]
     print(stdout.decode())
@@ -129,5 +135,8 @@ for idx, target_entries in enumerate(full_queries):
             (os.path.isfile(os.path.join(paths.analysis_path, 'combinedanalysis_run.txt'))):
         # delete the txt file (specify de novo to not run risks)
         os.remove(os.path.join(paths.analysis_path, 'combinedanalysis_run.txt'))
+    elif (parsed_search['analysis_type'] == 'tuning_run') & \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'tuning_run.txt'))):
+        os.remove(os.path.join(paths.analysis_path, 'tuning_run.txt'))
 
 print('yay')

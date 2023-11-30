@@ -820,7 +820,7 @@ def flip_DLC_y(traces):
     column_names = np.unique([el[:-1] for el in traces.columns])
     # for all the unique names
     for column in column_names:
-        # if the name + x exists, transform
+        # if the name + y exists, transform
         if column + 'y' in traces.columns:
             # get the y data
             original_data = traces[[column + 'y']].to_numpy()

@@ -152,3 +152,34 @@ def get_roi_stats(footprints):
         roi_info.append(np.hstack((output[3][1, :], output[2][1, :])))
 
     return np.vstack(roi_info)
+
+
+def list_lists_to_array(list_of_lists, prepend=False):
+    """ Converts a list of lists into a 2D array
+
+    Parameters
+    ----------
+    list_of_lists : list
+
+    Returns
+    -------
+    new_array : np.array
+        Array where each row was an entry in the list of lists
+    """
+
+    max_length = max([len(sublist) for sublist in list_of_lists])
+    new_array = np.empty((len(list_of_lists), max_length))
+    new_array[:] = np.NaN
+
+    for row, l in enumerate(list_of_lists):
+        if prepend:
+            start = new_array.shape[-1] - len(l)
+            new_array[row, start:] = l
+        else:
+            new_array[row, :len(l)] = l
+
+    return new_array
+
+def find_nearest(array, value):
+    idx = (np.abs(array - value)).argmin()
+    return idx, array[idx]

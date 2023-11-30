@@ -195,7 +195,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
 
     except IndexError:
         # DLC in VR arena
-        if file_info['rig'] in ['VTuning', 'VTuningWF']:
+        if file_info['rig'] in ['VTuning']:
             # Similar to small arena, but no cricket
             # Make miniscope the mouse head in this case.
             filtered_traces = pd.DataFrame(raw_h5[[
@@ -231,6 +231,48 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
                 [el for el in column_names if ('mouseBody3' in el) and ('likelihood' in el)][0],
                 [el for el in column_names if ('mouseBase' in el) and ('likelihood' in el)][0],
                 [el for el in column_names if ('miniscope' in el) and ('likelihood' in el)][0],
+            ]].to_numpy(), columns=['mouse_snout', 'mouse_barl', 'mouse_barr', 'mouse', 'mouse_body2', 'mouse_body3',
+                                    'mouse_base', 'mouse_head'])
+
+        elif file_info['rig'] in ['VTuningWF']:
+            # Similar to small arena, but no cricket
+            # Make miniscope_base the mouse head in this case.
+            filtered_traces = pd.DataFrame(raw_h5[[
+                [el for el in column_names if ('mouseSnout' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseSnout' in el) and ('y' in el)][0],
+                [el for el in column_names if ('HeadBarL' in el) and ('x' in el)][0],
+                [el for el in column_names if ('HeadBarL' in el) and ('y' in el)][0],
+                [el for el in column_names if ('HeadBarR' in el) and ('x' in el)][0],
+                [el for el in column_names if ('HeadBarR' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody1' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody1' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody2' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody2' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBody3' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBody3' in el) and ('y' in el)][0],
+                [el for el in column_names if ('mouseBase' in el) and ('x' in el)][0],
+                [el for el in column_names if ('mouseBase' in el) and ('y' in el)][0],
+                [el for el in column_names if ('miniscope_base' in el) and ('x' in el)][0],
+                [el for el in column_names if ('miniscope_base' in el) and ('y' in el)][0],
+                [el for el in column_names if ('miniscope_top' in el) and ('x' in el)][0],
+                [el for el in column_names if ('miniscope_top' in el) and ('y' in el)][0],
+            ]].to_numpy(), columns=['mouse_snout_x', 'mouse_snout_y', 'mouse_barl_x', 'mouse_barl_y',
+                                    'mouse_barr_x', 'mouse_barr_y',
+                                    'mouse_x', 'mouse_y', 'mouse_body2_x', 'mouse_body2_y',
+                                    'mouse_body3_x', 'mouse_body3_y', 'mouse_base_x', 'mouse_base_y',
+                                    'mouse_head_x', 'mouse_head_y',
+                                    'miniscope_top_x', 'miniscope_top_y'])
+
+            # get the likelihoods
+            likelihood_frame = pd.DataFrame(raw_h5[[
+                [el for el in column_names if ('mouseSnout' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('HeadBarL' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('HeadBarR' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBody1' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBody2' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBody3' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('mouseBase' in el) and ('likelihood' in el)][0],
+                [el for el in column_names if ('miniscope_base' in el) and ('likelihood' in el)][0],
             ]].to_numpy(), columns=['mouse_snout', 'mouse_barl', 'mouse_barr', 'mouse', 'mouse_body2', 'mouse_body3',
                                     'mouse_base', 'mouse_head'])
 
@@ -358,7 +400,7 @@ def run_dlc_preprocess(file_path_ref, file_path_dlc, file_info, kernel_size=5):
         filtered_traces = filtered_traces.iloc[1:, :].reset_index(drop=True)
         frame_bounds['start'] += 1
 
-    if file_info['rig'] != 'VTuning':
+    if file_info['rig'] not in ['VTuning', 'VTuningWF']:
         if file_info['result'] != 'habi':
             # interpolate the position of the cricket assuming stationarity
             filtered_traces = fp.interpolate_animals(filtered_traces, np.nan,
@@ -408,6 +450,30 @@ def extract_motive(file_path_motive, rig, trials=None):
         parsed_path = parse_path(file_path_motive)
         # select the appropriate header
         if rig == 'VR':
+            """
+            ### --- Why we rename the coordinate system --- ###
+            (See Unity_DLC_coordinate_map.png)
+            Tracking happens in Motive and then gets passed to Unity. 
+            Motive is a right-handed coordinate system with X as the forward vector and Y as the upward (anti-gravity) vector.
+            Unity is a left-handed coordinate system with Z as the forward vector and Y as the upward (anti-gravity) vector.
+            This means that when the mouse moves forward in Motive, forward motion moves along +X, but along -X (NOT Z!) in Unity.
+            This transform is handled by a Unity plugin, so we don't need to think about it for position, but we do for rotations. 
+
+            We also track the body and other objects using DeepLabCut, which does pose estimation on 2D, top down images. 
+            We only get X and Y coordinates there. However, the DLC convention is to take Z as the upward (anti-gravity) vector. 
+            We want all of these coordinate spaces to match, so we remap the Unity coordiantes such that:
+            (up) Unity Y = DLC Z
+            (forward) Unity Z = DLC X
+            (lateral) Unity X = DLC Y
+
+            We rename the rotations similarly. Note here that the names correspond to rotations about tha axis in DLC space.
+            Because of the handedness shift, all Unity rotations are negated from what we see in Motive
+            mouse_xrot_m is rotation about unity Z axis (x axis moves up/down), correponds to mouse pitch.
+            mouse_yrot_m is rotation about unity X axis (y axis moves side to side), correponds to mouse roll.
+            mouse_zrot_m is rotation about unity Y axis (z axis moves left/right), correponds to mouse yaw.
+            
+            """
+
             # if it's before the sync files, exclude the last column
             if parsed_path['datetime'] <= datetime.datetime(year=2019, month=11, day=10):
                 column_names = ['time_m', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
@@ -464,7 +530,7 @@ def extract_motive(file_path_motive, rig, trials=None):
                             'target_y_m', 'target_z_m', 'target_x_m',
                             'color_factor']
 
-        elif rig == 'VTuning':
+        elif rig in ['VTuning', 'VTuningWF', 'VWheel', 'VWheelWF']:
             column_names = ['time_m', 'trial_num',
                             'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
                             'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m',

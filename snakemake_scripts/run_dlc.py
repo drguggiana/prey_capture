@@ -1,18 +1,20 @@
 # imports
 import os
 import sys
-import paths
-sys.path.insert(0, os.path.abspath(paths.prey_capture_repo_directory))
-os.environ["DLClight"] = "True"
-
-import os
-import sys
 import shutil
+import json
+
+os.environ["DLClight"] = "True"
 import deeplabcut as dlc
+
+# Insert the cwd for local imports
+os.chdir(os.getcwd())
+sys.path.insert(0, os.getcwd())
+
+import paths
 import functions_bondjango as bd
 import functions_io as fi
 import functions_misc as fm
-import json
 import processing_parameters
 
 # # define the config_path
@@ -42,25 +44,28 @@ temp_video_path = os.path.join(paths.temp_path, os.path.basename(video_path))
 # copy the video to the working folder
 shutil.copyfile(video_path, temp_video_path)
 
-# analyze the video
-# dlc.analyze_videos?
-
 # select which network to use
 if video_data['rig'] == 'miniscope':
-    dlc.analyze_videos(paths.config_vame_path, [temp_video_path], destfolder=paths.temp_path)
     target_model = 'video_experiment'
+    config = paths.config_vame_path
 else:
     target_model = 'vr_experiment'
-    if video_data['rig'] == 'VWheel':
-        # Use dynamic cropping for eye tracking to speed up analysis.
-        dlc.analyze_videos(paths.config_path_VWheel, [temp_video_path], destfolder=paths.temp_path, dynamic=(True, .1, 100))
+    if video_data['rig'] in ['VWheel', 'VWheelWF']:
+        config = paths.config_path_VWheel
+    elif video_data['rig'] == 'VTuningWF':
+        config = paths.config_path_VTuningWF
     else:
-        dlc.analyze_videos(paths.config_vame_path, [temp_video_path], destfolder=paths.temp_path)
+        config = paths.config_path_VTuning
+
+# Load the config and get necessary parameters (namely shuffle)
+cfg = dlc.auxiliaryfunctions.read_config(config)
+shuffle = cfg.get('shuffle', 1)    # Defaults to 1 if not present in config file
+
+# analyze the video
+dlc.analyze_videos(config, [temp_video_path], shuffle=shuffle, destfolder=paths.temp_path)
 
 # filter the data
-# dlc.filterpredictions(config_path, [temp_video_path], filtertype='median',
-#                       windowlength=11, destfolder=paths.temp_path, save_as_csv=False)
-# dlc.filterpredictions?
+dlc.filterpredictions(config, [temp_video_path], shuffle=shuffle, destfolder=paths.temp_path, save_as_csv=False)
 
 # move and rename the file
 

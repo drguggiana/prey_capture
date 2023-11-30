@@ -7,7 +7,21 @@ import holoviews as hv
 from bokeh.themes.theme import Theme
 from bokeh.plotting import show as bokeh_show
 from functools import partial
+from processing_parameters import gof_type
+from functions_kinematic import wrap
 
+# define in to cm
+constant_in2cm = 2.54
+
+# Define standard colors for holoviews
+hv_blue_rgb = tuple(np.array([42, 158, 210]) / 255.)
+hv_blue_hex = '#2a9ed2'
+hv_orange_rgb = tuple(np.array([255, 191, 134]) / 255.)
+hv_orange_hex = '#ffbf86'
+hv_mpi_green_rgb = tuple(np.array([0, 136, 122]) / 255.)
+hv_mpi_green_hex = '#00887a'
+hv_mpi_yellow_rgb = tuple(np.array([203, 219, 42]) / 255.)
+hv_mpi_yellow_hex = '#cbdb2a'
 
 # define the standard font sizes
 paper = '7pt'
@@ -38,7 +52,7 @@ font_sizes_raw = {
         'ylabel': poster,
         'zlabel': poster,
         'labels': poster,
-        'xticks': poster,
+        'xticks': '13pt',
         'yticks': poster,
         'zticks': poster,
         'ticks': poster,
@@ -46,7 +60,7 @@ font_sizes_raw = {
         'minor_yticks': poster,
         'minor_ticks': poster,
         'title': poster,
-        # 'legend': poster - 1,
+        'legend': '13pt',
         'legend_title': poster,
     },
     'screen': {
@@ -304,6 +318,220 @@ def simple_animation(data_in, interval=10):
     anim = animation.FuncAnimation(fig0, animate, init_func=init,
                                    frames=data_in.shape[1], interval=interval, blit=True)
     return anim
+
+
+def spike_raster(data_in, cells=None):
+    if cells is None:
+        cells = [el for el in data_in.columns if 'cell' in el]
+
+    spikes = data_in.loc[:, cells]
+
+    im = hv.Image((data_in.time_vector, np.arange(len(cells)), spikes.values.T),
+                  kdims=['Time (s)', 'Cells'], vdims=['Activity (a.u.)'])
+    im.opts(width=600)  # , cmap='Purples')
+    return im
+
+
+def trace_raster(data, cells=None, ds_factor=1):
+    if cells is None:
+        cells = [el for el in data.columns if 'cell' in el]
+
+    trace = data.loc[:, cells]
+    max_std = trace.std().max()
+
+    lines = {i: hv.Curve((data.time_vector, trace.iloc[:, i].values.T + i * max_std)) for i in np.arange(len(cells))}
+    lineoverlay = hv.NdOverlay(lines, kdims=['Time (s)']).opts(height=500, width=800)
+    return lineoverlay
+
+
+def rand_jitter(arr):
+    stdev = .001 * (max(arr) - min(arr))
+    return arr + np.random.randn(len(arr)) * stdev
+
+
+def plot_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_angle=None, ax=None, **kwargs):
+    if ax is None:
+        fig = plt.figure(dpi=300, figsize=(10, 6))
+        ax = fig.add_subplot(111)
+
+    tuning = ax.errorbar(tuning_curve[:, 0], tuning_curve[:, 1],
+                         c='k', alpha=0.5, yerr=error, elinewidth=1,
+                         **kwargs)
+
+    if fit is not None:
+        ax.plot(fit[:, 0], fit[:, 1], c='#1f77b4')
+
+    if pref_angle is not None:
+        ax.axvline(pref_angle, color='r', linewidth=1)
+
+    if trials is not None:
+        ax.scatter(rand_jitter(trials[:, 0]), trials[:, 1], marker='.', c='k', alpha=0.5, edgecolor='none')
+
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+
+    return tuning
+
+
+def plot_polar_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_angle=None, ax=None, **kwargs):
+    theta_max = kwargs.pop('theta_max', 360)
+
+    if ax is None:
+        fig = plt.figure(dpi=300, figsize=(5, 5))
+        ax = fig.add_subplot(111, projection='polar')
+
+    tuning = ax.errorbar(np.deg2rad(tuning_curve[:, 0]), tuning_curve[:, 1],
+                         c='k', alpha=0.5, yerr=error, elinewidth=1,
+                         **kwargs)
+
+    if fit is not None:
+        ax.plot(np.deg2rad(fit[:, 0]), fit[:, 1], c='#1f77b4')
+
+    if trials is not None:
+        ax.scatter(rand_jitter(np.deg2rad(trials[:, 0])), trials[:, 1], marker='.', color='k', alpha=0.5, edgecolor='none')
+
+    if pref_angle is not None:
+        ax.axvline(np.deg2rad(pref_angle), color='r', linewidth=1)
+
+    ax.set_thetamax(theta_max)
+    ax.set_theta_zero_location("W")
+    ax.set_theta_direction(-1)
+    # ax.set_rorigin(0)
+    radial_ticks = [0.0, 0.25, 0.50, 0.75, 1.00]
+    ax.set_rticks(radial_ticks, color='black')
+    ax.set_yticklabels(['0.0', '', '0.5', '', '1.0'], color='black')
+    ax.set_rlabel_position(0)
+    # ax.yaxis.set_label_position('right')
+
+    return tuning
+
+
+def plot_tuning_curve_hv(tuning_curve, error, fit=None, trials=None, pref_angle=None, **kwargs):
+    overlay = []
+
+    tuning = hv.Curve(tuning_curve).opts(width=600, height=300, **kwargs)
+    overlay.append(tuning)
+
+    error_plot = hv.Spread((*tuning_curve.T, error)).opts(fill_alpha=0.25)
+    overlay.append(error_plot)
+
+    if fit is not None:
+        fit_plot = hv.Curve(fit)
+        overlay.append(fit_plot)
+
+    if trials is not None:
+        trials_plot = hv.Scatter(trials).opts(color='k', size=3)
+        overlay.append(trials_plot)
+
+    if pref_angle is not None:
+        pref_plot = hv.VLine(pref_angle).opts(color='k', line_width=1)
+        overlay.append(pref_plot)
+
+    return hv.Overlay(overlay)
+
+
+def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std', norm=True, polar=True, axes=None,
+                           **kwargs):
+    data_cols = ['mean', error, 'trial_resp']
+    fit_cols = ['fit_curve', 'pref', 'resultant']
+
+    if 'direction' in tuning_kind:
+        multiplier = 1.
+    else:
+        multiplier = 2.
+
+    if norm:
+        data_cols = [el + '_norm' for el in data_cols]
+
+    columns = data_cols + fit_cols
+
+    if axes is None:
+        figsize = kwargs.get('figsize', (10 * constant_in2cm, 5 * constant_in2cm))
+        fig = plt.figure(layout='constrained', figsize=figsize)
+        fig.suptitle(f"Cell {cell}", fontsize='x-large')
+        subfig = fig.subfigures(nrows=1, ncols=1)
+
+        if polar:
+            ax1 = subfig.add_subplot(121, projection="polar")  # tuning
+        else:
+            ax1 = subfig.add_subplot(121)  # tuning
+
+        ax2 = subfig.add_subplot(122)  # resp
+        # ax3 = subfig.add_subplot(224)  # error
+        # plt.subplots_adjust(wspace=0.4, hspace=0.4)
+        axes = [ax1, ax2]
+
+    if polar:
+        tuning_plot_func = plot_polar_tuning_curve
+
+    else:
+        tuning_plot_func = plot_tuning_curve
+
+    ds = dataset.iloc[cell, :]
+    plot_kwargs = {'theta_max': 360 / multiplier}
+    # Plot directions
+    _ = tuning_plot_func(ds[columns[0]], ds[columns[1]],
+                         trials=ds[columns[2]],
+                         fit=ds[columns[3]],
+                         pref_angle=ds[columns[4]],
+                         ax=axes[0],
+                         **plot_kwargs
+                         )
+
+    resultant = ds[columns[5]][-1]
+    # if resultant <= 180:
+    #     resultant *= 2
+    # else:
+    #     resultant = (360 - resultant)
+
+    # axes[0].axvline(resultant, color='green', linewidth=1)
+    # axes[0].set_title(f"Pref: {ds[columns[4]]: .1f}$^\circ$")
+    axes[0].set_xticks(np.deg2rad(np.linspace(0,  plot_kwargs['theta_max'], int(4/multiplier), endpoint=False)))
+
+    # Plot dsi or osi
+    if 'direction' in tuning_kind:
+        si = 'dsi_nasal_temporal'
+        title = 'DSI'
+        xlims = (-1.001, 1.001)
+        step = 0.05
+    else:
+        si = 'responsivity'
+        title = 'OSI'
+        xlims = (-0.05, 1.001)
+        step = 0.025
+
+    hist_resp = ds[f'bootstrap_{si}']
+    hist_resp[np.isnan(hist_resp)] = -0.05
+    real_resp = ds[si]
+    p_resp = ds[f'p_{si}']
+    edges = np.arange(*xlims, step)
+    axes[1].hist(hist_resp, bins=edges, edgecolor="black", color=holoviews_blue_rgb)
+    axes[1].axvline(x=real_resp, color='r', linestyle='dashed', linewidth=2)
+    # axes[1].text(1.0, 1.0, f"%ile={p_resp: .2f}", size=10, ha='right', va='bottom', transform=axes[1].transAxes)
+    axes[1].spines['right'].set_visible(False)
+    axes[1].spines['top'].set_visible(False)
+    axes[1].xaxis.set_ticks_position('bottom')
+    axes[1].yaxis.set_ticks_position('left')
+    axes[1].set_title(title)
+
+    # # Plot goodness of fit
+    # hist_gof = ds['bootstrap_gof']
+    # hist_gof[np.isnan(hist_gof)] = -0.1
+    # real_gof = ds['gof']
+    # p_gof = ds['p_gof']
+    # edges = np.arange(-0.1, 1.001, 0.025)
+    # axes[2].hist(hist_gof, bins=edges, edgecolor="black", color=holoviews_blue_rgb)
+    # axes[2].axvline(x=real_gof, color='r', linestyle='dashed', linewidth=2)
+    # # axes[2].text(1.0, 1.0, f"%ile={p_gof: .2f}", size=10, ha='right', va='bottom', transform=axes[2].transAxes)
+    # axes[2].spines['right'].set_visible(False)
+    # axes[2].spines['top'].set_visible(False)
+    # axes[2].xaxis.set_ticks_position('bottom')
+    # axes[2].yaxis.set_ticks_position('left')
+    # axes[2].set_title(gof_type.upper())
+
+    return axes
 
 
 def histogram(data_in, rows=1, columns=1, bins=50, fig=None, color=None, fontsize=None, dpi=None):
@@ -679,7 +907,7 @@ def get_figure_dimensions(render_fig):
     """Get a rendered figures pixel dimensions"""
 
     # get the original width and height of the figure
-    px_width = render_fig.properties_with_values()['plot_width']
+    px_width = render_fig.properties_with_values()['width']
     # set flag for which dim to change later
     flag_width = 'plot'
     # get the frame width if the plot one wasn't defined
@@ -687,7 +915,7 @@ def get_figure_dimensions(render_fig):
         px_width = render_fig.properties_with_values()['frame_width']
         flag_width = 'frame'
     # repeat for height
-    px_height = render_fig.properties_with_values()['plot_height']
+    px_height = render_fig.properties_with_values()['height']
     flag_height = 'plot'
     if px_height is None:
         px_height = render_fig.properties_with_values()['frame_height']
@@ -808,14 +1036,23 @@ def holoviews_mods(figure_in, dpi, scale_factor):
             # also scale the dot size
             dot_size = props['size']
             figure_in.opts(size=px2pt(dot_size, dpi, scale_factor))
-        # check for BoxWHisker plot
+        # check for BoxWhisker plot
         if 'BoxWhisker' in str(type(figure_in)):
-            box_line_width = props['box_line_width']
+            box_line_width = props.get('box_line_width', 1)
             figure_in.opts(box_line_width=px2pt(box_line_width, dpi, scale_factor))
-            whisker_line_width = props['whisker_line_width']
+            whisker_line_width = props.get('whisker_line_width', 1)
             figure_in.opts(whisker_line_width=px2pt(whisker_line_width, dpi, scale_factor))
-            outlier_line_width = props['outlier_line_width']
+            outlier_line_width = props.get('outlier_line_width', 1)
             figure_in.opts(outlier_line_width=px2pt(outlier_line_width, dpi, scale_factor))
+        if 'Violin' in str(type(figure_in)):
+            violin_line_width = props.get('violin_line_width', 1)
+            figure_in.opts(box_line_width=px2pt(violin_line_width, dpi, scale_factor))
+            stats_line_width = props.get('stats_line_width', 0.5)
+            figure_in.opts(stats_line_width=px2pt(stats_line_width, dpi, scale_factor))
+            outline_line_width = props.get('outline_line_width', 1)
+            figure_in.opts(box_line_width=px2pt(outline_line_width, dpi, scale_factor))
+            box_line_width = props.get('box_line_width', 1)
+            figure_in.opts(box_line_width=px2pt(box_line_width, dpi, scale_factor))
 
     return figure_in
 
@@ -882,8 +1119,8 @@ def scale_figure(figure_in, target, dpi, fontsize, mode='convert'):
         is_legend = False
     if is_legend:
         # scale legend
-        current_fontsize = float(render_fig.above[0].label_text_font_size[:-2])
-        figure_in.opts(legend_opts={'label_text_font_size': str(px2pt(current_fontsize, dpi, scale_factor)) + 'pt'})
+        current_fontsize = float(render_fig.legend[0].label_text_font_size[:-2])
+        figure_in.opts(legend_opts={'label_text_font_size': str(px2pt(current_fontsize-5, dpi, scale_factor)) + 'pt'})
 
     # select between singular and nested structures
     if ('Overlay' in str(type(figure_in))) | ('Layout' in str(type(figure_in))):

@@ -23,7 +23,7 @@ def preprocess_selector(ref_path, file_info):
         # assemble the path here, in case the file wasn't in the database
         dlc_path = file_info['avi_path'].replace('.avi', '_dlc.h5')
         # select function depending on the rig
-        if files['rig'] in ['VWheel', 'VWheelWF'] :
+        if files['rig'] in ['VWheel', 'VWheelWF']:
             # use the eye specific function
             traces, corner_out, frame_b = s1.run_preprocess_eye(ref_path, dlc_path, file_info)
         else:
@@ -65,7 +65,8 @@ except NameError:
     raw_path = files['avi_path']
     calcium_path = files['avi_path'][:-4] + '_calcium.hdf5'
     # match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], files['rig'], 'cellMatch.hdf5')))
-    match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], 'cellMatch.hdf5')))
+    day = files['slug'][:10]
+    match_path = os.path.join(paths.analysis_path, '_'.join((day, files['mouse'], 'dayCellMatch.hdf5')))
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
                              os.path.basename(files['avi_path'][:-4]))+'_rawcoord.hdf5'
@@ -222,7 +223,7 @@ elif files['rig'] in ['VTuningWF']:
     # calculate only if calcium is present
     if files['imaging'] == 'wirefree':
         # get a dataframe with the calcium data matched to the bonsai data
-        matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
+        matched_calcium, roi_info = fm.match_calcium_wf(calcium_path, files['sync_path'], kinematics_data, trials=trials)
         # if there is a calcium output, write to the file
         if matched_calcium is not None:
             matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
@@ -259,7 +260,7 @@ elif files['rig'] in ['VWheelWF']:
     # calculate only if calcium is present
     if files['imaging'] == 'wirefree':
         # get a dataframe with the calcium data matched to the bonsai data
-        matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
+        matched_calcium, roi_info = fm.match_calcium_wf(calcium_path, files['sync_path'], kinematics_data, trials=trials)
         # if there is a calcium output, write to the file
         if matched_calcium is not None:
             matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
