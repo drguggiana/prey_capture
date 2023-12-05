@@ -1,18 +1,20 @@
-# imports
-import functions_matching as fm
-import functions_preprocessing as fp
-import functions_plotting as fplot
-import paths
-import snakemake_scripts.sub_preprocess_S1 as s1
-import snakemake_scripts.sub_preprocess_S2 as s2
-import datetime
-import functions_bondjango as bd
 import os
 import yaml
-import matplotlib.pyplot as plt
+import datetime
 import h5py
+import matplotlib.pyplot as plt
 from pandas import read_hdf, DataFrame
+
+
+import paths
 import processing_parameters
+import functions_bondjango as bd
+import functions_matching as fm
+import functions_preprocessing as fp
+import functions_wirefree_trigger_fix as wf_trig
+import functions_plotting as fplot
+import snakemake_scripts.sub_preprocess_S1 as s1
+import snakemake_scripts.sub_preprocess_S2 as s2
 
 
 def preprocess_selector(ref_path, file_info):
@@ -191,6 +193,9 @@ elif files['rig'] in ['VWheel']:
             cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
 
 elif files['rig'] in ['VTuningWF']:
+    # Correct the miniscope timestamps and fix the sync file
+    _ = wf_trig.fix_wirefree_timestamps(files['tif_path'], files['sync_path'])
+
     # load the data for the trial structure and parameters
     trials = read_hdf(files['screen_path'], key='trial_set')
     params = read_hdf(files['screen_path'], key='params')
@@ -224,6 +229,7 @@ elif files['rig'] in ['VTuningWF']:
     if files['imaging'] == 'wirefree':
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_wf(calcium_path, files['sync_path'], kinematics_data, trials=trials)
+        _ = wf_trig.get_trial_duration_stats(matched_calcium, 'trial_num', 'time_vector')
         # if there is a calcium output, write to the file
         if matched_calcium is not None:
             matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
@@ -233,6 +239,9 @@ elif files['rig'] in ['VTuningWF']:
             cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
 
 elif files['rig'] in ['VWheelWF']:
+    # Correct the miniscope timestamps and fix the sync file
+    _ = wf_trig.fix_wirefree_timestamps(files['tif_path'], files['sync_path'])
+
     # load the data for the trial structure and parameters
     trials = read_hdf(files['screen_path'], key='trial_set')
     params = read_hdf(files['screen_path'], key='params')
@@ -261,6 +270,8 @@ elif files['rig'] in ['VWheelWF']:
     if files['imaging'] == 'wirefree':
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_wf(calcium_path, files['sync_path'], kinematics_data, trials=trials)
+        _ = wf_trig.get_trial_duration_stats(matched_calcium, 'trial_num', 'time_vector')
+
         # if there is a calcium output, write to the file
         if matched_calcium is not None:
             matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')

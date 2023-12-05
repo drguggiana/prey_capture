@@ -670,6 +670,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
         frames_1 = np.round(sync_data.loc[:, 'projector_frames_2'] / 4).astype(int)
         # assemble the actual sequence
         frame_code = (frames_0 | frames_1).to_numpy()
+
         # TODO: turn this into a function
         fixed_code = frame_code.copy()
         # for all the frames
@@ -906,10 +907,12 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     sync_data = pd.read_csv(sync_path, header=None)
     if sync_data.shape[1] == 3:
         sync_data.columns = ['Time', 'mini_frames', 'camera_frames']
+    
     elif sync_data.shape[1] == 6:
         # TODO: only for files from 21.02.2022
         sync_data.columns = ['Time', 'projector_frames', 'camera_frames',
                              'sync_trigger', 'mini_frames', 'wheel_frames']
+    
     else:
         sync_data.columns = ['Time', 'projector_frames', 'camera_frames',
                              'sync_trigger', 'mini_frames', 'wheel_frames', 'projector_frames_2']
@@ -917,10 +920,9 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     # get the camera frame times
     frame_idx_camera_sync = kinematics_data['sync_frames'].to_numpy().astype(int)
     frame_times_camera_sync = sync_data.loc[frame_idx_camera_sync, 'Time'].to_numpy()
+    
     # get the miniscope frame indexes from the sync file
     frame_idx_mini_sync = np.argwhere(np.diff(np.round(sync_data.loc[:, 'mini_frames'])) > 0).squeeze() + 1
-    # interpolate missing triggers (based on experience)
-    frame_idx_mini_sync = np.round(interpolate_frame_triggers(frame_idx_mini_sync))
 
     # correct for the calcium starting before and/or ending after the behavior
     if frame_idx_mini_sync[0] < frame_idx_camera_sync[0]:
@@ -964,7 +966,35 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     if trials is not None:
 
         # repair the trial_num column
+        real_trials = np.concatenate([[0], trials.index + 1])
+        incorrect_trial_assignments = ~np.isin(matched_bonsai.loc[:, 'trial_num'], real_trials)
+        incorrect_trial_idxs = matched_bonsai.index[incorrect_trial_assignments]
+        
+        # Check preceding or following frames for the correct trial number
+        for idx in incorrect_trial_idxs:
+            trial_val = matched_bonsai.loc[idx, 'trial_num']
+            rounded_trial = np.round(trial_val)
+            prec_trial = matched_bonsai.loc[idx - 1, 'trial_num']
+            next_trial = matched_bonsai.loc[idx + 1, 'trial_num']
+            
+            if (rounded_trial == prec_trial) and (next_trial == 0):
+                matched_bonsai.loc[idx, 'trial_num'] = prec_trial
+            elif (rounded_trial == next_trial) and (prec_trial == 0):
+                matched_bonsai.loc[idx, 'trial_num'] = next_trial
+            elif (rounded_trial == prec_trial) and (rounded_trial == next_trial):
+                matched_bonsai.loc[idx, 'trial_num'] = prec_trial
+            else:
+                matched_bonsai.loc[idx, 'trial_num'] = 0
+        
         matched_bonsai.loc[:, 'trial_num'] = np.round(matched_bonsai.loc[:, 'trial_num'])
+
+        # find indexes for each trial number > 0. If there are some that aren't consecutive, fix them
+        # Seems to be the case the sometimes the transition is split across two frames
+        for trial in matched_bonsai.trial_num.unique():
+            indexes = matched_bonsai.index[matched_bonsai.trial_num == trial]
+            if np.any(np.diff(indexes) != 1):
+                where_bad = np.argwhere(np.diff(indexes) > 1).squeeze() + 1
+                matched_bonsai.loc[indexes[where_bad], 'trial_num'] = 0
 
         # now that the trials are reassigned, add the trial data
         matched_bonsai = assign_trial_parameters(matched_bonsai, trials)
@@ -988,8 +1018,10 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     # print a single dataframe with the calcium matched positions and timestamps
     cell_column_names = ['_'.join(('cell', f'{el:04d}', 'spikes')) for el in range(calcium_data.shape[1])]
     calcium_dataframe = pd.DataFrame(calcium_data, columns=cell_column_names)
-    cell_column_names = ['_'.join(('cell', f'{el:04d}', 'fluor')) for el in range(calcium_data.shape[1])]
+
+    cell_column_names = [col.replace('spikes', 'fluor') for col in cell_column_names]
     fluorescence_dataframe = pd.DataFrame(fluor_data, columns=cell_column_names)
+
     # concatenate both data frames
     full_dataframe = pd.concat([matched_bonsai, calcium_dataframe, fluorescence_dataframe], axis=1)
 

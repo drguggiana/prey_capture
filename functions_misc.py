@@ -180,6 +180,7 @@ def list_lists_to_array(list_of_lists, prepend=False):
 
     return new_array
 
+
 def find_nearest(array, value):
     idx = (np.abs(array - value)).argmin()
     return idx, array[idx]
