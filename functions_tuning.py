@@ -300,7 +300,7 @@ def subsample_responses(trial_nums_by_angle, min_trials=4, replace=True):
     return trial_subset
 
 
-def bootstrap_resultant(responses, multiplier, sampling_method, min_trials=4, num_shuffles=1000):
+def bootstrap_resultant(responses, multiplier, sampling_method, min_trials=3, num_shuffles=1000):
     columns = list(responses.columns)
     tuning_kind = columns[0]
     cell = columns[-1]
@@ -324,7 +324,7 @@ def bootstrap_resultant(responses, multiplier, sampling_method, min_trials=4, nu
 
         else:
             # select subset of trials, guaranteeing that each angle is represented the same number of times
-            trial_subset = subsample_responses(trial_nums_by_angle)
+            trial_subset = subsample_responses(trial_nums_by_angle, min_trials=min_presentations)
             theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
             magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
 
@@ -439,7 +439,7 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     return dsi_nasal_temporal, dsi_abs, osi, resultant_length, pref, null
 
 
-def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=4, num_shuffles=1000):
+def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=3, num_shuffles=1000):
     columns = list(responses.columns)
     tuning_kind = columns[0]
     cell = columns[-1]
@@ -453,12 +453,11 @@ def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=4, num_shu
     # Get the counts per angle
     trial_nums_by_angle = responses.groupby(tuning_kind).trial_num.agg(list)
     angle_counts = responses[tuning_kind].value_counts()
-    min_presentations = angle_counts.min()
-    if min_presentations < min_trials:
-        if sampling_method == 'equal_trial_nums':
-            print('Not enough presentations per angle to calculate DSI/OSI')
-            return shuffled_dsi_nasal_temporal.fill(np.nan), shuffled_dsi_abs.fill(np.nan), shuffled_osi.fill(np.nan), \
-                   shuffled_resultant.fill(np.nan), shuffled_null_angle.fill(np.nan)
+    min_presentations = int(angle_counts.min())
+    if (min_presentations < min_trials) and (sampling_method == 'equal_trial_nums'):
+        print('Not enough presentations per angle to calculate DSI/OSI')
+        return shuffled_dsi_nasal_temporal.fill(np.nan), shuffled_dsi_abs.fill(np.nan), shuffled_osi.fill(np.nan), \
+            shuffled_resultant.fill(np.nan), shuffled_null_angle.fill(np.nan)
 
     for i in np.arange(num_shuffles):
 
@@ -469,7 +468,7 @@ def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=4, num_shu
 
         else:
             # select subset of trials, guaranteeing that each angle is represented the same number of times
-            trial_subset = subsample_responses(trial_nums_by_angle)
+            trial_subset = subsample_responses(trial_nums_by_angle, min_trials=min_presentations)
             theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
             magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
 
