@@ -7,7 +7,8 @@ from skimage import io
 def get_trial_duration_stats(df, trial_key, time_key):
     grouped_trials = df[df[trial_key] > 0].groupby(trial_key)
     trial_durations = grouped_trials.apply(lambda x: x[time_key].to_list()[-1] - x[time_key].to_list()[0])
-    print(trial_durations.min(), trial_durations.max(), trial_durations.mean())
+    print(f"Min. trial. dur.: {trial_durations.min():.3f}, Max. trial. dur.: {trial_durations.max():.3f}"
+          f" Mean. trial. dur.:{trial_durations.mean():.3f}")
     return np.array((trial_durations.min(), trial_durations.max(), trial_durations.mean()))
 
 
@@ -88,7 +89,7 @@ def update_sync_file(timestamps_in, target_sync_in, miniscope_channel=4):
     best_idx = best_idx[best_idx < sync_info.shape[0]]
 
     # reset the timestamps before replacing them
-    sync_info.iloc[sync_start + 1:, miniscope_channel] = sync_info.iloc[sync_start + 1, miniscope_channel]
+    sync_info.iloc[sync_start + 1:, miniscope_channel] = 0
 
     # # modify the sync info to add the timestamps
     sync_info.iloc[best_idx, miniscope_channel] = 5
