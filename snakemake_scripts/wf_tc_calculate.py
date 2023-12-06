@@ -33,42 +33,71 @@ def parse_trial_frames(df):
     return traces
 
 
+def drop_partial_or_long_trials(df, min_trial_length=4.5, max_trial_length=5.5):
+    trial_lengths = df[df.trial_num > 0].groupby('trial_num').apply(lambda x: x.shape[0] / wf_frame_rate)
 
-def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bootstrap_shuffles=500):
+    # Drop trials that are shorter than min_trial_length (partial trials)
+    short_trials = trial_lengths[trial_lengths < min_trial_length].index
+    df = df.drop(df[df.trial_num.isin(short_trials)].index)
 
-    # --- Threshold data and parse trials --- #
-    # define the clipping threshold in percentile of baseline
-    clip_threshold = 8
-    # do the cell clipping
+    # Drop trials that are longer than max_trial_length (errors in trial number indexing)
+    long_trials = trial_lengths[trial_lengths > max_trial_length].index
+    df = df.drop(df[df.trial_num.isin(long_trials)].index)
+
+    return df
+
+
+def generate_tcs_and_stats(df):
+    _mean, unique_angles = tuning.generate_response_vector(df, np.mean)
+    _sem, _ = tuning.generate_response_vector(df, sem, nan_policy='omit')
+    _std, _ = tuning.generate_response_vector(df, np.std)
+    return _mean, _sem, _std, unique_angles
+
+
+def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tuning_fit='von_mises',
+                            bootstrap_shuffles=500):
+    # --- Parse trials and cells--- #
+    # Fill any NaNs in the data with 0
+    activity_df = activity_df.fillna(0)
+    # Drop trials that are poorly indexed or incomplete
+    activity_df = drop_partial_or_long_trials(activity_df)
+    # Get the column names for the cells
     cells = [col for col in activity_df.columns if 'cell' in col]
-    activity_df[cells] = activity_df.loc[:, cells].apply(clipping_function, axis=1, raw=True,
-                                                         threshold=clip_threshold)
 
-    # Correctly parse trials since the data has some errors
-    activity_df = parse_trial_frames(activity_df)
+    # --- Threshold data --- #
+    # define the clipping threshold in percentile of baseline and do the cell clipping
+    clip_threshold = 8
+    activity_df[cells] = activity_df.loc[:, cells].apply(clipping_function, axis=1, raw=True, threshold=clip_threshold)
 
-    # Get the mean response per trial and drop the inter-trial interval from df
-    mean_trial_activity = activity_df.groupby([tuning_kind, 'trial_num'])[cells].agg(np.nanmean).reset_index()
-    mean_trial_activity = mean_trial_activity.drop(mean_trial_activity[mean_trial_activity[tuning_kind] == -1000].index).sort_values('trial_num')
+    # -- Mean activity per trial -- #
+    # Get the mean direction response per trial and drop the inter-trial interval from df
+    mean_direction_activity = activity_df.groupby([direction_label, 'trial_num'])[cells].agg(np.mean).copy().reset_index()
+    mean_direction_activity = mean_direction_activity.drop(mean_direction_activity[mean_direction_activity.trial_num == 0].index).sort_values('trial_num')
 
-    # Make sure to explicitly represent 360 degrees in the data by duplicating the 0 degrees value
-    if 'direction' in tuning_kind:
-        dup_angle = 360.
-        dup = mean_trial_activity.loc[mean_trial_activity[tuning_kind] == 0].copy()
-        dup.loc[:, tuning_kind] = dup_angle
-        mean_trial_activity = pd.concat([mean_trial_activity, dup], ignore_index=True)
+    # Make sure to explicitly represent 360 degrees in the direction data by duplicating the 0 degrees value
+    dup = mean_direction_activity.loc[mean_direction_activity[direction_label] == 0].copy()
+    dup.loc[:, direction_label] = 360.
+    mean_direction_activity = pd.concat([mean_direction_activity, dup], ignore_index=True)
 
-    # -- Create the response vectors --#
-    mean_resp, unique_angles = tuning.generate_response_vector(mean_trial_activity, np.nanmean)
-    sem_resp, _ = tuning.generate_response_vector(mean_trial_activity, sem, nan_policy='omit')
-    std_resp, _ = tuning.generate_response_vector(mean_trial_activity, np.nanstd)
+    mean_orientation_activity = activity_df.groupby(['orientation', 'trial_num'])[cells].agg(np.mean).copy().reset_index()
+    mean_orientation_activity = mean_orientation_activity.drop(mean_orientation_activity[mean_orientation_activity.trial_num == 0].index).sort_values('trial_num')
 
+    # Make sure to explicitly represent 180 degrees in the orientation data by duplicating the 0 degrees value
+    # dup = mean_orientation_activity.loc[mean_orientation_activity['orientation'] == 0].copy()
+    # dup.loc[:, 'orientation'] = 180.
+    # mean_orientation_activity = pd.concat([mean_orientation_activity, dup], ignore_index=True)
+
+    # -- Create the response vectors and normalized response vectors --#
     # Normalize the responses of each cell to the maximum mean response of the cell on any given trial
-    norm_trial_activity = mean_trial_activity.copy()
-    norm_trial_activity[cells] = norm_trial_activity[cells].apply(tuning.normalize)
-    norm_mean_resp, _ = tuning.generate_response_vector(norm_trial_activity, np.nanmean)
-    norm_sem_resp, _ = tuning.generate_response_vector(norm_trial_activity, sem, nan_policy='omit')
-    norm_std_resp, _ = tuning.generate_response_vector(norm_trial_activity, np.nanstd)
+    mean_dir, sem_dir, std_dir, unique_dirs = generate_tcs_and_stats(mean_direction_activity)
+    norm_direction_activity = mean_direction_activity.copy()
+    norm_direction_activity[cells] = norm_direction_activity[cells].apply(tuning.normalize)
+    norm_mean_dir, norm_sem_dir, norm_std_dir, _ = generate_tcs_and_stats(norm_direction_activity)
+
+    mean_ori, sem_ori, std_ori, unique_oris = generate_tcs_and_stats(mean_orientation_activity)
+    norm_orientation_activity = mean_orientation_activity.copy()
+    norm_orientation_activity[cells] = norm_orientation_activity[cells].apply(tuning.normalize)
+    norm_mean_ori, norm_sem_ori, norm_std_ori, _ = generate_tcs_and_stats(norm_orientation_activity)
 
     # -- Fit tuning curves to get preference-- #
     if tuning_fit == 'von_mises':
@@ -79,124 +108,180 @@ def calculate_visual_tuning(activity_df, tuning_kind, tuning_fit='von_mises', bo
     # For all cells
     cell_data_list = []
     for cell in cells:
-        # -- Calculate fit and responsivity using all trials -- #
+
+        # -- 1. Calculate fit and responsivity using all trials -- #
         try:
-            mean_guess = unique_angles[np.argmax(norm_mean_resp[cell].fillna(0), axis=0)]
+            mean_guess_dir = np.deg2rad(unique_dirs[np.argmax(norm_mean_dir[cell].fillna(0), axis=0)])
+            mean_guess_ori = np.deg2rad(unique_oris[np.argmax(norm_mean_ori[cell].fillna(0), axis=0)])
         except:
             # Sometimes this throws an error if there are no responses
-            mean_guess = 0
+            mean_guess_dir = np.pi
+            mean_guess_ori = np.pi/2
 
-        fit, fit_curve, pref_angle, real_pref_angle = \
-            fit_function(unique_angles, norm_mean_resp[cell].to_numpy(), tuning_kind, mean=mean_guess)
+        dir_fit, dir_fit_curve, pref_dir, real_pref_dir = \
+            fit_function(unique_dirs, norm_mean_dir[cell].to_numpy(), direction_label, mean=mean_guess_dir)
 
-        fit_gof = tuning.goodness_of_fit(norm_trial_activity[tuning_kind].to_numpy(),
-                                         norm_trial_activity[cell].to_numpy(),
-                                         fit_curve[:, 0], fit_curve[:, 1],
+        ori_fit, ori_fit_curve, pref_ori, real_pref_ori = \
+            fit_function(unique_oris, norm_mean_ori[cell].to_numpy(), 'orientation', mean=mean_guess_ori)
+
+        dir_gof = tuning.goodness_of_fit(norm_direction_activity[direction_label].to_numpy(),
+                                         norm_direction_activity[cell].to_numpy(),
+                                         dir_fit_curve[:, 0], dir_fit_curve[:, 1],
                                          type=processing_parameters.gof_type)
 
-        # -- Get resultant vector and response variance using the tuning curve (trial response means) -- #
-        if 'direction' in tuning_kind:
-            multiplier = 1.
-        else:
-            multiplier = 2.
+        ori_gof = tuning.goodness_of_fit(norm_orientation_activity['orientation'].to_numpy(),
+                                         norm_orientation_activity[cell].to_numpy(),
+                                         ori_fit_curve[:, 0], ori_fit_curve[:, 1],
+                                         type=processing_parameters.gof_type)
 
-        thetas = np.deg2rad(unique_angles)
-        theta_sep = np.mean(np.diff(thetas))
-        magnitudes = norm_mean_resp[cell].copy().to_numpy()
+        # --- Bootstrap fit and responsivity using all trials -- #
+        # Split the data with an 80-20 train-test split. Fit the tuning curve on the training data and calculate
+        # goodness of fit on the test data.
+        bootstrap_dir_gof, bootstrap_pref_dir, bootstrap_real_pref_dir = \
+            tuning.bootstrap_tuning_curve(norm_direction_activity[[direction_label, 'trial_num', cell]], fit_function,
+                                          gof_type=processing_parameters.gof_type,
+                                          num_shuffles=bootstrap_shuffles, mean=mean_guess_dir)
+        p_dir_gof = percentileofscore(bootstrap_dir_gof[~np.isnan(bootstrap_dir_gof)], dir_gof, kind='mean') / 100.
 
-        if 'direction' in tuning_kind:
-            dsi_nasal_temporal, dsi_abs, osi, resultant_length, resultant_angle, null_angle = \
-                tuning.calculate_dsi_osi_resultant(thetas, magnitudes)
-            resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
-            null_angle = fk.wrap(np.rad2deg(null_angle), bound=360/multiplier)
+        bootstrap_ori_gof, bootstrap_pref_ori, bootstrap_real_pref_ori = \
+            tuning.bootstrap_tuning_curve(norm_orientation_activity[['orientation', 'trial_num', cell]], fit_function,
+                                          gof_type=processing_parameters.gof_type,
+                                          num_shuffles=bootstrap_shuffles, mean=mean_guess_ori)
+        p_ori_gof = percentileofscore(bootstrap_ori_gof[~np.isnan(bootstrap_ori_gof)], ori_gof, kind='mean') / 100.
 
-        else:
-            resultant_length = circ.resultant_vector_length(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
-            resultant_angle = circ.mean(thetas, w=magnitudes, d=theta_sep, axial_correction=multiplier)
-            resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
+        # -- 2. Get resultant vector, variance, DSI and OSI using the tuning curves (normalized means) -- #
 
-            dsi_nasal_temporal = np.nan
-            dsi_abs = np.nan
-            osi = np.nan
-            null_angle = np.nan
+        # Use the direction dataset first
+        theta_dirs = np.deg2rad(unique_dirs)
+        dir_magnitudes = norm_mean_dir[cell].copy().to_numpy()
 
-        circ_var = circ.var(thetas, w=magnitudes, d=theta_sep)
-        responsivity = 1 - circ_var
+        dsi_nasal_temporal, dsi_abs, osi, resultant_dir_length, resultant_dir, null_dir = \
+            tuning.calculate_dsi_osi_resultant(theta_dirs, dir_magnitudes)
+        resultant_dir = fk.wrap(np.rad2deg(resultant_dir), bound=360.)
+        null_dir = fk.wrap(np.rad2deg(null_dir), bound=360.)
+        responsivity_dir = resultant_dir_length
+
+        # For the orientation dataset
+        theta_oris = np.deg2rad(unique_oris)
+        ori_sep = np.mean(np.diff(theta_oris))
+        ori_magnitudes = norm_mean_ori[cell].copy().to_numpy()
+
+        resultant_ori_length, resultant_ori = tuning.resultant_vector(theta_oris, ori_magnitudes, 2)
+        resultant_ori = fk.wrap(np.rad2deg(resultant_ori), bound=180.)
+        null_ori = fk.wrap(resultant_ori + 90, bound=180.)
+
+        circ_var_ori = circ.var(theta_oris, w=ori_magnitudes, d=ori_sep)
+        responsivity_ori = 1 - circ_var_ori
 
         # -- Run permutation tests using single trial mean responses-- #
-        # 1. Shuffle the trial IDs and compare the real selectivity indices to the bootstrapped distribution
-        # 2. Bootstrap resultant length and angle while guaranteeing the same number of presentations per angle
-        #    This is what Joel does for significant shifts in tuning curves 
-        # 3. Calculate regression fit on a subset of data and compare to bootstrapped distribution
+        # A. Bootstrap resultant length and angle while guaranteeing the same number of presentations per angle
+        #    This is what Joel does for significant shifts in tuning curves
+        # B. Shuffle the trial IDs and compare the real selectivity indices to the bootstrapped distribution
 
-        if 'direction' in tuning_kind:
-            # 1. Shuffle trial IDs
-            bootstrap_dsi_nasal_temporal, bootstrap_dsi_abs, bootstrap_osi, bootstrap_responsivity, bootstrap_null_angle= \
-                tuning.boostrap_dsi_osi_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]],
-                                                  sampling_method='shuffle_trials', num_shuffles=bootstrap_shuffles)
+        # A. Bootstrap resultant vector while guaranteeing the same number of presentations per angle
+        # For direction data
+        bootstrap_dsi_nasal_temporal, bootstrap_dsi_abs, bootstrap_osi, bootstrap_resultant_dir, bootstrap_null_dir \
+            = tuning.boostrap_dsi_osi_resultant(norm_direction_activity[[direction_label, 'trial_num', cell]],
+                                                sampling_method='equal_trial_nums', num_shuffles=bootstrap_shuffles)
+        bootstrap_responsivity_dir = bootstrap_resultant_dir[:, 0]
+        p_dsi_nasal_temporal_bootstrap = percentileofscore(bootstrap_dsi_nasal_temporal, dsi_nasal_temporal, kind='mean') / 100.
+        p_dsi_abs_bootstrap = percentileofscore(bootstrap_dsi_abs, dsi_abs, kind='mean') / 100.
+        p_osi_bootstrap = percentileofscore(bootstrap_osi, osi, kind='mean') / 100.
+        p_responsivity_dir_bootstrap = percentileofscore(bootstrap_responsivity_dir, responsivity_dir, kind='mean') / 100.
 
-            bootstrap_responsivity = bootstrap_responsivity[:, 0]
-            p_dsi_nasal_temporal = percentileofscore(bootstrap_dsi_nasal_temporal, dsi_nasal_temporal, kind='mean') / 100.
-            p_dsi_abs = percentileofscore(bootstrap_dsi_abs, dsi_abs, kind='mean') / 100.
-            p_osi = percentileofscore(bootstrap_osi, osi, kind='mean') / 100.
-            p_res = percentileofscore(bootstrap_responsivity, responsivity, kind='mean') / 100.
+        # For orientation data
+        bootstrap_resultant_ori = \
+            tuning.bootstrap_resultant(norm_orientation_activity[['orientation', 'trial_num',  cell]],
+                                       sampling_method='equal_trial_nums', multiplier=2, num_shuffles=bootstrap_shuffles)
+        bootstrap_responsivity_ori = bootstrap_resultant_ori[:, 0]
+        p_responsivity_ori_bootstrap = percentileofscore(bootstrap_responsivity_ori, responsivity_ori, kind='mean') / 100.
 
-            # 2. Bootstrap resultant vector
-            _, _, _, bootstrap_resultant, _ = \
-                tuning.boostrap_dsi_osi_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]],
-                                                  sampling_method='equal_trial_nums', num_shuffles=bootstrap_shuffles)
+        # B. Shuffle the trial IDs and compare the real selectivity indices to the bootstrapped distribution
+        # For direction data
+        shuffle_dsi_nasal_temporal, shuffle_dsi_abs, shuffle_osi, shuffle_resultant_dir, shuffle_null_dir \
+            = tuning.boostrap_dsi_osi_resultant(norm_direction_activity[[direction_label, 'trial_num', cell]],
+                                                sampling_method='shuffle_trials', num_shuffles=bootstrap_shuffles)
 
-        else:
-            # 1. Shuffle trial IDs
-            bootstrap_responsivity = tuning.bootstrap_responsivity(thetas, magnitudes, multiplier, 
-                                                                   num_shuffles=bootstrap_shuffles)
-            p_res = percentileofscore(bootstrap_responsivity, responsivity, kind='mean') / 100.
+        p_dsi_nasal_temporal_shuffle = percentileofscore(shuffle_dsi_nasal_temporal, dsi_nasal_temporal, kind='mean') / 100.
+        shuffle_responsivity_dir = shuffle_resultant_dir[:, 0]
+        p_dsi_abs_shuffle = percentileofscore(shuffle_dsi_abs, dsi_abs, kind='mean') / 100.
+        p_osi_shuffle = percentileofscore(shuffle_osi, osi, kind='mean') / 100.
+        p_responsivity_dir_shuffle = percentileofscore(shuffle_responsivity_dir, responsivity_dir, kind='mean') / 100.
 
-            # 2. Bootstrap resultant vector
-            bootstrap_resultant = tuning.bootstrap_resultant(norm_trial_activity[[tuning_kind, 'trial_num', cell]],
-                                                            multiplier=multiplier, num_shuffles=bootstrap_shuffles)
-
-            bootstrap_dsi_nasal_temporal = np.nan
-            bootstrap_dsi_abs = np.nan
-            bootstrap_osi = np.nan
-            p_dsi_nasal_temporal = np.nan
-            p_dsi_abs = np.nan
-            p_osi = np.nan
-
-        # 3. Calculate fit on subset of data
-        bootstrap_gof, bootstrap_pref_angle, bootstrap_real_pref = \
-            tuning.bootstrap_tuning_curve(norm_trial_activity[[tuning_kind, 'trial_num', cell]], fit_function,
-                                          gof_type=processing_parameters.gof_type,
-                                          num_shuffles=bootstrap_shuffles, mean=mean_guess)
-        p_gof = percentileofscore(bootstrap_gof[~np.isnan(bootstrap_gof)], fit_gof, kind='mean') / 100.
+        # For orientation data
+        shuffle_resultant_ori = \
+            tuning.bootstrap_resultant(norm_orientation_activity[['orientation', 'trial_num', cell]],
+                                       sampling_method='shuffle_trials', multiplier=2,
+                                       num_shuffles=bootstrap_shuffles)
+        shuffle_responsivity_ori = shuffle_resultant_ori[:, 0]
+        p_responsivity_ori_shuffle = percentileofscore(shuffle_responsivity_ori, responsivity_ori, kind='mean') / 100.
 
         # -- Assemble data for saving -- #
-        cell_data = [mean_trial_activity[[tuning_kind, cell]].to_numpy(),
-                     norm_trial_activity[[tuning_kind, cell]].to_numpy(),
-                     np.vstack([unique_angles, mean_resp[cell].to_numpy()]).T,
-                     np.vstack([unique_angles, norm_mean_resp[cell].to_numpy()]).T,
-                     std_resp[cell].to_numpy(), norm_std_resp[cell].to_numpy(),
-                     sem_resp[cell].to_numpy(), norm_sem_resp[cell].to_numpy(),
-                     fit, fit_curve, fit_gof, bootstrap_gof, p_gof,
-                     pref_angle, bootstrap_pref_angle, real_pref_angle, bootstrap_real_pref,
-                     (resultant_length, resultant_angle), bootstrap_resultant,
-                     circ_var, responsivity, bootstrap_responsivity, p_res,
-                     dsi_nasal_temporal, bootstrap_dsi_nasal_temporal, p_dsi_nasal_temporal,
-                     dsi_abs, bootstrap_dsi_abs, p_dsi_abs,
-                     osi, bootstrap_osi, p_osi]
+        direction_data = [mean_direction_activity[[direction_label, cell]].to_numpy(),
+                          norm_direction_activity[[direction_label, cell]].to_numpy(),
+                          np.vstack([unique_dirs, mean_dir[cell].to_numpy()]).T,
+                          np.vstack([unique_dirs, norm_mean_dir[cell].to_numpy()]).T,
+                          std_dir[cell].to_numpy(), norm_std_dir[cell].to_numpy(),
+                          sem_dir[cell].to_numpy(), norm_sem_dir[cell].to_numpy(),
+                          dir_fit, dir_fit_curve, dir_gof, bootstrap_dir_gof, p_dir_gof,
+                          pref_dir, bootstrap_pref_dir, real_pref_dir, bootstrap_real_pref_dir,
+                          (resultant_dir_length, resultant_dir), bootstrap_resultant_dir, shuffle_resultant_dir,
 
+                          responsivity_dir, bootstrap_responsivity_dir, p_responsivity_dir_bootstrap,
+                          shuffle_responsivity_dir, p_responsivity_dir_shuffle,
+
+                          null_dir, bootstrap_null_dir, shuffle_null_dir,
+                          dsi_nasal_temporal, bootstrap_dsi_nasal_temporal, p_dsi_nasal_temporal_bootstrap,
+                          shuffle_dsi_nasal_temporal, p_dsi_nasal_temporal_shuffle,
+                          dsi_abs, bootstrap_dsi_abs, p_dsi_abs_bootstrap,
+                          shuffle_dsi_abs, p_dsi_abs_shuffle]
+
+        orientation_data = [mean_orientation_activity[['orientation', cell]].to_numpy(),
+                            norm_orientation_activity[['orientation', cell]].to_numpy(),
+                            np.vstack([unique_oris, mean_ori[cell].to_numpy()]).T,
+                            np.vstack([unique_oris, norm_mean_ori[cell].to_numpy()]).T,
+                            std_ori[cell].to_numpy(), norm_std_ori[cell].to_numpy(),
+                            sem_ori[cell].to_numpy(), norm_sem_ori[cell].to_numpy(),
+                            ori_fit, ori_fit_curve, ori_gof, bootstrap_ori_gof, p_ori_gof,
+                            pref_ori, null_ori, bootstrap_pref_ori, real_pref_ori, bootstrap_real_pref_ori,
+                            (resultant_ori_length, resultant_ori), bootstrap_resultant_ori, shuffle_resultant_ori,
+
+                            responsivity_ori, bootstrap_responsivity_ori, p_responsivity_ori_bootstrap,
+                            shuffle_responsivity_ori, p_responsivity_ori_shuffle,
+
+                            osi, bootstrap_osi, p_osi_bootstrap, shuffle_osi, p_osi_shuffle]
+
+        cell_data = direction_data + orientation_data
         cell_data_list.append(cell_data)
 
     # -- Assemble large dataframe -- #
-    data_cols = ['trial_resp', 'trial_resp_norm',
-                 'mean', 'mean_norm', 'std', 'std_norm', 'sem', 'sem_norm',
-                 'fit', 'fit_curve', 'gof', 'bootstrap_gof', 'p_gof',
-                 'pref', 'bootstrap_pref', 'shown_pref', 'bootstrap_shown_pref',
-                 'resultant', 'bootstrap_resultant',
-                 'circ_var', 'responsivity', 'bootstrap_responsivity', 'p_responsivity',
-                 'dsi_nasal_temporal', 'bootstrap_dsi_nasal_temporal', 'p_dsi_nasal_temporal',
-                 'dsi_abs', 'bootstrap_dsi_abs', 'p_dsi_abs',
-                 'osi', 'bootstrap_osi', 'p_osi']
+    direction_columns = ['resp_dir', 'resp_norm_dir',
+                         'mean_dir', 'mean_norm_dir',
+                         'std_dir', 'std_norm_dir',
+                         'sem_dir', 'sem_norm_dir',
+                         'fit_dir', 'fit_curve_dir', 'gof_dir', 'bootstrap_gof_dir', 'p_gof_dir',
+                         'pref_dir', 'bootstrap_pref_dir', 'real_pref_dir', 'bootstrap_real_pref_dir',
+                         'resultant_dir', 'bootstrap_resultant_dir', 'shuffle_resultant_dir',
+                         'responsivity_dir', 'bootstrap_responsivity_dir', 'bootstrap_p_responsivity_dir',
+                         'shuffle_responsivity_dir', 'shuffle_p_responsivity_dir',
+                         'null_dir', 'bootstrap_null_dir', 'shuffle_null_dir',
+                         'dsi_nasal_temporal', 'bootstrap_dsi_nasal_temporal', 'bootstrap_p_dsi_nasal_temporal',
+                         'shuffle_dsi_nasal_temporal', 'shuffle_p_dsi_nasal_temporal',
+                         'dsi_abs', 'bootstrap_dsi_abs', 'bootstrap_p_dsi_abs',
+                         'shuffle_dsi_abs', 'shuffle_p_dsi_abs']
+
+    orientation_columns = ['resp_ori', 'resp_norm_ori',
+                           'mean_ori', 'mean_norm_ori',
+                           'std_ori', 'std_norm_ori',
+                           'sem_ori', 'sem_norm_ori',
+                           'fit_ori', 'fit_curve_ori', 'gof_ori', 'bootstrap_gof_ori', 'p_gof_ori',
+                           'pref_ori', 'null_ori', 'bootstrap_pref_ori', 'real_pref_ori', 'bootstrap_real_pref_ori',
+                           'resultant_ori', 'bootstrap_resultant_ori', 'shuffle_resultant_ori',
+                           'responsivity_ori', 'bootstrap_responsivity_ori', 'bootstrap_p_responsivity_ori',
+                           'shuffle_responsivity_ori', 'shuffle_p_responsivity_ori',
+                           'osi', 'bootstrap_osi', 'bootstrap_p_osi', 'shuffle_osi', 'shuffle_p_osi']
+
+    data_cols = direction_columns + orientation_columns
 
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
     return data_df
@@ -227,7 +312,7 @@ def parse_kinematic_data(matched_calcium, rig):
         matched_calcium['orientation'] = matched_calcium['direction_wrapped'].copy()
         matched_calcium['orientation_rel_ground'] = matched_calcium['direction_rel_ground'].copy()
         mask = matched_calcium['orientation'] > -1000
-        matched_calcium.loc[mask, 'orientation'] = matched_calcium.loc[mask, 'orientation'].apply(fk.wrap, bound=180)
+        matched_calcium.loc[mask, 'orientation'] = matched_calcium.loc[mask, 'orientation'].apply(fk.wrap, bound=180.1)
         matched_calcium.loc[mask, 'orientation_rel_ground'] = matched_calcium.loc[mask, 'orientation_rel_ground'].apply(fk.wrap, bound=180)
 
     spikes_cols = [key for key in matched_calcium.keys() if 'spikes' in key]
@@ -389,20 +474,14 @@ if __name__ == '__main__':
             activity_ds_dict['norm_spikes_viewed_still'] = norm_spikes_viewed_still
             activity_ds_dict['norm_dff_viewed_still'] = norm_dff_viewed_still
 
-            # Run the visual tuning loop
+            # Run the visual tuning loop and save to file
             print('Calculating visual tuning curves...')
             vis_prop_dict = {}
             for ds_name in processing_parameters.activity_datasets:
                 activity_ds = activity_ds_dict[ds_name]
-                for tuning_type in ['direction_wrapped', 'orientation']:
-                    props = calculate_visual_tuning(activity_ds, tuning_type,
-                                                    bootstrap_shuffles=processing_parameters.bootstrap_repeats)
-                    label = tuning_type.split('_')[0]
-                    vis_prop_dict[f'{ds_name}_{label}_props'] = props
-
-            # Save visual features to hdf5 file
-            for key in vis_prop_dict.keys():
-                vis_prop_dict[key].to_hdf(out_file, key)
+                props = calculate_visual_tuning(activity_ds, bootstrap_shuffles=processing_parameters.bootstrap_repeats)
+                # Save visual features to hdf5 file
+                props.to_hdf(out_file, f'{ds_name}_props')
 
             # --- Process kinematic tuning --- #
             # This is lifted directly from tc_calculate.py

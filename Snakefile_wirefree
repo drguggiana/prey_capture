@@ -431,7 +431,7 @@ def matched_tc_files(wildcards):
     animal = '_'.join([name_parts[7].upper()] + name_parts[8:10])
 
     if os.path.isfile(os.path.join(paths.analysis_path, f'{day[0]}_{animal[0]}_tcconsolidate.hdf5')):
-        return os.path.join(config["target_path"],config["files"][wildcards.file] + '.avi')
+        return os.path.join(paths.analysis_path, f"{wildcards.file}_tcdummy.txt")
 
     else:
         info_list = [yaml.load(config["file_info"][el],Loader=yaml.FullLoader) for el in config["file_info"]]
@@ -442,7 +442,7 @@ def matched_tc_files(wildcards):
 
         if (len(match_tc_files) < 2) or not all([os.path.isfile(tc_file) for tc_file in match_tc_files]):
             print(f'Not all tuning curve files are present for {animal} on {day}')
-            return os.path.join(config["target_path"],config["files"][wildcards.file] + '.avi')
+            return os.path.join(paths.analysis_path, f"{wildcards.file}_tcdummy.txt")
 
         else:
             return match_tc_files
@@ -474,7 +474,7 @@ rule agg_tcs:
 
 rule tuning_run:
     input:
-          expand(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"), file=config['files'])
+          expand(os.path.join(paths.analysis_path, "{file}_tcday.hdf5"), file=config['files'])
     output:
           os.path.join(paths.analysis_path, "tuning_run.txt")
     params:

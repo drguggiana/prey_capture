@@ -227,31 +227,30 @@ def calculate_pref_orientation(angles, tuning_curve, **kwargs):
 def calculate_pref_von_mises(angles, tuning_curve, fit_kind, **kwargs):
     # --- Fit double gaussian ---#
 
+    # Get angles in radians
+    rads = np.deg2rad(angles)
+
     # Shift baseline to zero for fitting the data
     curve_to_fit = tuning_curve - tuning_curve.min()
 
     if fit_kind == 'orientation':
         # Duplicate the tuning curve to properly fit the double von mises
         curve_to_fit = np.tile(curve_to_fit, 2)
-        angles = np.concatenate((angles, angles + 180))
+        rads = np.concatenate((rads, rads + np.pi))
 
     # Approximate parameters for the fit
     amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
     kappa = kwargs.get('kappa', 5)
-    mean = kwargs.get('mean', angles[np.argmax(curve_to_fit, axis=0)])
+    mean = kwargs.get('mean', rads[np.argmax(curve_to_fit, axis=0)])
+    mean2 = fk.wrap(mean + np.pi, bound=2*np.pi)
 
-    # Following Carandini and Ferster, 2000, (https://doi.org/10.1523%2FJNEUROSCI.20-01-00470.2000)
-    # initialize the double gaussian with the same width and amplitude, but shift the center of the second gaussian
-    # if wrapping on [-180, 180] domain, use fk.wrap(center + center_shift, bound=180) - center_shift
-    mean2 = fk.wrap(mean + 180)
-
-    init_params = [amp, np.deg2rad(mean), kappa, amp, np.deg2rad(mean2), kappa]
+    init_params = [amp, mean, kappa, amp, mean2, kappa]
     lower_bound = [0, 0, 1, 0, 0, 1]
     upper_bound = [2, 2*np.pi, 12, 2, 2*np.pi, 12]
 
     # Run regression
     fit = least_squares(fit_double_von_mises_pdf, init_params,
-                        args=(np.deg2rad(angles), curve_to_fit),
+                        args=(rads, curve_to_fit),
                         bounds=(lower_bound, upper_bound),
                         loss='linear')
 
@@ -264,94 +263,6 @@ def calculate_pref_von_mises(angles, tuning_curve, fit_kind, **kwargs):
         # Cut the fit curve in half
         x = x[:len(x) // 2]
         fit_curve = fit_curve[:len(fit_curve) // 2]
-
-    # Find the preferred orientation/direction from the fit
-    pref = np.rad2deg(x[np.argmax(fit_curve)])
-
-    # Find the direction/orientation of the grating that was shown
-    real_pref = angles[np.argmin(np.abs(angles - pref))]
-
-    return fit, np.vstack((np.rad2deg(x), fit_curve)).T, pref, real_pref
-
-
-def calculate_pref_orientation_vm(angles, tuning_curve, **kwargs):
-    # --- Fit double gaussian ---#
-
-    # Shift baseline to zero for fitting the data
-    curve_to_fit = tuning_curve - tuning_curve.min()
-
-    # Duplicate the tuning curve to properly fit the double von mises
-    curve_to_fit = np.tile(curve_to_fit, 2)
-    angles = angles.append(angles + 180)
-
-    # Approximate parameters for the fit
-    amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
-    kappa = kwargs.get('kappa', 5)
-    mean = kwargs.get('mean', angles[np.argmax(curve_to_fit)])
-    mean2 = fk.wrap(mean + 180)
-
-    # init_params = [amp, np.deg2rad(mean), kappa]
-    # lower_bound = [0, 0, 0]
-    # upper_bound = [1, np.pi, 10]
-
-    init_params = [amp, np.deg2rad(mean), amp, np.deg2rad(mean2)]
-    lower_bound = [0, 0, 0, 0]
-    upper_bound = [1, 2 * np.pi, 1, 2 * np.pi]
-
-    # Run regression
-    fit = least_squares(fit_double_von_mises_pdf, init_params,
-                        args=(np.deg2rad(angles), curve_to_fit),
-                        bounds=(lower_bound, upper_bound),
-                        loss='linear')
-
-    # Generate a fit curve
-    x = np.linspace(0, np.pi, 500, endpoint=True)
-    fit_curve = von_mises(x, *fit.x)
-    fit_curve += tuning_curve.min()  # Shift baseline back to match real data
-
-    # Find the preferred orientation/direction from the fit
-    pref = np.rad2deg(x[np.argmax(fit_curve)])
-
-    # Find the direction/orientation of the grating that was shown
-    real_pref = angles[np.argmin(np.abs(angles - pref))]
-
-    return fit, np.vstack((np.rad2deg(x), fit_curve)).T, pref, real_pref
-
-
-def calculate_pref_direction_vm(angles, tuning_curve, **kwargs):
-    # --- Fit double gaussian ---#
-
-    # Shift baseline to zero for fitting the data
-    curve_to_fit = tuning_curve - tuning_curve.min()
-
-    # Approximate parameters for the fit
-    amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
-    kappa = kwargs.get('kappa', 5)
-    mean = kwargs.get('mean', angles[np.argmax(curve_to_fit, axis=0)])
-
-    # Following Carandini and Ferster, 2000, (https://doi.org/10.1523%2FJNEUROSCI.20-01-00470.2000)
-    # initialize the double gaussian with the same width and amplitude, but shift the center of the second gaussian
-    # if wrapping on [-180, 180] domain, use fk.wrap(center + center_shift, bound=180) - center_shift
-    mean2 = fk.wrap(mean + 180)
-
-    # init_params = [amp, np.deg2rad(mean), kappa, amp, np.deg2rad(mean2), kappa]
-    # lower_bound = [0, 0, 0, 0, 0, 0]
-    # upper_bound = [1, 2*np.pi, 10, 1, 2*np.pi, 10]
-
-    init_params = [amp, np.deg2rad(mean), amp, np.deg2rad(mean2)]
-    lower_bound = [0, 0, 0, 0]
-    upper_bound = [1, 2 * np.pi, 1, 2 * np.pi]
-
-    # Run regression
-    fit = least_squares(fit_double_von_mises_pdf, init_params,
-                        args=(np.deg2rad(angles), curve_to_fit),
-                        bounds=(lower_bound, upper_bound),
-                        loss='linear')
-
-    # Generate a fit curve
-    x = np.linspace(0, 2 * np.pi, 500, endpoint=True)
-    fit_curve = double_von_mises(x, *fit.x)
-    fit_curve += tuning_curve.min()  # Shift baseline back to match real data
 
     # Find the preferred orientation/direction from the fit
     pref = np.rad2deg(x[np.argmax(fit_curve)])
@@ -375,57 +286,54 @@ def generate_response_vector(responses, function, **kwargs):
     return resp, angles
 
 
-def bootstrap_responsivity(angles, magnitudes, multiplier, num_shuffles=1000):
-    
-    shuffled_responsivity = []
-
-    angle_sep = np.mean(np.diff(angles))
-    
-    for i in range(0, num_shuffles):
-        # Shuffle stimulus labels and reassign
-        np.random.shuffle(angles)
-        
-        # -- Get response circular variance -- #
-        responsivity = circ.resultant_vector_length(angles, w=magnitudes, d=angle_sep, axial_correction=multiplier)
-        shuffled_responsivity.append(responsivity)
-        
-    shuffled_responsivity = np.array(shuffled_responsivity)
-    
-    return shuffled_responsivity
+def resultant_vector(angles, magnitudes, axial_correction):
+    theta_sep = np.mean(np.diff(np.unique(angles)))
+    mag = circ.resultant_vector_length(angles, w=magnitudes, d=theta_sep, axial_correction=axial_correction)
+    angle = circ.mean(angles, w=magnitudes, d=theta_sep, axial_correction=axial_correction)
+    return mag, angle
 
 
-def bootstrap_resultant(responses, multiplier, num_shuffles=1000):
+def subsample_responses(trial_nums_by_angle, min_trials=4, replace=True):
+    # select subset of trials, guaranteeing that each angle is represented the same number of times
+    trial_subset = trial_nums_by_angle.apply(np.random.choice, size=min_trials, replace=replace).explode().to_numpy(
+        dtype=int)
+    return trial_subset
+
+
+def bootstrap_resultant(responses, multiplier, sampling_method, min_trials=4, num_shuffles=1000):
     columns = list(responses.columns)
     tuning_kind = columns[0]
     cell = columns[-1]
 
     # Get the counts per angle
-    angle_counts = responses[tuning_kind].value_counts()
-    unique_angles = angle_counts.index.to_numpy()
-    min_presentations = np.min(angle_counts.to_numpy())
     trial_nums_by_angle = responses.groupby(tuning_kind).trial_num.agg(list)
+    angle_counts = responses[tuning_kind].value_counts()
+    min_presentations = angle_counts.min()
+    if min_presentations < min_trials:
+        if sampling_method == 'equal_trial_nums':
+            print('Not enough presentations per angle to calculate resultant')
+            return np.nan, np.nan, np.nan, np.nan, np.nan
 
-    thetas = np.deg2rad(unique_angles)
-    theta_sep = np.mean(np.diff(thetas))
+    shuffled_resultant = np.zeros((num_shuffles, 2))
 
-    shuffled_resultant_angle = []
-    shuffled_resultant_length = []
     for i in np.arange(num_shuffles):
-        # select subset of trials, guaranteeing that each angle is represented the same number of times
-        trial_subset = trial_nums_by_angle.apply(np.random.choice, size=min_presentations, replace=False).explode().to_numpy(dtype=int)
-        theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
-        magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
+        if sampling_method == 'shuffle_trials':
+            theta_subset = responses[tuning_kind].apply(np.deg2rad).to_numpy()
+            np.random.shuffle(theta_subset)
+            magnitude_subset = responses[cell].to_numpy()
 
-        resultant_length = circ.resultant_vector_length(theta_subset, w=magnitude_subset, d=theta_sep, axial_correction=multiplier)
-        resultant_angle = circ.mean(theta_subset, w=magnitude_subset, d=theta_sep, axial_correction=multiplier)
+        else:
+            # select subset of trials, guaranteeing that each angle is represented the same number of times
+            trial_subset = subsample_responses(trial_nums_by_angle)
+            theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
+            magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
+
+        resultant_length, resultant_angle = resultant_vector(theta_subset, magnitude_subset, multiplier)
         resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
 
-        shuffled_resultant_length.append(resultant_length)
-        shuffled_resultant_angle.append(resultant_angle)
+        shuffled_resultant[i, 0] = resultant_length
+        shuffled_resultant[i, 1] = np.rad2deg(resultant_angle)
 
-    shuffled_resultant_length = np.array(shuffled_resultant_length)
-    shuffled_resultant_angle = np.array(shuffled_resultant_angle)
-    shuffled_resultant = np.vstack((shuffled_resultant_length, shuffled_resultant_angle)).T
     return shuffled_resultant
 
 
@@ -440,7 +348,7 @@ def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, gof_type='
 
     for i in np.arange(num_shuffles):
         test_trials = responses.groupby([tuning_kind])['trial_num'].apply(
-            lambda x: np.random.choice(x, 2)).iloc[1:].to_list()
+            lambda x: np.random.choice(x, 2, replace=False)).iloc[1:].to_list()
 
         test_trials = np.concatenate(test_trials)
         train_trials = np.setdiff1d(responses.trial_num.unique(), test_trials)
@@ -472,18 +380,6 @@ def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, gof_type='
     return np.array(gof_list), np.array(pref_angle_list), np.array(real_pref_angle_list)
 
 
-def polar_vector_sum(magnitudes, thetas):
-    thetas = np.deg2rad(thetas)
-
-    r = magnitudes * np.exp(1j * thetas)
-    t = np.sum(r)
-
-    mag = np.abs(t)
-    angle = np.angle(t)
-    
-    return mag, angle
-
-
 # --- DSI and OSI --- #
 def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     # Note all angles must be in radians
@@ -503,20 +399,15 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     half_period_angles_1 = angles[angles <= np.pi]
     half_period_mags_1 = magnitudes[angles <= np.pi]
 
-    half_period_angles_2 = angles[angles >= np.pi] - np.pi
-    half_period_mags_2 = magnitudes[angles >= np.pi]
+    half_period_angles_2 = angles[angles > np.pi] - np.pi
+    half_period_mags_2 = magnitudes[angles > np.pi]
 
-    res_mag_1 = circ.resultant_vector_length(half_period_angles_1, w=half_period_mags_1, d=theta_sep,
-                                             axial_correction=2)
-    res_angle_1 = circ.mean(half_period_angles_1, w=half_period_mags_1, d=theta_sep, axial_correction=2)
+    res_mag_1, res_angle_1 = resultant_vector(half_period_angles_1, half_period_mags_1, 2)
     closest_idx1 = np.argmin(np.abs(angles - res_angle_1))
     resp1 = magnitudes[closest_idx1]
 
-    res_mag_2 = circ.resultant_vector_length(half_period_angles_2, w=half_period_mags_2, d=theta_sep,
-                                             axial_correction=2)
-    res_angle_2 = circ.mean(half_period_angles_2, w=half_period_mags_2, d=theta_sep, axial_correction=2)
+    res_mag_2, res_angle_2 = resultant_vector(half_period_angles_2, half_period_mags_2, 2)
     res_angle_2 = fk.wrap(res_angle_2, bound=np.pi) + np.pi
-
     closest_idx2 = np.argmin(np.abs(angles - res_angle_2))
     resp2 = magnitudes[closest_idx2]
 
@@ -548,7 +439,7 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     return dsi_nasal_temporal, dsi_abs, osi, resultant_length, pref, null
 
 
-def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=2, num_shuffles=1000):
+def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=4, num_shuffles=1000):
     columns = list(responses.columns)
     tuning_kind = columns[0]
     cell = columns[-1]
@@ -557,10 +448,10 @@ def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=2, num_shu
     trial_nums_by_angle = responses.groupby(tuning_kind).trial_num.agg(list)
     angle_counts = responses[tuning_kind].value_counts()
     min_presentations = angle_counts.min()
-    # if min_presentations < min_trials:
-    #     if sampling_method == 'equal_trial_nums':
-    #         print('Not enough presentations per angle to calculate DSI/OSI')
-    #         return np.nan, np.nan, np.nan, np.nan, np.nan
+    if min_presentations < min_trials:
+        if sampling_method == 'equal_trial_nums':
+            print('Not enough presentations per angle to calculate DSI/OSI')
+            return np.nan, np.nan, np.nan, np.nan, np.nan
 
     shuffled_null_angle = np.zeros(num_shuffles)
     shuffled_resultant = np.zeros((num_shuffles, 2))
@@ -577,7 +468,7 @@ def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=2, num_shu
 
         else:
             # select subset of trials, guaranteeing that each angle is represented the same number of times
-            trial_subset = trial_nums_by_angle.apply(np.random.choice, size=min_presentations, replace=False).explode().to_numpy(dtype=int)
+            trial_subset = subsample_responses(trial_nums_by_angle)
             theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
             magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
 
@@ -607,7 +498,7 @@ def goodness_of_fit(angles, responses, fit_angles, fit_values, type='rmse'):
     elif type == 'mse':
         gof = mean_squared_error(responses, pred_resp)
     elif type == 'r2':
-        gof = r2_score(responses, np.array(pred_resp))
+        gof = r2_score(responses, pred_resp)
     else:
         raise NameError('Invalid goodness of fit type')
 
