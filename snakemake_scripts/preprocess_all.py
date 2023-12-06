@@ -194,7 +194,8 @@ elif files['rig'] in ['VWheel']:
 
 elif files['rig'] in ['VTuningWF']:
     # Correct the miniscope timestamps and fix the sync file
-    _ = wf_trig.fix_wirefree_timestamps(files['tif_path'], files['sync_path'])
+    if not os.path.exists(files['sync_path'].replace('.csv', '_original.csv')):
+        _ = wf_trig.fix_wirefree_timestamps(files['tif_path'], files['sync_path'])
 
     # load the data for the trial structure and parameters
     trials = read_hdf(files['screen_path'], key='trial_set')
@@ -240,7 +241,8 @@ elif files['rig'] in ['VTuningWF']:
 
 elif files['rig'] in ['VWheelWF']:
     # Correct the miniscope timestamps and fix the sync file
-    _ = wf_trig.fix_wirefree_timestamps(files['tif_path'], files['sync_path'])
+    if not os.path.exists(files['sync_path'].replace('.csv', '_original.csv')):
+        _ = wf_trig.fix_wirefree_timestamps(files['tif_path'], files['sync_path'])
 
     # load the data for the trial structure and parameters
     trials = read_hdf(files['screen_path'], key='trial_set')
