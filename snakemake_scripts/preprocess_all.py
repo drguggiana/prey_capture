@@ -230,9 +230,9 @@ elif files['rig'] in ['VTuningWF']:
     if files['imaging'] == 'wirefree':
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_wf(calcium_path, files['sync_path'], kinematics_data, trials=trials)
-        _ = wf_trig.get_trial_duration_stats(matched_calcium, 'trial_num', 'time_vector')
         # if there is a calcium output, write to the file
         if matched_calcium is not None:
+            _ = wf_trig.get_trial_duration_stats(matched_calcium, 'trial_num', 'time_vector')
             matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
             roi_info.to_hdf(save_path, key='roi_info', mode='a', format='fixed')
             # also get the cell matching if it exists
@@ -272,10 +272,11 @@ elif files['rig'] in ['VWheelWF']:
     if files['imaging'] == 'wirefree':
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_wf(calcium_path, files['sync_path'], kinematics_data, trials=trials)
-        _ = wf_trig.get_trial_duration_stats(matched_calcium, 'trial_num', 'time_vector')
 
         # if there is a calcium output, write to the file
         if matched_calcium is not None:
+            _ = wf_trig.get_trial_duration_stats(matched_calcium, 'trial_num', 'time_vector')
+
             matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
             roi_info.to_hdf(save_path, key='roi_info', mode='a', format='fixed')
             # also get the cell matching if it exists
