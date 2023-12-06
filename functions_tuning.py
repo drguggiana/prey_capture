@@ -312,7 +312,7 @@ def bootstrap_resultant(responses, multiplier, sampling_method, min_trials=4, nu
     if min_presentations < min_trials:
         if sampling_method == 'equal_trial_nums':
             print('Not enough presentations per angle to calculate resultant')
-            return np.nan, np.nan, np.nan, np.nan, np.nan
+            return [np.nan, np.nan]
 
     shuffled_resultant = np.zeros((num_shuffles, 2))
 
@@ -451,7 +451,7 @@ def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=4, num_shu
     if min_presentations < min_trials:
         if sampling_method == 'equal_trial_nums':
             print('Not enough presentations per angle to calculate DSI/OSI')
-            return np.nan, np.nan, np.nan, np.nan, np.nan
+            return np.nan, np.nan, np.nan, [np.nan, np.nan], np.nan
 
     shuffled_null_angle = np.zeros(num_shuffles)
     shuffled_resultant = np.zeros((num_shuffles, 2))

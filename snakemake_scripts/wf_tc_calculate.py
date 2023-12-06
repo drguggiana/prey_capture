@@ -282,7 +282,6 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
                            'osi', 'bootstrap_osi', 'bootstrap_p_osi', 'shuffle_osi', 'shuffle_p_osi']
 
     data_cols = direction_columns + orientation_columns
-
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
     return data_df
 
