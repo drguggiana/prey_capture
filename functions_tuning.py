@@ -305,6 +305,8 @@ def bootstrap_resultant(responses, multiplier, sampling_method, min_trials=4, nu
     tuning_kind = columns[0]
     cell = columns[-1]
 
+    shuffled_resultant = np.zeros((num_shuffles, 2))
+
     # Get the counts per angle
     trial_nums_by_angle = responses.groupby(tuning_kind).trial_num.agg(list)
     angle_counts = responses[tuning_kind].value_counts()
@@ -312,9 +314,7 @@ def bootstrap_resultant(responses, multiplier, sampling_method, min_trials=4, nu
     if min_presentations < min_trials:
         if sampling_method == 'equal_trial_nums':
             print('Not enough presentations per angle to calculate resultant')
-            return [np.nan, np.nan]
-
-    shuffled_resultant = np.zeros((num_shuffles, 2))
+            return shuffled_resultant.fill(np.nan)
 
     for i in np.arange(num_shuffles):
         if sampling_method == 'shuffle_trials':
@@ -444,6 +444,12 @@ def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=4, num_shu
     tuning_kind = columns[0]
     cell = columns[-1]
 
+    shuffled_null_angle = np.zeros(num_shuffles)
+    shuffled_resultant = np.zeros((num_shuffles, 2))
+    shuffled_dsi_nasal_temporal = np.zeros(num_shuffles)
+    shuffled_dsi_abs = np.zeros(num_shuffles)
+    shuffled_osi = np.zeros(num_shuffles)
+
     # Get the counts per angle
     trial_nums_by_angle = responses.groupby(tuning_kind).trial_num.agg(list)
     angle_counts = responses[tuning_kind].value_counts()
@@ -451,13 +457,8 @@ def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=4, num_shu
     if min_presentations < min_trials:
         if sampling_method == 'equal_trial_nums':
             print('Not enough presentations per angle to calculate DSI/OSI')
-            return np.nan, np.nan, np.nan, [np.nan, np.nan], np.nan
-
-    shuffled_null_angle = np.zeros(num_shuffles)
-    shuffled_resultant = np.zeros((num_shuffles, 2))
-    shuffled_dsi_nasal_temporal = np.zeros(num_shuffles)
-    shuffled_dsi_abs = np.zeros(num_shuffles)
-    shuffled_osi = np.zeros(num_shuffles)
+            return shuffled_dsi_nasal_temporal.fill(np.nan), shuffled_dsi_abs.fill(np.nan), shuffled_osi.fill(np.nan), \
+                   shuffled_resultant.fill(np.nan), shuffled_null_angle.fill(np.nan)
 
     for i in np.arange(num_shuffles):
 
