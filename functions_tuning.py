@@ -313,26 +313,27 @@ def bootstrap_resultant(responses, multiplier, sampling_method, min_trials=3, nu
     min_presentations = angle_counts.min()
     if min_presentations < min_trials:
         if sampling_method == 'equal_trial_nums':
+            shuffled_resultant.fill(np.nan)
             print('Not enough presentations per angle to calculate resultant')
-            return shuffled_resultant.fill(np.nan)
 
-    for i in np.arange(num_shuffles):
-        if sampling_method == 'shuffle_trials':
-            theta_subset = responses[tuning_kind].apply(np.deg2rad).to_numpy()
-            np.random.shuffle(theta_subset)
-            magnitude_subset = responses[cell].to_numpy()
+    else:
+        for i in np.arange(num_shuffles):
+            if sampling_method == 'shuffle_trials':
+                theta_subset = responses[tuning_kind].apply(np.deg2rad).to_numpy()
+                np.random.shuffle(theta_subset)
+                magnitude_subset = responses[cell].to_numpy()
 
-        else:
-            # select subset of trials, guaranteeing that each angle is represented the same number of times
-            trial_subset = subsample_responses(trial_nums_by_angle, min_trials=min_presentations)
-            theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
-            magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
+            else:
+                # select subset of trials, guaranteeing that each angle is represented the same number of times
+                trial_subset = subsample_responses(trial_nums_by_angle, min_trials=min_presentations)
+                theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
+                magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
 
-        resultant_length, resultant_angle = resultant_vector(theta_subset, magnitude_subset, multiplier)
-        resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
+            resultant_length, resultant_angle = resultant_vector(theta_subset, magnitude_subset, multiplier)
+            resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
 
-        shuffled_resultant[i, 0] = resultant_length
-        shuffled_resultant[i, 1] = np.rad2deg(resultant_angle)
+            shuffled_resultant[i, 0] = resultant_length
+            shuffled_resultant[i, 1] = np.rad2deg(resultant_angle)
 
     return shuffled_resultant
 
@@ -347,8 +348,9 @@ def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, gof_type='
     real_pref_angle_list = []
 
     for i in np.arange(num_shuffles):
+        # TODO check this
         test_trials = responses.groupby([tuning_kind])['trial_num'].apply(
-            lambda x: np.random.choice(x, 2, replace=False)).iloc[1:].to_list()
+            lambda x: np.random.choice(x, 2, replace=True)).iloc[1:].to_list()
 
         test_trials = np.concatenate(test_trials)
         train_trials = np.setdiff1d(responses.trial_num.unique(), test_trials)
@@ -361,10 +363,8 @@ def bootstrap_tuning_curve(responses, fit_function, num_shuffles=100, gof_type='
 
         # Sometimes the data cannot be fit - catch that here
         try:
-            fit, fit_curve, pref_angle, real_pref_angle = fit_function(unique_angles,
-                                                                       train_mean[cell].to_numpy(),
-                                                                       tuning_kind,
-                                                                       **kwargs)
+            fit, fit_curve, pref_angle, real_pref_angle = \
+                fit_function(unique_angles, train_mean[cell].to_numpy(), tuning_kind,  **kwargs)
 
             gof = goodness_of_fit(test_set[tuning_kind].to_numpy(), test_set[cell].to_numpy(),
                                   fit_curve[:, 0], fit_curve[:, 1], type=gof_type)
@@ -455,32 +455,36 @@ def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=3, num_shu
     angle_counts = responses[tuning_kind].value_counts()
     min_presentations = int(angle_counts.min())
     if (min_presentations < min_trials) and (sampling_method == 'equal_trial_nums'):
+        shuffled_dsi_nasal_temporal.fill(np.nan)
+        shuffled_dsi_abs.fill(np.nan)
+        shuffled_osi.fill(np.nan)
+        shuffled_resultant.fill(np.nan)
+        shuffled_null_angle.fill(np.nan)
         print('Not enough presentations per angle to calculate DSI/OSI')
-        return shuffled_dsi_nasal_temporal.fill(np.nan), shuffled_dsi_abs.fill(np.nan), shuffled_osi.fill(np.nan), \
-            shuffled_resultant.fill(np.nan), shuffled_null_angle.fill(np.nan)
 
-    for i in np.arange(num_shuffles):
+    else:
+        for i in np.arange(num_shuffles):
 
-        if sampling_method == 'shuffle_trials':
-            theta_subset = responses[tuning_kind].apply(np.deg2rad).to_numpy()
-            np.random.shuffle(theta_subset)
-            magnitude_subset = responses[cell].to_numpy()
+            if sampling_method == 'shuffle_trials':
+                theta_subset = responses[tuning_kind].apply(np.deg2rad).to_numpy()
+                np.random.shuffle(theta_subset)
+                magnitude_subset = responses[cell].to_numpy()
 
-        else:
-            # select subset of trials, guaranteeing that each angle is represented the same number of times
-            trial_subset = subsample_responses(trial_nums_by_angle, min_trials=min_presentations)
-            theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
-            magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
+            else:
+                # select subset of trials, guaranteeing that each angle is represented the same number of times
+                trial_subset = subsample_responses(trial_nums_by_angle, min_trials=min_presentations)
+                theta_subset = responses[responses.trial_num.isin(trial_subset)][tuning_kind].apply(np.deg2rad).to_numpy()
+                magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
 
-        dsi_nasal_temporal, dsi_abs, osi, resultant_length, resultant_angle, null_angle = \
-            calculate_dsi_osi_resultant(theta_subset, magnitude_subset, bootstrap=True)
+            dsi_nasal_temporal, dsi_abs, osi, resultant_length, resultant_angle, null_angle = \
+                calculate_dsi_osi_resultant(theta_subset, magnitude_subset, bootstrap=True)
 
-        shuffled_dsi_nasal_temporal[i] = dsi_nasal_temporal
-        shuffled_dsi_abs[i] = dsi_abs
-        shuffled_osi[i] = osi
-        shuffled_resultant[i, 0] = resultant_length
-        shuffled_resultant[i, 1] = np.rad2deg(resultant_angle)
-        shuffled_null_angle[i] = np.rad2deg(null_angle)
+            shuffled_dsi_nasal_temporal[i] = dsi_nasal_temporal
+            shuffled_dsi_abs[i] = dsi_abs
+            shuffled_osi[i] = osi
+            shuffled_resultant[i, 0] = resultant_length
+            shuffled_resultant[i, 1] = np.rad2deg(resultant_angle)
+            shuffled_null_angle[i] = np.rad2deg(null_angle)
 
     return shuffled_dsi_nasal_temporal, shuffled_dsi_abs, shuffled_osi, shuffled_resultant, shuffled_null_angle
 
