@@ -17,17 +17,16 @@ def kine_fraction_responsive(ds):
 
 
 def vis_frac_responsive(ds):
-    if 'dsi_nasal_temporal' in ds.columns:
-        is_ori_resp = ds['osi'] > 0.5
-        is_dir_resp = np.abs(ds['dsi_nasal_temporal']) > 0.5
-        is_resp = is_ori_resp + is_dir_resp
-        is_resp = is_resp > 0
-    else:
-        is_resp = ds['responsivity'] > 0.25
+    is_ori_resp = ds['osi'] > 0.5
+    is_dir_resp = ds['dsi_abs'] > 0.5
+    frac_ori_resp = is_ori_resp.sum() / is_ori_resp.count()
+    frac_dir_resp = is_dir_resp.sum() / is_dir_resp.count()
 
-    frac_resp = is_resp.sum() / is_resp.count()
+    is_vis_resp = is_ori_resp + is_dir_resp
+    is_vis_resp = is_vis_resp > 0
+    frac_vis_resp = is_vis_resp.sum() / is_vis_resp.count()
 
-    return is_resp, frac_resp
+    return is_vis_resp, frac_vis_resp, frac_ori_resp, frac_dir_resp
 
 
 # def cell_multimodal_reponses(resp_data):
@@ -98,6 +97,8 @@ if __name__ == '__main__':
         id_flags = results
         rig = rigs[0]
     else:
+        # If not repeat, use the rig to identify matches. Note that this is sorted alphabetically, so
+        # VTuningWF (free session) comes first
         id_flags = rigs
         rig = 'multi'
 
@@ -144,7 +145,7 @@ if __name__ == '__main__':
             # get matches and save
             match_col = np.where([id_flag in el for el in matches.columns])[0][0]
             match_idxs = matches.iloc[:, match_col].to_numpy(dtype=int)
-            num_cells = len(data['norm_spikes_viewed_direction_props'].index)
+            num_cells = len(data['norm_spikes_viewed_props'].index)
 
             all_cells_summary_stats['num_matches'] = len(match_idxs)
             all_cells_summary_stats['match_frac'] = len(match_idxs) / num_cells
@@ -174,11 +175,18 @@ if __name__ == '__main__':
             exp_vis_features = {}
             for feature in vis_features:
                 feat = '_'.join(feature.split('_')[3:-1])
+
+                # When looking at all the data, the feature name is empty, so give it a name
+                if feat == "":
+                    feat = "all"
+
                 # Save the whole dataset
-                all_is_resp, all_frac_resp = vis_frac_responsive(data[feature])
+                all_is_resp, all_frac_resp, frac_ori_resp, frac_dir_resp = vis_frac_responsive(data[feature])
                 data[feature]['Resp_test'] = all_is_resp
                 data[feature].reset_index(names=['original_cell_id']).to_hdf(out_path, f'{id_flag}/all_cells/{feature}')
                 all_cells_summary_stats[f"frac_resp_{feat}"] = all_frac_resp
+                all_cells_summary_stats[f"frac_ori_resp_{feat}"] = frac_ori_resp
+                all_cells_summary_stats[f"frac_dir_resp_{feat}"] = frac_dir_resp
 
                 # Need to drop the index to match the kine features
                 multimodal_tuning[feat] = data[feature]['Resp_test'].reset_index(drop=True)
@@ -186,17 +194,33 @@ if __name__ == '__main__':
                 # Save matched TCs
                 matched_feature = data[feature].iloc[match_idxs, :].reset_index(names=['original_cell_id'])
                 matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
-                _, matched_frac_resp = vis_frac_responsive(matched_feature)
+                _, matched_frac_resp, matched_frac_ori_resp, matched_frac_dir_resp = vis_frac_responsive(
+                    matched_feature)
                 matched_summary_stats[f"frac_resp_{feat}"] = matched_frac_resp
+                matched_summary_stats[f"frac_ori_resp_{feat}"] = matched_frac_ori_resp
+                matched_summary_stats[f"frac_dir_resp_{feat}"] = matched_frac_dir_resp
 
                 # Get the preferred orientation/direction from the matched cells
-                exp_vis_features[feat] = matched_feature.loc[:, ['pref', 'responsivity', 'p_responsivity', 'bootstrap_responsivity']]
+                exp_vis_features[feat] = matched_feature.loc[:,
+                                         ['pref_dir', 'bootstrap_pref_dir', 'real_pref_dir', 'bootstrap_real_pref_dir',
+                                         'resultant_dir', 'bootstrap_resultant_dir', 'shuffle_resultant_dir',
+                                         'responsivity_dir', 'bootstrap_responsivity_dir', 'bootstrap_p_responsivity_dir',
+                                         'shuffle_responsivity_dir', 'shuffle_p_responsivity_dir',
+                                         'pref_ori', 'null_ori', 'bootstrap_pref_ori', 'real_pref_ori',
+                                         'bootstrap_real_pref_ori',  'resultant_ori', 'bootstrap_resultant_ori',
+                                          'shuffle_resultant_ori', 'responsivity_ori', 'bootstrap_responsivity_ori',
+                                         'bootstrap_p_responsivity_ori', 'shuffle_responsivity_ori', 'shuffle_p_responsivity_ori',
+                                         ]
+                                         ]
 
                 # save unmatched tcs
                 unmatched_feature = data[feature].reset_index(names=['original_cell_id']).drop(index=match_idxs)
                 unmatched_feature.to_hdf(out_path, f'{id_flag}/unmatched/{feature}')
-                _, unmatched_frac_resp = vis_frac_responsive(unmatched_feature)
+                _, unmatched_frac_resp, unmatched_frac_ori_resp, unmatched_frac_dir_resp = vis_frac_responsive(
+                    unmatched_feature)
                 unmatched_summary_stats[f"frac_resp_{feat}"] = unmatched_frac_resp
+                unmatched_summary_stats[f"frac_ori_resp_{feat}"] = unmatched_frac_ori_resp
+                unmatched_summary_stats[f"frac_dir_resp_{feat}"] = unmatched_frac_dir_resp
 
             summary_stats = dicts_to_dataframe([all_cells_summary_stats, matched_summary_stats, unmatched_summary_stats],
                                                ['all_cells', 'matched', 'unmatched'])
@@ -212,41 +236,57 @@ if __name__ == '__main__':
         # use the fixed rig as the reference
         delta_pref = pd.DataFrame()
         for tuning_type in visual_shifts[id_flags[0]].keys():
-            fixed = visual_shifts[id_flags[0]][tuning_type]
-            free = visual_shifts[id_flags[1]][tuning_type]
-            diff = free.loc[:, ['pref']].subtract(fixed.loc[:, ['pref']]).to_numpy().flatten()
-            if 'direction' in tuning_type:
-                diff = wrap_negative(diff)
-            else:
-                diff = wrap(diff, bound=180)
-            delta_pref[f"delta_{tuning_type}"] = diff
+            # Recall that id_flags[0] is the free session, id_flags[1] is the fixed session
+            free = visual_shifts[id_flags[0]][tuning_type]
+            fixed = visual_shifts[id_flags[1]][tuning_type]
+            diff_dir = free.loc[:, ['pref_dir']].subtract(fixed.loc[:, ['pref_dir']]).to_numpy().flatten()
+            diff_ori = free.loc[:, ['pref_ori']].subtract(fixed.loc[:, ['pref_ori']]).to_numpy().flatten()
+
+            diff_dir = wrap_negative(diff_dir)
+            diff_ori = wrap(diff_ori, bound=180)
+
+            delta_pref[f"delta_{tuning_type}_dir"] = diff_dir
+            delta_pref[f"delta_{tuning_type}_ori"] = diff_ori
 
         # Now do the same, but with the still fixed session as the reference
         still_tuning = [el for el in visual_shifts[id_flags[0]].keys() if 'still' in el]
         all_tuning = [el for el in visual_shifts[id_flags[0]].keys() if 'still' not in el]
         for still_tuning, moving_tuning in zip(still_tuning, all_tuning):
-            fixed_still = visual_shifts[id_flags[0]][still_tuning]
-            free_still = visual_shifts[id_flags[1]][still_tuning]
+            free_still = visual_shifts[id_flags[0]][still_tuning]
+            fixed_still = visual_shifts[id_flags[1]][still_tuning]
 
-            fixed_all = visual_shifts[id_flags[0]][moving_tuning]
-            free_all = visual_shifts[id_flags[1]][moving_tuning]
+            free_all = visual_shifts[id_flags[0]][moving_tuning]
+            fixed_all = visual_shifts[id_flags[1]][moving_tuning]
 
-            diff_rig = free_still.loc[:, ['pref']].subtract(fixed_still.loc[:, ['pref']]).to_numpy().flatten()
-            diff_moving_fixed = fixed_all.loc[:, ['pref']].subtract(fixed_still.loc[:, ['pref']]).to_numpy().flatten()
-            diff_moving_free = free_all.loc[:, ['pref']].subtract(fixed_still.loc[:, ['pref']]).to_numpy().flatten()
+            diff_rig_dir = free_still.loc[:, ['pref_dir']].subtract(fixed_still.loc[:,
+                                                                    ['pref_dir']]).to_numpy().flatten()
+            diff_moving_fixed_dir = fixed_all.loc[:, ['pref_dir']].subtract(fixed_still.loc[:,
+                                                                            ['pref_dir']]).to_numpy().flatten()
+            diff_moving_free_dir = free_all.loc[:, ['pref_dir']].subtract(fixed_still.loc[:,
+                                                                          ['pref_dir']]).to_numpy().flatten()
 
-            if 'direction' in moving_tuning:
-                diff_rig = wrap_negative(diff_rig)
-                diff_moving_fixed = wrap_negative(diff_moving_fixed)
-                diff_moving_free = wrap_negative(diff_moving_free)
-            else:
-                diff_rig = wrap(diff_rig, bound=180)
-                diff_moving_fixed = wrap(diff_moving_fixed, bound=180)
-                diff_moving_free = wrap(diff_moving_free, bound=180)
+            diff_rig_ori = free_still.loc[:, ['pref_ori']].subtract(fixed_still.loc[:,
+                                                                    ['pref_ori']]).to_numpy().flatten()
+            diff_moving_fixed_ori = fixed_all.loc[:, ['pref_ori']].subtract(fixed_still.loc[:,
+                                                                            ['pref_ori']]).to_numpy().flatten()
+            diff_moving_free_ori = free_all.loc[:, ['pref_ori']].subtract(fixed_still.loc[:,
+                                                                          ['pref_ori']]).to_numpy().flatten()
 
-            delta_pref[f"delta_{moving_tuning}_free_still_rel_fixed_still"] = diff_rig
-            delta_pref[f"delta_{moving_tuning}_fixed_moving_rel_fixed_still"] = diff_moving_fixed
-            delta_pref[f"delta_{moving_tuning}_free_moving_rel_fixed_still"] = diff_moving_free
+            diff_rig_dir = wrap_negative(diff_rig_dir)
+            diff_moving_fixed_dir = wrap_negative(diff_moving_fixed_dir)
+            diff_moving_free_dir = wrap_negative(diff_moving_free_dir)
+
+            diff_rig_ori = wrap(diff_rig_ori, bound=180)
+            diff_moving_fixed_ori = wrap(diff_moving_fixed_ori, bound=180)
+            diff_moving_free_ori = wrap(diff_moving_free_ori, bound=180)
+
+            delta_pref[f"delta_dir_{moving_tuning}_free_still_rel_fixed_still"] = diff_rig_dir
+            delta_pref[f"delta_dir_{moving_tuning}_fixed_moving_rel_fixed_still"] = diff_moving_fixed_dir
+            delta_pref[f"delta_dir_{moving_tuning}_free_moving_rel_fixed_still"] = diff_moving_free_dir
+
+            delta_pref[f"delta_ori_{moving_tuning}_free_still_rel_fixed_still"] = diff_rig_ori
+            delta_pref[f"delta_ori_{moving_tuning}_fixed_moving_rel_fixed_still"] = diff_moving_fixed_ori
+            delta_pref[f"delta_ori_{moving_tuning}_free_moving_rel_fixed_still"] = diff_moving_free_ori
 
         delta_pref.to_hdf(out_path, 'delta_vis_tuning')
 

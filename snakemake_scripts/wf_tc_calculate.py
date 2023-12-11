@@ -183,6 +183,7 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
         bootstrap_dsi_nasal_temporal, bootstrap_dsi_abs, bootstrap_osi, bootstrap_resultant_dir, bootstrap_null_dir \
             = tuning.boostrap_dsi_osi_resultant(norm_direction_activity[[direction_label, 'trial_num', cell]],
                                                 sampling_method='equal_trial_nums', num_shuffles=bootstrap_shuffles)
+        # TODO check nonetype output here
         bootstrap_responsivity_dir = bootstrap_resultant_dir[:, 0]
         p_dsi_nasal_temporal_bootstrap = percentileofscore(bootstrap_dsi_nasal_temporal, dsi_nasal_temporal, kind='mean') / 100.
         p_dsi_abs_bootstrap = percentileofscore(bootstrap_dsi_abs, dsi_abs, kind='mean') / 100.
