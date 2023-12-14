@@ -94,11 +94,11 @@ if __name__ == '__main__':
     # If repeat experiments, rigs aren't unique, and so aren't useful for identifying matches.
     # Instead, use the result
     if result == 'repeat':
-        id_flags = results
+        id_flags = np.sort(results)
         rig = rigs[0]
     else:
-        # If not repeat, use the rig to identify matches. Note that this is sorted alphabetically, so
-        # VTuningWF (free session) comes first
+        # If not repeat, use the rig to identify matches.
+        # Note that this is sorted alphabetically, so VTuningWF (free session) comes first
         id_flags = rigs
         rig = 'multi'
 
@@ -161,6 +161,10 @@ if __name__ == '__main__':
                 data[feature].to_hdf(out_path, f'{id_flag}/all_cells/{feature}')
                 all_cells_summary_stats[f"frac_resp_{feature}"] = kine_fraction_responsive(data[feature])
                 multimodal_tuning[feature] = data[feature]['Qual_test']
+
+                # Sometimes the matched cells are out of range because of ROI size cutoffs, so drop them.
+                num_cells = data[feature].shape[0]
+                match_idxs = match_idxs[match_idxs < num_cells]
 
                 # Save matched TCs
                 matched_feature = data[feature].iloc[match_idxs, :].reset_index(names=['original_cell_id'])
@@ -233,60 +237,76 @@ if __name__ == '__main__':
             multimodal_tuned.to_hdf(out_path, f'{id_flag}/multimodal_tuned')
 
         # Calculate delta prefs for all matched cells
-        # use the fixed rig as the reference
         delta_pref = pd.DataFrame()
-        for tuning_type in visual_shifts[id_flags[0]].keys():
-            # Recall that id_flags[0] is the free session, id_flags[1] is the fixed session
-            free = visual_shifts[id_flags[0]][tuning_type]
-            fixed = visual_shifts[id_flags[1]][tuning_type]
-            diff_dir = free.loc[:, ['pref_dir']].subtract(fixed.loc[:, ['pref_dir']]).to_numpy().flatten()
-            diff_ori = free.loc[:, ['pref_ori']].subtract(fixed.loc[:, ['pref_ori']]).to_numpy().flatten()
+        if result in ['multi', 'control', 'fullfield']:
+            # use the fixed rig as the reference
+            for tuning_type in visual_shifts[id_flags[0]].keys():
+                # Recall that id_flags[0] is the free session, id_flags[1] is the fixed session
+                free = visual_shifts[id_flags[0]][tuning_type]
+                fixed = visual_shifts[id_flags[1]][tuning_type]
+                diff_dir = free.loc[:, ['pref_dir']].subtract(fixed.loc[:, ['pref_dir']]).to_numpy().flatten()
+                diff_ori = free.loc[:, ['pref_ori']].subtract(fixed.loc[:, ['pref_ori']]).to_numpy().flatten()
 
-            diff_dir = wrap_negative(diff_dir)
-            diff_ori = wrap(diff_ori, bound=180)
+                diff_dir = wrap_negative(diff_dir)
+                diff_ori = wrap(diff_ori, bound=180)
 
-            delta_pref[f"delta_{tuning_type}_dir"] = diff_dir
-            delta_pref[f"delta_{tuning_type}_ori"] = diff_ori
+                delta_pref[f"delta_{tuning_type}_dir"] = diff_dir
+                delta_pref[f"delta_{tuning_type}_ori"] = diff_ori
 
-        # Now do the same, but with the still fixed session as the reference
-        still_tuning = [el for el in visual_shifts[id_flags[0]].keys() if 'still' in el]
-        all_tuning = [el for el in visual_shifts[id_flags[0]].keys() if 'still' not in el]
-        for still_tuning, moving_tuning in zip(still_tuning, all_tuning):
-            free_still = visual_shifts[id_flags[0]][still_tuning]
-            fixed_still = visual_shifts[id_flags[1]][still_tuning]
+            # Now do the same, but with the still fixed session as the reference
+            still_tunings = [el for el in visual_shifts[id_flags[0]].keys() if 'still' in el]
+            all_tunings = [el for el in visual_shifts[id_flags[0]].keys() if 'still' not in el]
+            for still_tuning, moving_tuning in zip(still_tunings, all_tunings):
+                free_still = visual_shifts[id_flags[0]][still_tuning]
+                fixed_still = visual_shifts[id_flags[1]][still_tuning]
 
-            free_all = visual_shifts[id_flags[0]][moving_tuning]
-            fixed_all = visual_shifts[id_flags[1]][moving_tuning]
+                free_all = visual_shifts[id_flags[0]][moving_tuning]
+                fixed_all = visual_shifts[id_flags[1]][moving_tuning]
 
-            diff_rig_dir = free_still.loc[:, ['pref_dir']].subtract(fixed_still.loc[:,
-                                                                    ['pref_dir']]).to_numpy().flatten()
-            diff_moving_fixed_dir = fixed_all.loc[:, ['pref_dir']].subtract(fixed_still.loc[:,
-                                                                            ['pref_dir']]).to_numpy().flatten()
-            diff_moving_free_dir = free_all.loc[:, ['pref_dir']].subtract(fixed_still.loc[:,
-                                                                          ['pref_dir']]).to_numpy().flatten()
+                diff_rig_dir = free_still.loc[:, ['pref_dir']].subtract(fixed_still.loc[:,
+                                                                        ['pref_dir']]).to_numpy().flatten()
+                diff_moving_fixed_dir = fixed_all.loc[:, ['pref_dir']].subtract(fixed_still.loc[:,
+                                                                                ['pref_dir']]).to_numpy().flatten()
+                diff_moving_free_dir = free_all.loc[:, ['pref_dir']].subtract(fixed_still.loc[:,
+                                                                              ['pref_dir']]).to_numpy().flatten()
 
-            diff_rig_ori = free_still.loc[:, ['pref_ori']].subtract(fixed_still.loc[:,
-                                                                    ['pref_ori']]).to_numpy().flatten()
-            diff_moving_fixed_ori = fixed_all.loc[:, ['pref_ori']].subtract(fixed_still.loc[:,
-                                                                            ['pref_ori']]).to_numpy().flatten()
-            diff_moving_free_ori = free_all.loc[:, ['pref_ori']].subtract(fixed_still.loc[:,
-                                                                          ['pref_ori']]).to_numpy().flatten()
+                diff_rig_ori = free_still.loc[:, ['pref_ori']].subtract(fixed_still.loc[:,
+                                                                        ['pref_ori']]).to_numpy().flatten()
+                diff_moving_fixed_ori = fixed_all.loc[:, ['pref_ori']].subtract(fixed_still.loc[:,
+                                                                                ['pref_ori']]).to_numpy().flatten()
+                diff_moving_free_ori = free_all.loc[:, ['pref_ori']].subtract(fixed_still.loc[:,
+                                                                              ['pref_ori']]).to_numpy().flatten()
 
-            diff_rig_dir = wrap_negative(diff_rig_dir)
-            diff_moving_fixed_dir = wrap_negative(diff_moving_fixed_dir)
-            diff_moving_free_dir = wrap_negative(diff_moving_free_dir)
+                diff_rig_dir = wrap_negative(diff_rig_dir)
+                diff_moving_fixed_dir = wrap_negative(diff_moving_fixed_dir)
+                diff_moving_free_dir = wrap_negative(diff_moving_free_dir)
 
-            diff_rig_ori = wrap(diff_rig_ori, bound=180)
-            diff_moving_fixed_ori = wrap(diff_moving_fixed_ori, bound=180)
-            diff_moving_free_ori = wrap(diff_moving_free_ori, bound=180)
+                diff_rig_ori = wrap(diff_rig_ori, bound=180)
+                diff_moving_fixed_ori = wrap(diff_moving_fixed_ori, bound=180)
+                diff_moving_free_ori = wrap(diff_moving_free_ori, bound=180)
 
-            delta_pref[f"delta_dir_{moving_tuning}_free_still_rel_fixed_still"] = diff_rig_dir
-            delta_pref[f"delta_dir_{moving_tuning}_fixed_moving_rel_fixed_still"] = diff_moving_fixed_dir
-            delta_pref[f"delta_dir_{moving_tuning}_free_moving_rel_fixed_still"] = diff_moving_free_dir
+                delta_pref[f"delta_dir_{moving_tuning}_free_still_rel_fixed_still"] = diff_rig_dir
+                delta_pref[f"delta_dir_{moving_tuning}_fixed_moving_rel_fixed_still"] = diff_moving_fixed_dir
+                delta_pref[f"delta_dir_{moving_tuning}_free_moving_rel_fixed_still"] = diff_moving_free_dir
 
-            delta_pref[f"delta_ori_{moving_tuning}_free_still_rel_fixed_still"] = diff_rig_ori
-            delta_pref[f"delta_ori_{moving_tuning}_fixed_moving_rel_fixed_still"] = diff_moving_fixed_ori
-            delta_pref[f"delta_ori_{moving_tuning}_free_moving_rel_fixed_still"] = diff_moving_free_ori
+                delta_pref[f"delta_ori_{moving_tuning}_free_still_rel_fixed_still"] = diff_rig_ori
+                delta_pref[f"delta_ori_{moving_tuning}_fixed_moving_rel_fixed_still"] = diff_moving_fixed_ori
+                delta_pref[f"delta_ori_{moving_tuning}_free_moving_rel_fixed_still"] = diff_moving_free_ori
+
+        # If we have repeat sessions, we can't try fixed as a reference, so just look at delta between sessions
+        else:
+            for tuning_type in visual_shifts[id_flags[0]].keys():
+                # Recall that id_flags[0] is the free session, id_flags[1] is the fixed session
+                session1 = visual_shifts[id_flags[0]][tuning_type]
+                session2 = visual_shifts[id_flags[1]][tuning_type]
+                diff_dir = session2.loc[:, ['pref_dir']].subtract(session1.loc[:, ['pref_dir']]).to_numpy().flatten()
+                diff_ori = session2.loc[:, ['pref_ori']].subtract(session1.loc[:, ['pref_ori']]).to_numpy().flatten()
+
+                diff_dir = wrap_negative(diff_dir)
+                diff_ori = wrap(diff_ori, bound=180)
+
+                delta_pref[f"delta_{tuning_type}_dir"] = diff_dir
+                delta_pref[f"delta_{tuning_type}_ori"] = diff_ori
 
         delta_pref.to_hdf(out_path, 'delta_vis_tuning')
 
