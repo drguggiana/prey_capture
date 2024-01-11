@@ -3,6 +3,7 @@ import os
 import sys
 import re
 import h5py
+import cv2
 from caiman.base.rois import register_multisession
 
 # Insert the cwd for local imports
@@ -14,6 +15,30 @@ import processing_parameters
 import functions_bondjango as bd
 import functions_misc as fm
 import functions_plotting as fplot
+import matplotlib.pyplot as plt
+
+
+def get_footprint_contours(calcium_data):
+    contour_list = []
+    contour_stats = []
+    for frame in calcium_data:
+        frame = frame * 255.
+        frame = frame.astype(np.uint8)
+        thresh = cv2.threshold(frame, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+
+        # get contours and filter out small defects
+        contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        # Only take the top-level contour
+        cntr = contours[0]
+        area = cv2.contourArea(cntr)
+        perimeter = cv2.arcLength(cntr, True)
+        compactness = 4 * np.pi * area / (perimeter + 1e-16) ** 2
+
+        contour_list.append(cntr)
+        contour_stats.append((area, perimeter, compactness))
+
+    return contour_list, np.array(contour_stats)
+
 
 # Main script
 try:
@@ -45,13 +70,15 @@ except IndexError:
     # query the database for data to plot
     data_all = bd.query_database('analyzed_data', search_string)
     # get the paths to the files
-    calcium_path = [el['analysis_path'] for el in data_all if 'miniscope' not in el['slug']]
+    # calcium_path = [el['analysis_path'] for el in data_all if ('miniscope' not in el['slug'])]
+    calcium_path = [el['analysis_path'] for el in data_all if ('miniscope' not in el['slug']) and
+                    (day in el['slug'])]
     calcium_path.sort()
 
     # assemble the output path
     # out_path = os.path.join(paths.analysis_path, '_'.join((animal, rig, 'cellMatch.hdf5')))
-    # out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, 'cellMatch.hdf5')))
-    out_path = os.path.join(paths.analysis_path, '_'.join((animal, 'cellMatch.hdf5')))
+    out_path = os.path.join(paths.analysis_path, '_'.join((day, animal, 'cellMatch.hdf5')))
+    # out_path = os.path.join(paths.analysis_path, '_'.join((animal, 'cellMatch.hdf5')))
 
 # load the data for the matching
 footprint_list = []
@@ -65,20 +92,36 @@ date_list = []
 rig_list = []
 # load the calcium data
 for files in calcium_path:
+
+    date = os.path.basename(files)[:10]
+    rig = os.path.basename(files).split('_')[6]
+
     with h5py.File(files, mode='r') as f:
 
         try:
             calcium_data = np.array(f['A'])
+            max_proj = np.array(f['max_proj'])
         except KeyError:
             continue
 
         # if there are no ROIs, skip
         if (type(calcium_data) == np.ndarray) and np.any(calcium_data.astype(str) == 'no_ROIs'):
             continue
+
         # clear the rois that don't pass the size criteria
-        areas = fm.get_roi_stats(calcium_data)[:, -1]
+        roi_stats = fm.get_roi_stats(calcium_data)
+        contours, contour_stats = get_footprint_contours(calcium_data)
+
+        if len(roi_stats.shape) == 1:
+            roi_stats = roi_stats.reshape(1, -1)
+            contour_stats = contour_stats.reshape(1, -1)
+
+        areas = roi_stats[:, -1]
+        compactness = contour_stats[:, -1]
+
         keep_vector = (areas > processing_parameters.roi_parameters['area_min']) & \
-                      (areas < processing_parameters.roi_parameters['area_max'])
+                      (areas < processing_parameters.roi_parameters['area_max']) & \
+                      (compactness > processing_parameters.roi_parameters['compactness'])
 
         if np.all(keep_vector == False):
             continue
@@ -88,11 +131,8 @@ for files in calcium_path:
         # format and masks and store for matching
         footprint_list.append(np.moveaxis(calcium_data, 0, -1).reshape((-1, calcium_data.shape[0])))
         size_list.append(calcium_data.shape[1:])
-        template_list.append(np.zeros(size_list[0]))
-        # template_list.append(np.array(f['max_proj']))
+        template_list.append(np.array(f['max_proj']))
 
-        date = os.path.basename(files)[:10]
-        rig = os.path.basename(files).split('_')[6]
         if rig in ['VTuning', 'VWheel', 'VTuningWF', 'VWheelWF']:
             trial = re.findall(r'fixed\d', files) + re.findall(r'free\d', files)
             trial = trial[0]
@@ -104,8 +144,8 @@ for files in calcium_path:
 
 try:
     # run the matching software
-    spatial_union, assignments, matchings = register_multisession(
-        A=footprint_list, dims=size_list[0], templates=template_list, thresh_cost=0.7, max_dist=15)
+    spatial_union, assignments, matchings = register_multisession(A=footprint_list, dims=size_list[0], templates=template_list, 
+                                                                  align_flag=True, use_opt_flow=True, max_thr=0.1, thresh_cost=0.8, max_dist=8)
 except Exception:
     # generate an empty array for saving
     assignments = np.ones((len(date_list), 1))
