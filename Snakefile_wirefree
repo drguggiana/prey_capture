@@ -101,7 +101,6 @@ rule calcium_extract:
     shell:
         r'conda activate minian && python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
 
-
 def day_animal_rig_calcium_file(wildcards):
     python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
     animal = python_dict['mouse']
@@ -322,51 +321,16 @@ rule preprocess:
           "snakemake_scripts/preprocess_all.py"
 
 
-rule motifs:
-    input:
-        lambda wildcards: os.path.join(paths.analysis_path, config["files"][wildcards.file] + '_rawcoord.hdf5'),
-    output:
-        os.path.join(paths.analysis_path, "{file}_motifs.hdf5"),
-    params:
-          info=yaml_to_json,
-    shell:
-        r'conda activate vame & python "{paths.vame_latents}" "{input}" "{output}" "{params.info}"'
-
-
-def motif_selector(wildcards):
-    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
-
-    if python_dict['rig'] == 'miniscope':
-        return os.path.join(paths.analysis_path, "{file}_motifs.hdf5"),
-    else:
-        return python_dict['avi_path']
-
-
 rule preprocess_compile:
     input:
-        # lambda wildcards: os.path.join(paths.analysis_path, config["files"][wildcards.file] + '_rawcoord.hdf5'),
         os.path.join(paths.analysis_path, '{file}_rawcoord.hdf5'),
-        motif_selector,
     output:
         os.path.join(paths.analysis_path, "{file}_preproc.hdf5"),
     params:
         info=lambda wildcards: config["file_info"][wildcards.file]
     script:
-        "snakemake_scripts/combine_preprocessing.py"
+        "snakemake_scripts/combine_preprocessing_wf.py"
 
-
-rule aggregate_preprocessed:
-    input:
-          expand(os.path.join(paths.analysis_path, "{file}_preproc.hdf5"), file=config['files'])
-    output:
-          os.path.join(paths.analysis_path, "preprocessing_{query}.hdf5")
-    wildcard_constraints:
-          query=".*_agg.*"
-    params:
-          file_info=expand("{info}", info=config["file_info"].values()),
-          output_info=config["output_info"]
-    script:
-          "snakemake_scripts/aggregate.py"
 
 def files_to_day(wildcards):
     name_parts = wildcards.file.split('_')
@@ -463,13 +427,33 @@ rule tc_day_combine:
         "snakemake_scripts/wf_tc_consolidate.py"
 
 
-
 rule agg_tcs:
     input:
         expand(os.path.join(paths.analysis_path, "{file}_tcconsolidate.hdf5"), file=config['files'])
     wildcard_constraints:
         query=".*_agg.*"
 
+
+rule update_cell_matches:
+    input:
+        os.path.join(paths.analysis_path,'{file}_preproc.hdf5'),
+        os.path.join(paths.analysis_path, '{file}_tcday.hdf5')
+    output:
+        temp(os.path.join(paths.analysis_path, "{file}_update_dummy.txt"))
+    script:
+        "snakemake_scripts/update_cell_matches.py"
+
+
+rule update_cell_matches_run:
+    input:
+        expand(os.path.join(paths.analysis_path,"{file}_update_dummy.txt"),file=config['files'])
+    output:
+        os.path.join(paths.analysis_path, "update_run.txt")
+    params:
+        file_info=expand("{info}",info=config["file_info"].values()),
+        output_info=config["output_info"]
+    script:
+        "snakemake_scripts/full_run.py"
 
 
 rule tuning_run:
@@ -494,6 +478,7 @@ rule combinedanalysis_run:
           output_info=config["output_info"]
     script:
           "snakemake_scripts/full_run.py"
+
 
 rule full_run:
     input:

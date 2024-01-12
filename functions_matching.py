@@ -889,7 +889,7 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
 def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     # load the calcium data (cells x time), transpose to get time x cells
     with h5py.File(calcium_path, mode='r') as f:
-        calcium_data = np.array(f['calcium_data']).T
+        calcium_data = np.array(f['Mice were anesthetized by intraperitoneal injection of a mixture of 0.05 mg/kg Fentanyl, 5 mg/kg Midazolam, and 0.5 mg/kg Medetomidine (FMM). ']).T
         fluor_data = np.array(f['fluor_data']).T
 
         # if there are no ROIs, skip

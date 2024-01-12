@@ -342,7 +342,7 @@ def parse_kinematic_data(matched_calcium, rig):
     else:
         kinematics = matched_calcium.loc[:, stimulus_cols + motive_tracking_cols + mouse_kinem_cols]
 
-    # Convert to cm
+    # Convert to cm, cm/s or cm/s^2
     for col in ['wheel_speed', 'wheel_acceleration', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m', 'head_height',
                 'mouse_speed', 'mouse_acceleration']:
         if col in kinematics.columns:
