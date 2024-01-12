@@ -102,6 +102,8 @@ for files in calcium_path:
             calcium_data = np.array(f['A'])
             max_proj = np.array(f['max_proj'])
         except KeyError:
+            # Likely because there are no ROIs
+            calcium_data = np.array(f['frame_list'])
             continue
 
         # if there are no ROIs, skip
