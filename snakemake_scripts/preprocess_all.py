@@ -22,15 +22,18 @@ def preprocess_selector(ref_path, file_info):
     # check if the input has a dlc path or not
     if (len(file_info['dlc_path']) > 0 and file_info['dlc_path'] != 'N/A') or \
             os.path.isfile(file_info['avi_path'].replace('.avi', '_dlc.h5')):
+        
         # assemble the path here, in case the file wasn't in the database
         dlc_path = file_info['avi_path'].replace('.avi', '_dlc.h5')
+
         # select function depending on the rig
-        if files['rig'] in ['VWheel', 'VWheelWF']:
+        if file_info['rig'] in ['VWheel', 'VWheelWF']:
             # use the eye specific function
             traces, corner_out, frame_b = s1.run_preprocess_eye(ref_path, dlc_path, file_info)
         else:
             # if there's a dlc file, use this preprocessing
             traces, corner_out, frame_b = s1.run_dlc_preprocess(ref_path, dlc_path, file_info)
+
     else:
         # if not, use the legacy non-dlc preprocessing
         output_path, traces = s1.run_preprocess(ref_path, file_info)
@@ -38,6 +41,7 @@ def preprocess_selector(ref_path, file_info):
         corner_out = []
         # set frame bounds to empty
         frame_b = []
+        
     return traces, corner_out, frame_b
 
 
