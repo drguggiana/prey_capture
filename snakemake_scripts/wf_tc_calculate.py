@@ -5,7 +5,7 @@ import warnings
 
 import functions_kinematic as fk
 import functions_tuning as tuning
-from tc_calculate import *
+from snakemake_scripts.tc_calculate import *
 from processing_parameters import wf_frame_rate
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
@@ -485,6 +485,9 @@ if __name__ == '__main__':
 
             # --- Process kinematic tuning --- #
             # This is lifted directly from tc_calculate.py
+            # Note here that the kinematic data that was used for the visual tuning is not fed to the kinematic tuning 
+            # curve calculation below since the formatting is different. 
+
             print('Calculating kinematic tuning curves...')
 
             # Drop fluorescence columns since not used for this analysis
@@ -493,6 +496,9 @@ if __name__ == '__main__':
 
             # get the number of bins
             bin_num = processing_parameters.bin_number
+            shuffle_kind = processing_parameters.tc_shuffle_kind
+            percentile = processing_parameters.tc_percentile_cutoff
+
             # define the pairs to quantify
             if rig in ['VWheel', 'VWheelWF']:
                 variable_names = processing_parameters.variable_list_fixed
@@ -501,7 +507,8 @@ if __name__ == '__main__':
                 variable_names = processing_parameters.variable_list_free
 
             # Convert to cm
-            for col in ['wheel_speed', 'wheel_speed_abs', 'wheel_acceleration', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+            for col in ['wheel_speed', 'wheel_speed_abs', 'wheel_acceleration', 
+                        'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
                         'head_height', 'mouse_speed', 'mouse_acceleration']:
                 if col in dataframe.columns:
                     dataframe[col] = dataframe[col] * 100.
@@ -523,9 +530,12 @@ if __name__ == '__main__':
 
             # get the TCs and their responsivity
             tcs_half, tcs_full, tcs_resp, tc_count, tc_bins = \
-                extract_tcs_responsivity(features, calcium, variable_names, cell_num, percentile=80, bin_number=bin_num)
+                extract_tcs_responsivity(features, calcium, variable_names, cell_num, 
+                                         percentile=percentile, bin_number=bin_num, shuffle_kind=shuffle_kind)
+            
             # get the TC consistency
             tcs_cons = extract_consistency(tcs_half, variable_names, cell_num, percentile=80)
+            
             # # get the tc quality
             # tcs_qual = extract_quality(tcs_full, features)
             # convert the outputs into a dataframe

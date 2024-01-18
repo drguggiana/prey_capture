@@ -793,6 +793,7 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
         if (type(calcium_data) == np.ndarray) and (calcium_data == 'no_ROIs'):
             return None, None
         roi_info = np.array(f['roi_info'])
+    
     # check if there are nans in the columns, if so, also skip
     if kinematics_data.columns[0] == 'badFile':
         print(f'File {os.path.basename(calcium_path)} not matched due to NaNs')
@@ -813,10 +814,13 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     # get the camera frame times
     frame_idx_camera_sync = kinematics_data['sync_frames'].to_numpy().astype(int)
     frame_times_camera_sync = sync_data.loc[frame_idx_camera_sync, 'Time'].to_numpy()
+    
     # get the miniscope frame indexes from the sync file
     frame_idx_mini_sync = np.argwhere(np.diff(np.round(sync_data.loc[:, 'mini_frames'])) > 0).squeeze() + 1
+    
     # interpolate missing triggers (based on experience)
     frame_idx_mini_sync = np.round(interpolate_frame_triggers(frame_idx_mini_sync))
+    
     # correct for the calcium starting before and/or ending after the behavior
     if frame_idx_mini_sync[0] < frame_idx_camera_sync[0]:
         start_idx = np.argwhere(frame_idx_mini_sync > frame_idx_camera_sync[0])[0][0]
@@ -826,6 +830,7 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
         end_idx = np.argwhere(frame_idx_mini_sync < frame_idx_camera_sync[-1])[-1][0] + 1
         frame_idx_mini_sync = frame_idx_mini_sync[:end_idx]
         calcium_data = calcium_data[:end_idx, :]
+
     # get the delta frames with the calcium
     delta_frames = frame_idx_mini_sync.shape[0] - calcium_data.shape[0]
     # remove extra detections coming from terminating the calcium mid frame (I think)
@@ -835,6 +840,7 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     elif delta_frames < 0:
         print(f'There were {-delta_frames} more frames than triggers on file {os.path.basename(calcium_path)}')
         calcium_data = calcium_data[:delta_frames, :]
+        
     # trim calcium according to the frames left within the behavior
     calcium_data = calcium_data[frame_idx_mini_sync > frame_idx_camera_sync[0], :]
     # and then remove frames before the behavior starts
@@ -889,7 +895,8 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
 def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     # load the calcium data (cells x time), transpose to get time x cells
     with h5py.File(calcium_path, mode='r') as f:
-        calcium_data = np.array(f['Mice were anesthetized by intraperitoneal injection of a mixture of 0.05 mg/kg Fentanyl, 5 mg/kg Midazolam, and 0.5 mg/kg Medetomidine (FMM). ']).T
+        calcium_data = np.array(f['calcium_data']).T
+        ca_frames = np.arange(calcium_data.shape[0], dtype=int)
         fluor_data = np.array(f['fluor_data']).T
 
         # if there are no ROIs, skip
@@ -930,12 +937,14 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
         frame_idx_mini_sync = frame_idx_mini_sync[start_idx:]
         calcium_data = calcium_data[start_idx:, :]
         fluor_data = fluor_data[start_idx:, :]
+        ca_frames = ca_frames[start_idx:]
 
     if frame_idx_mini_sync[-1] > frame_idx_camera_sync[-1]:
         end_idx = np.argwhere(frame_idx_mini_sync < frame_idx_camera_sync[-1])[-1][0] + 1
         frame_idx_mini_sync = frame_idx_mini_sync[:end_idx]
         calcium_data = calcium_data[:end_idx, :]
         fluor_data = fluor_data[:end_idx, :]
+        ca_frames = ca_frames[:end_idx]
 
     # get the delta frames with the calcium
     delta_frames = frame_idx_mini_sync.shape[0] - calcium_data.shape[0]
@@ -948,14 +957,17 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
         print(f'There were {-delta_frames} more frames than triggers on file {os.path.basename(calcium_path)}')
         calcium_data = calcium_data[:delta_frames, :]
         fluor_data = fluor_data[:delta_frames, :]
+        ca_frames = ca_frames[:delta_frames]
 
+    idx_vector = frame_idx_mini_sync > frame_idx_camera_sync[0]
     # trim calcium according to the frames left within the behavior
-    calcium_data = calcium_data[frame_idx_mini_sync > frame_idx_camera_sync[0], :]
+    calcium_data = calcium_data[idx_vector, :]
     # do the same with fluorescence data
-    fluor_data = fluor_data[frame_idx_mini_sync > frame_idx_camera_sync[0], :]
+    fluor_data = fluor_data[idx_vector, :]
+    # and also with the frame indexes
+    ca_frames = ca_frames[idx_vector]
     # and then remove frames before the behavior starts
-    frame_idx_mini_sync = frame_idx_mini_sync[frame_idx_mini_sync > frame_idx_camera_sync[0]]
-
+    frame_idx_mini_sync = frame_idx_mini_sync[idx_vector]
     # get the actual mini times
     frame_times_mini_sync = sync_data.loc[frame_idx_mini_sync, 'Time'].to_numpy()
 
@@ -1014,6 +1026,7 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     matched_bonsai['time_vector'] = frame_times_mini_sync
     matched_bonsai['mouse'] = kinematics_data.loc[0, 'mouse']
     matched_bonsai['datetime'] = kinematics_data.loc[0, 'datetime']
+    matched_bonsai['ca_tif_frames'] = ca_frames
 
     # print a single dataframe with the calcium matched positions and timestamps
     cell_column_names = ['_'.join(('cell', f'{el:04d}', 'spikes')) for el in range(calcium_data.shape[1])]
