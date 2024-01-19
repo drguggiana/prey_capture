@@ -439,16 +439,40 @@ rule update_cell_matches:
         os.path.join(paths.analysis_path,'{file}_preproc.hdf5'),
         os.path.join(paths.analysis_path, '{file}_tcday.hdf5')
     output:
-        temp(os.path.join(paths.analysis_path, "{file}_update_dummy.txt"))
+        temp(os.path.join(paths.analysis_path, "{file}_update_dummy_matches.txt"))
     script:
         "snakemake_scripts/update_cell_matches.py"
 
 
+rule update_kinematic_tcs:
+    input:
+        os.path.join(paths.analysis_path,'{file}_preproc.hdf5'),
+        os.path.join(paths.analysis_path, '{file}_tcday.hdf5')
+    output:
+        temp(os.path.join(paths.analysis_path, "{file}_update_dummy_kinem_tcs.txt"))
+    params:
+        file_info = lambda wildcards: config["file_info"][wildcards.file]
+    script:
+        "snakemake_scripts/update_kinematic_tc_wf.py"
+
+
 rule update_cell_matches_run:
     input:
-        expand(os.path.join(paths.analysis_path,"{file}_update_dummy.txt"),file=config['files'])
+        expand(os.path.join(paths.analysis_path,"{file}_update_dummy_matches.txt"), file=config['files'])
     output:
-        os.path.join(paths.analysis_path, "update_run.txt")
+        os.path.join(paths.analysis_path, "update_cells_match_run.txt")
+    params:
+        file_info=expand("{info}",info=config["file_info"].values()),
+        output_info=config["output_info"]
+    script:
+        "snakemake_scripts/full_run.py"
+
+
+rule update_kinem_tcs_run:
+    input:
+        expand(os.path.join(paths.analysis_path,"{file}_update_dummy_kinem_tcs.txt"), file=config['files'])
+    output:
+        os.path.join(paths.analysis_path, "update_kinem_tc_run.txt")
     params:
         file_info=expand("{info}",info=config["file_info"].values()),
         output_info=config["output_info"]

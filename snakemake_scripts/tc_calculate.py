@@ -173,8 +173,6 @@ def shuffle_random(cell, counts_feature_0, feature_counts, bins, tc_idx, shuffle
     shuffle_array = np.zeros((shuffle_number, 1))
     shuffle_prediction = np.zeros((shuffle_number, 1))
 
-    # TODO change randomization to wrapping with lag (or rather add it in addition to the current one)
-    # use np.take
     # shuffle the calcium activity
     for shuffle in np.arange(shuffle_number):
 
@@ -219,13 +217,13 @@ def shuffle_random_bin(cell, counts_feature_0, feature_counts, bins, tc_idx, tim
 
     # shuffle the calcium activity
     for shuffle in np.arange(shuffle_number):
-        
-        # Shuffle the time while maintaining the binning
-        random_time_bins = np.random.choice(unique_time_bins.copy(), unique_time_bins.shape[0], replace=False)
+        # Shuffle the time while maintaining the binning. Deliberately oversample to ensure we have enough
+        random_time_bins = np.random.choice(unique_time_bins.copy(), int(unique_time_bins.shape[0] * 1.2), replace=True)
         random_time_idxs = np.squeeze(np.concatenate([np.argwhere(binned_time_idxs == el) for el in random_time_bins]))
 
-        # randomize the calcium activity
+        # Trim the indexes to size of calcium activity and randomize the calcium activity
         random_cell = cell.copy()
+        random_time_idxs = random_time_idxs[:random_cell.shape[0]]
         random_cell = random_cell[random_time_idxs]
 
         # Get the sum of the bins
@@ -364,16 +362,17 @@ def extract_full_tc(counts_feature_0, feature_counts, cell_number, calcium_trial
 
 def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variables, cell_number,
                              percentile=99, bin_number=10, shuffle_kind='random'):
-    '''
+    """
     Extract the tuning curves (full and half) and their responsivity index
-    
-    feature_raw_trials: (pd.DataFrame) The kinematic features 
+
+    feature_raw_trials: (pd.DataFrame) The kinematic features
     calcium_trials: (np.array)  The calcium traces (cells x time)
     target_variables: (list of str) names of the variables to extract
     cell_number: (int) number of cells
-    percentile: (int) percentile for the responsivity index
-    bin_number: (int) number of bins for the tuning curves (bins tile the range of the TCs)
-    '''
+    percentile: (int, optional) percentile for the responsivity index
+    bin_number: (int, optional) number of bins for the tuning curves (bins tile the range of the TCs)
+    shuffle_kind: (str, optional) kind of shuffling to use for the responsivity index
+    """
     
     # get the number of pairs
     var_number = len(target_variables)
@@ -441,7 +440,8 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
 
         # get the full tuning curves
         tc_cell_full, tc_cell_resp = extract_full_tc(counts_feature_0, feature_counts, cell_number, calcium_trials, 
-                                                     bins, keep_vector_full, shuffle_number, percentile, shuffle_kind, lag_or_bin=processing_parameters.tc_lags[feature_name])
+                                                     bins, keep_vector_full, shuffle_number, percentile, shuffle_kind,
+                                                     lag_or_bin=processing_parameters.tc_lags[feature_name])
         # store the halves and fulls
         tc_half[feature_name] = tc_half_temp
         tc_full[feature_name] = tc_cell_full

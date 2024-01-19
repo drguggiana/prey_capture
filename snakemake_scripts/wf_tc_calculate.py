@@ -358,6 +358,67 @@ def parse_kinematic_data(matched_calcium, rig):
     return kinematics, raw_spikes, raw_fluor
 
 
+def calculate_kinematic_tuning(df, day, animal, rig):
+    # --- Process kinematic tuning --- #
+    # This is lifted directly from tc_calculate.py
+    # Note here that the kinematic data that was used for the visual tuning is not fed to the kinematic tuning
+    # curve calculation below since the formatting is different.
+
+    print('Calculating kinematic tuning curves...')
+
+    # Drop fluorescence columns since not used for this analysis
+    fluor_cols = [col for col in df.columns if 'fluor' in col]
+    df.drop(columns=fluor_cols, inplace=True)
+
+    # get the number of bins
+    bin_num = processing_parameters.bin_number
+    shuffle_kind = processing_parameters.tc_shuffle_kind
+    percentile = processing_parameters.tc_percentile_cutoff
+
+    # define the pairs to quantify
+    if rig in ['VWheel', 'VWheelWF']:
+        variable_names = processing_parameters.variable_list_fixed
+        df['wheel_speed_abs'] = np.abs(df['wheel_speed'])
+    else:
+        variable_names = processing_parameters.variable_list_free
+
+    # Convert to cm
+    for col in ['wheel_speed', 'wheel_speed_abs', 'wheel_acceleration',
+                'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+                'head_height', 'mouse_speed', 'mouse_acceleration']:
+        if col in df.columns:
+            df[col] = df[col] * 100.
+        else:
+            pass
+
+    # clip the calcium traces
+    clipped_data = clip_calcium([('', df)])
+
+    # parse the features (bin number is for spatial bins in this one)
+    features, calcium = parse_features(clipped_data, variable_names, bin_number=processing_parameters.spatial_bins)
+
+    # concatenate all the trials
+    features = pd.concat(features)
+    calcium = np.concatenate(calcium)
+
+    # get the number of cells
+    cell_num = calcium.shape[1]
+
+    # get the TCs and their responsivity
+    tcs_half, tcs_full, tcs_resp, tc_count, tc_bins = \
+        extract_tcs_responsivity(features, calcium, variable_names, cell_num,
+                                 percentile=percentile, bin_number=bin_num, shuffle_kind=shuffle_kind)
+
+    # get the TC consistency
+    tcs_cons = extract_consistency(tcs_half, variable_names, cell_num, percentile=80)
+
+    # convert the outputs into a dataframe
+    tcs_dict, tcs_counts_dict, tcs_bins_dict = convert_to_dataframe(tcs_half, tcs_full, tc_count, tcs_resp,
+                                                        tcs_cons, tc_bins, day, animal, rig)
+
+    return tcs_dict, tcs_counts_dict, tcs_bins_dict
+
+
 if __name__ == '__main__':
     # get the data paths
     try:
@@ -484,63 +545,7 @@ if __name__ == '__main__':
                 props.to_hdf(out_file, f'{ds_name}_props')
 
             # --- Process kinematic tuning --- #
-            # This is lifted directly from tc_calculate.py
-            # Note here that the kinematic data that was used for the visual tuning is not fed to the kinematic tuning 
-            # curve calculation below since the formatting is different. 
-
-            print('Calculating kinematic tuning curves...')
-
-            # Drop fluorescence columns since not used for this analysis
-            fluor_cols = [col for col in dataframe.columns if 'fluor' in col]
-            dataframe.drop(columns=fluor_cols, inplace=True)
-
-            # get the number of bins
-            bin_num = processing_parameters.bin_number
-            shuffle_kind = processing_parameters.tc_shuffle_kind
-            percentile = processing_parameters.tc_percentile_cutoff
-
-            # define the pairs to quantify
-            if rig in ['VWheel', 'VWheelWF']:
-                variable_names = processing_parameters.variable_list_fixed
-                dataframe['wheel_speed_abs'] = np.abs(dataframe['wheel_speed'])
-            else:
-                variable_names = processing_parameters.variable_list_free
-
-            # Convert to cm
-            for col in ['wheel_speed', 'wheel_speed_abs', 'wheel_acceleration', 
-                        'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
-                        'head_height', 'mouse_speed', 'mouse_acceleration']:
-                if col in dataframe.columns:
-                    dataframe[col] = dataframe[col] * 100.
-                else:
-                    pass
-
-            # clip the calcium traces
-            clipped_data = clip_calcium([('', dataframe)])
-
-            # parse the features (bin number is for spatial bins in this one)
-            features, calcium = parse_features(clipped_data, variable_names, bin_number=20)
-
-            # concatenate all the trials
-            features = pd.concat(features)
-            calcium = np.concatenate(calcium)
-
-            # get the number of cells
-            cell_num = calcium.shape[1]
-
-            # get the TCs and their responsivity
-            tcs_half, tcs_full, tcs_resp, tc_count, tc_bins = \
-                extract_tcs_responsivity(features, calcium, variable_names, cell_num, 
-                                         percentile=percentile, bin_number=bin_num, shuffle_kind=shuffle_kind)
-            
-            # get the TC consistency
-            tcs_cons = extract_consistency(tcs_half, variable_names, cell_num, percentile=80)
-            
-            # # get the tc quality
-            # tcs_qual = extract_quality(tcs_full, features)
-            # convert the outputs into a dataframe
-            tcs_dict, tcs_counts_dict, tcs_bins_dict = convert_to_dataframe(tcs_half, tcs_full, tc_count, tcs_resp,
-                                                                tcs_cons, tc_bins, day, animal, rig)
+            tcs_dict, tcs_counts_dict, tcs_bins_dict = calculate_kinematic_tuning(dataframe, day, animal, rig)
 
             # for all the features
             for feature in tcs_dict.keys():

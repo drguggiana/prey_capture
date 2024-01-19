@@ -31,7 +31,6 @@ if __name__ == '__main__':
         # get the input
         preproc_file = snakemake.input[0]
         tc_file = snakemake.input[1]
-        # tc_file = preproc_file.replace('_preproc', '_tcday')
         dummy_out_file = snakemake.output[0]
 
         basename = os.path.basename(preproc_file)
