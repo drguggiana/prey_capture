@@ -72,7 +72,7 @@ if __name__ == '__main__':
 
                 # update the file
                 if feature_key in f.keys():
-                    f.remove('feature')
+                    f.remove(feature)
                     tcs_dict[feature].to_hdf(tc_file, feature)
 
                     f.remove(feature + '_counts')
