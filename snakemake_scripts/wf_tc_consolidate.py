@@ -13,7 +13,15 @@ from functions_kinematic import wrap_negative, wrap
 
 
 def kine_fraction_responsive(ds):
-    return ds['Qual_test'].sum() / ds['Qual_test'].count()
+    frac_qual = ds['Qual_test'].sum() / ds['Qual_test'].count()
+    frac_cons = ds['Cons_test'].sum() / ds['Cons_test'].count()
+    # frac_resp = ds['Resp_test'].sum() / ds['Resp_test'].count()
+
+    # is responsive if qual and cons are both true
+    is_resp = ds['Qual_test'] + ds['Cons_test']
+    is_resp = is_resp > 1
+    frac_is_resp = is_resp.sum() / is_resp.count()
+    return frac_is_resp
 
 
 def vis_frac_responsive(ds):
