@@ -896,7 +896,6 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     # load the calcium data (cells x time), transpose to get time x cells
     with h5py.File(calcium_path, mode='r') as f:
         calcium_data = np.array(f['calcium_data']).T
-        ca_frames = np.arange(calcium_data.shape[0], dtype=int)
         fluor_data = np.array(f['fluor_data']).T
 
         # if there are no ROIs, skip
@@ -904,6 +903,7 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
             return None, None
 
         roi_info = np.array(f['roi_info'])
+        ca_frames = np.arange(calcium_data.shape[0], dtype=int)
 
     # check if there are nans in the columns, if so, also skip
     if kinematics_data.columns[0] == 'badFile':
