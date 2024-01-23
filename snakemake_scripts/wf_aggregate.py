@@ -1,60 +1,33 @@
+import os
 import pandas as pd
 import numpy as np
-import os
+import itertools
 
-import functions_data_handling as fd
-import functions_bondjango as bd
 import paths
-
 import processing_parameters
+import functions_data_handling as fdh
+import functions_bondjango as bd
+from functions_misc import slugify
 
 # Main script
-try:
-    # get the raw output_path
-    raw_path = snakemake.output[0]
-    # get the parsed path
-    dict_path = yaml.load(snakemake.params.output_info, Loader=yaml.FullLoader)
-    # get the input paths
-    paths_all = snakemake.input
-    # get the parsed path info
-    path_info = [yaml.load(el, Loader=yaml.FullLoader) for el in snakemake.params.file_info]
-    # get the analysis type
-    analysis_type = dict_path['analysis_type']
-    # get a list of all the animals and dates involved
-    animal_list = [el['mouse'] for el in path_info]
-    date_list = [datetime.datetime.strptime(el['date'], '%Y-%m-%dT%H:%M:%SZ').date() for el in path_info]
+mice = processing_parameters.cohort_2 + processing_parameters.cohort_1[:-1]
+results = ['multi', 'fullfield', 'control']    # ['multi', 'fullfield', 'control'], ['repeat']
+lightings = ['normal', 'dark']
+rigs = ['ALL']     # ['VWheelWF', 'VTuningWF'], ['ALL']    # 'ALL' used for everything but repeat aggs
+analysis_type = 'tc_consolidate'
 
-except NameError:
-    # define the search query
-    search_query = processing_parameters.search_string
-
-    # define the origin model
-    ori_type = 'tc_consolidate'
-    # get a dictionary with the search terms
-    dict_path = fd.parse_search_string(search_query)
-
-    # get the info and paths
-    path_info, paths_all, parsed_query, date_list, animal_list = \
-        fd.fetch_preprocessing(search_query + ', analysis_type:' + ori_type)
-    # get the raw output_path
-    basic_name = '_'.join(dict_path.values())
-
-
-unique_mice = np.unique(animal_list)
-
-for mouse in unique_mice:
+for mouse, result, light, rig in itertools.product(mice, results, lightings, rigs):
 
     # get the search string
-    search_string = f"mouse:{mouse}, result:multi, lighting:normal"
+    search_string = f"mouse:{mouse}, result:{result}, lighting:{light}, rig:{rig}, analysis_type:{analysis_type}"
+    print(search_string)
 
-    parsed_search = fd.parse_search_string(search_string)
+    parsed_search = fdh.parse_search_string(fdh.remove_query_field(search_string, 'analysis_type'))
 
     # get the paths from the database
     file_infos = bd.query_database("analyzed_data", search_string)
-    input_paths = np.array([el['analysis_path'] for el in file_infos if ('_tcconsolidate' in el['slug']) and
-                            (parsed_search['mouse'].lower() in el['slug'])])
+    input_paths = np.array([el['analysis_path'] for el in file_infos if (parsed_search['mouse'].lower() in el['slug'])])
     input_paths = np.array([in_path for in_path in input_paths if os.path.isfile(in_path)])
-    print(np.sort(input_paths))
 
     if len(input_paths) == 0:
         continue
@@ -76,10 +49,6 @@ for mouse in unique_mice:
                 else:
                     for key in tc.keys():
                         label = "_".join(key.split('/')[1:])
-                        # if parsed_search['result'] == 'repeat':
-                        #     exp_id = label.split('_')[0][:-1]
-                        #     label_base = label.split('_')[1:]
-                        #     label = '_'.join(([exp_id] + label_base)
                         data = tc[key]
                         data['date'] = date
                         data_dict[label] = data
@@ -88,7 +57,6 @@ for mouse in unique_mice:
 
         if len(data_list) > 0:
             # Aggregate it all
-
             for key in data_list[0].keys():
                 df = pd.concat([d[key] for d in data_list]).reset_index(names='old_index')
                 df.to_hdf(output_path, key)
@@ -103,7 +71,7 @@ for mouse in unique_mice:
                 'rig': parsed_search['rig'],
                 'lighting': parsed_search['lighting'],
                 'imaging': 'wirefree',
-                'slug': misc.slugify(os.path.basename(output_path)[:-5]),
+                'slug': slugify(os.path.basename(output_path)[:-5]),
             }
 
             # check if the entry already exists, if so, update it, otherwise, create it
@@ -118,3 +86,5 @@ for mouse in unique_mice:
                   (output_entry.status_code, output_entry.reason))
             if output_entry.status_code in [500, 400]:
                 print(entry_data)
+
+print('Done!')

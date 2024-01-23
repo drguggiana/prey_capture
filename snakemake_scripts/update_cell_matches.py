@@ -46,17 +46,18 @@ if __name__ == '__main__':
 
         # get the paths to the files
         preproc_data = [el for el in data_all if '_preproc' in el['slug'] and
-                        parsed_search['mouse'].lower() in el['slug']]
+                        (parsed_search['mouse'].lower() in el['slug'])]
         preproc_file = preproc_data[0]['analysis_path']
 
-        tc_data = [el for el in data_all if '_tcday' in el['slug'] and
-                   parsed_search['mouse'].lower() in el['slug']]
+        tc_data = [el for el in data_all if ('_tcday' in el['slug']) and
+                   (parsed_search['mouse'].lower() in el['slug'])]
         tc_file = tc_data[0]['analysis_path']
 
         dummy_out_file = tc_file.replace('_tcday.hdf5', '_update_dummy.txt')
 
     # Search for the cell matching file
     cell_match_data = bd.query_database('analyzed_data', f'mouse:{mouse}, slug:{day}, analysis_type:cellmatching')
+    cell_match_data = [el for el in cell_match_data if mouse.lower() in el['slug']]
     cell_match_file = cell_match_data[0]['analysis_path']
 
     # Load the cell matching file

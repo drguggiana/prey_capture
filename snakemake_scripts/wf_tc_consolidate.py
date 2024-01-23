@@ -70,19 +70,20 @@ if __name__ == '__main__':
         # get the search string
         search_string = processing_parameters.search_string
         parsed_search = dh.parse_search_string(search_string)
+        mouse = parsed_search['mouse']
 
         # get the paths from the database
         all_path = bd.query_database('analyzed_data', search_string)
         input_paths = np.array([el['analysis_path'] for el in all_path if ('_tcday' in el['slug']) and
                                 (parsed_search['mouse'].lower() in el['slug'])])
         slugs = [os.path.basename(el) for el in input_paths]
-        day = np.unique([el[:10] for el in slugs])
+        day = np.unique([el[:10] for el in slugs])[0]
         rigs = np.unique([el.split('_')[6] for el in slugs])
         results = [el for slug in slugs for el in slug.split('_') if
                    any(exp in el for exp in processing_parameters.wf_exp_types)]
 
         # assemble the output path
-        out_path = os.path.join(paths.analysis_path, 'test_tcconsolidate.hdf5')
+        out_path = os.path.join(paths.analysis_path, f'{day}_{mouse}_tcconsolidate.hdf5')
         dummy_out = os.path.join(paths.analysis_path, 'test_tcdummy.txt')
 
     if 'control' in input_paths[0]:
@@ -289,9 +290,9 @@ if __name__ == '__main__':
                 diff_moving_fixed_dir = wrap_negative(diff_moving_fixed_dir)
                 diff_moving_free_dir = wrap_negative(diff_moving_free_dir)
 
-                diff_rig_ori = wrap(diff_rig_ori, bound=180)
-                diff_moving_fixed_ori = wrap(diff_moving_fixed_ori, bound=180)
-                diff_moving_free_ori = wrap(diff_moving_free_ori, bound=180)
+                diff_rig_ori = wrap(diff_rig_ori, bound=180.1)
+                diff_moving_fixed_ori = wrap(diff_moving_fixed_ori, bound=180.1)
+                diff_moving_free_ori = wrap(diff_moving_free_ori, bound=180.1)
 
                 delta_pref[f"delta_dir_{moving_tuning}_free_still_rel_fixed_still"] = diff_rig_dir
                 delta_pref[f"delta_dir_{moving_tuning}_fixed_moving_rel_fixed_still"] = diff_moving_fixed_dir

@@ -104,8 +104,8 @@ for idx, target_entries in enumerate(full_queries):
         out_path = os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt')
     elif parsed_search['analysis_type'] == 'tuning_run':
         out_path = os.path.join(paths.analysis_path, 'tuning_run.txt')
-    elif parsed_search['analysis_type'] == 'combinedanalysis_run':
-        out_path = os.path.join(paths.analysis_path, 'combinedanalysis_run.txt')
+    elif parsed_search['analysis_type'] == 'aggregate_run':
+        out_path = os.path.join(paths.analysis_path, 'aggregate_run.txt')
     else:
         # feed the aggregation path
         out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
@@ -116,7 +116,7 @@ for idx, target_entries in enumerate(full_queries):
                               '-d', paths.snakemake_working,
                               # '--use-conda',
                               # '-F',         # (hard) force rerun everything
-                              # '-f',         # (soft) force rerun last step
+                              '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               # '--rerun-incomplete',
                               # '--touch',    # updates output file timestamp, but doesn't process
@@ -136,13 +136,14 @@ for idx, target_entries in enumerate(full_queries):
             (os.path.isfile(os.path.join(paths.analysis_path, 'preprocessing_run.txt'))):
         # delete the txt file (specify de novo to not run risks)
         os.remove(os.path.join(paths.analysis_path, 'preprocessing_run.txt'))
-    elif (parsed_search['analysis_type'] == 'combinedanalysis_run') &  \
-            (os.path.isfile(os.path.join(paths.analysis_path, 'combinedanalysis_run.txt'))):
-        # delete the txt file (specify de novo to not run risks)
-        os.remove(os.path.join(paths.analysis_path, 'combinedanalysis_run.txt'))
     elif (parsed_search['analysis_type'] == 'tuning_run') & \
             (os.path.isfile(os.path.join(paths.analysis_path, 'tuning_run.txt'))):
+        # delete the txt file (specify de novo to not run risks)
         os.remove(os.path.join(paths.analysis_path, 'tuning_run.txt'))
+    elif (parsed_search['analysis_type'] == 'aggregate_run') &  \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'aggregate_run.txt'))):
+        # delete the txt file (specify de novo to not run risks)
+        os.remove(os.path.join(paths.analysis_path, 'aggregate_run.txt'))
     elif (parsed_search['analysis_type'] == 'update_matches_run') & \
          (os.path.isfile(os.path.join(paths.analysis_path, 'update_cells_match_run.txt'))):
         os.remove(os.path.join(paths.analysis_path, 'update_cells_match_run.txt'))
