@@ -12,16 +12,28 @@ import functions_misc as fm
 from functions_kinematic import wrap_negative, wrap
 
 
+def rename_match_df(matches, exp_type):
+    old_cols = list(matches.columns)
+    if exp_type != 'repeat':
+        new_cols = [col.split("_")[-2] for col in old_cols[:2]]
+        new_cols += old_cols[2:]
+    else:
+        new_cols = [col.split("_")[-1] for col in old_cols[:2]]
+    col_map = dict(zip(old_cols, new_cols))
+    new_df = matches.rename(columns=col_map)
+    return new_df
+
+
 def kine_fraction_responsive(ds):
     frac_qual = ds['Qual_test'].sum() / ds['Qual_test'].count()
     frac_cons = ds['Cons_test'].sum() / ds['Cons_test'].count()
     # frac_resp = ds['Resp_test'].sum() / ds['Resp_test'].count()
 
-    # is responsive if qual and cons are both true
+    # is responsive if quality and consistency are both true
     is_resp = ds['Qual_test'] + ds['Cons_test']
     is_resp = is_resp > 1
     frac_is_resp = is_resp.sum() / is_resp.count()
-    return frac_is_resp
+    return frac_is_resp, is_resp
 
 
 def vis_frac_responsive(ds):
@@ -142,6 +154,7 @@ if __name__ == '__main__':
     else:
         # Save cell matches
         if matches is not None:
+            matches = rename_match_df(matches, result)
             matches.to_hdf(out_path, 'cell_matches')
 
         visual_shifts = {}
@@ -152,9 +165,9 @@ if __name__ == '__main__':
             multimodal_tuning = {}
 
             # get matches and save
-            match_col = np.where([id_flag in el for el in matches.columns])[0][0]
-            match_idxs = matches.iloc[:, match_col].to_numpy(dtype=int)
-            num_cells = len(data['norm_spikes_viewed_props'].index)
+            # match_col = np.where([id_flag in el for el in matches.columns])[0][0]
+            match_idxs = matches.loc[:, id_flag].to_numpy(dtype=int)
+            num_cells = data['norm_spikes_viewed_props'].shape[0]
 
             all_cells_summary_stats['num_matches'] = len(match_idxs)
             all_cells_summary_stats['match_frac'] = len(match_idxs) / num_cells
@@ -165,26 +178,31 @@ if __name__ == '__main__':
             kine_features = [el for el in data.keys() if not any([x in el for x in ['props', 'counts', 'edges']])]
             vis_features = [el for el in data.keys() if 'props' in el]
 
+            # Run the kinematic features
             for feature in kine_features:
                 # Save the whole dataset
                 data[feature].to_hdf(out_path, f'{id_flag}/all_cells/{feature}')
-                all_cells_summary_stats[f"frac_resp_{feature}"] = kine_fraction_responsive(data[feature])
-                multimodal_tuning[feature] = data[feature]['Qual_test']
+                frac_kine_resp, cells_kine_resp = kine_fraction_responsive(data[feature])
+                all_cells_summary_stats[f"frac_resp_{feature}"] = frac_kine_resp
+                multimodal_tuning[feature] = cells_kine_resp
 
                 # Sometimes the matched cells are out of range because of ROI size cutoffs, so drop them.
-                num_cells = data[feature].shape[0]
-                match_idxs = match_idxs[match_idxs < num_cells]
+                # num_cells = data[feature].shape[0]
+                # match_idxs = match_idxs[match_idxs < num_cells]
 
                 # Save matched TCs
                 matched_feature = data[feature].iloc[match_idxs, :].reset_index(names=['original_cell_id'])
                 matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
-                matched_summary_stats[f"frac_resp_{feature}"] = kine_fraction_responsive(matched_feature)
+                matched_frac_kine_resp, _ = kine_fraction_responsive(matched_feature)
+                matched_summary_stats[f"frac_resp_{feature}"] = matched_frac_kine_resp
 
                 # save unmatched tcs
                 unmatched_feature = data[feature].drop(match_idxs, axis=0)
                 unmatched_feature.to_hdf(out_path, f'{id_flag}/unmatched/{feature}')
-                unmatched_summary_stats[f"frac_resp_{feature}"] = kine_fraction_responsive(unmatched_feature)
+                unmatched_frac_kine_resp, _ = kine_fraction_responsive(unmatched_feature)
+                unmatched_summary_stats[f"frac_resp_{feature}"] = unmatched_frac_kine_resp
 
+            # Run the visual features
             exp_vis_features = {}
             for feature in vis_features:
                 feat = '_'.join(feature.split('_')[3:-1])
@@ -192,6 +210,8 @@ if __name__ == '__main__':
                 # When looking at all the data, the feature name is empty, so give it a name
                 if feat == "":
                     feat = "all"
+
+                feat = 'vis_' + feat
 
                 # Save the whole dataset
                 all_is_resp, all_frac_resp, frac_ori_resp, frac_dir_resp = vis_frac_responsive(data[feature])
@@ -305,18 +325,18 @@ if __name__ == '__main__':
         # If we have repeat sessions, we can't try fixed as a reference, so just look at delta between sessions
         else:
             for tuning_type in visual_shifts[id_flags[0]].keys():
-                # Recall that id_flags[0] is the free session, id_flags[1] is the fixed session
                 session1 = visual_shifts[id_flags[0]][tuning_type]
                 session2 = visual_shifts[id_flags[1]][tuning_type]
                 diff_dir = session2.loc[:, ['pref_dir']].subtract(session1.loc[:, ['pref_dir']]).to_numpy().flatten()
                 diff_ori = session2.loc[:, ['pref_ori']].subtract(session1.loc[:, ['pref_ori']]).to_numpy().flatten()
 
                 diff_dir = wrap_negative(diff_dir)
-                diff_ori = wrap(diff_ori, bound=180)
+                diff_ori = wrap(diff_ori, bound=180.1)
 
                 delta_pref[f"delta_{tuning_type}_dir"] = diff_dir
                 delta_pref[f"delta_{tuning_type}_ori"] = diff_ori
 
+        delta_pref['original_cell_id'] = match_idxs
         delta_pref.to_hdf(out_path, 'delta_vis_tuning')
 
     # assemble the entry data

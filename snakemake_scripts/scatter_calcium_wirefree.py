@@ -1,12 +1,15 @@
 import yaml
 import os
 import h5py
-import functions_bondjango as bd
-import functions_misc as fm
-import paths
 import numpy as np
 import datetime
+
+import paths
+import functions_misc as fm
 import processing_parameters
+import functions_bondjango as bd
+from snakemake_scripts.cell_matching import get_footprint_contours
+
 
 try:
 
@@ -85,12 +88,20 @@ try:
     current_calcium = np.concatenate((prepend_pad, calcium_data, postpend_pad), axis=1)
     current_fluor = np.concatenate((prepend_pad, fluor_data, postpend_pad), axis=1)
 
-    # get the areas
-    roi_info = fm.get_roi_stats(footprints)
+    # clear the rois that don't pass the size criteria
+    roi_info = fm.get_roi_stats(calcium_data)
+    contours, contour_stats = get_footprint_contours(calcium_data)
+
+    if len(roi_info.shape) == 1:
+        roi_stats = roi_info.reshape(1, -1)
+        contour_stats = contour_stats.reshape(1, -1)
+
     areas = roi_info[:, -1]
-    # filter out ROIs outside a size range
+    compactness = contour_stats[:, -1]
+
     keep_vector = (areas > processing_parameters.roi_parameters['area_min']) & \
-                  (areas < processing_parameters.roi_parameters['area_max'])
+                  (areas < processing_parameters.roi_parameters['area_max']) & \
+                  (compactness > processing_parameters.roi_parameters['compactness'])
 
     # remove from the calcium
     current_calcium = current_calcium[keep_vector, :]
