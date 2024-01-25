@@ -3,12 +3,34 @@ import os
 import h5py
 import numpy as np
 import datetime
+import cv2
 
 import paths
 import functions_misc as fm
 import processing_parameters
 import functions_bondjango as bd
-from snakemake_scripts.cell_matching import get_footprint_contours
+
+
+def get_footprint_contours(calcium_data):
+    contour_list = []
+    contour_stats = []
+    for frame in calcium_data:
+        frame = frame * 255.
+        frame = frame.astype(np.uint8)
+        thresh = cv2.threshold(frame, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+
+        # get contours and filter out small defects
+        contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        # Only take the top-level contour
+        cntr = contours[0]
+        area = cv2.contourArea(cntr)
+        perimeter = cv2.arcLength(cntr, True)
+        compactness = 4 * np.pi * area / (perimeter + 1e-16) ** 2
+
+        contour_list.append(cntr)
+        contour_stats.append((area, perimeter, compactness))
+
+    return contour_list, np.array(contour_stats)
 
 
 try:
