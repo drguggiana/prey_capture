@@ -85,7 +85,7 @@ try:
 
         frame_list = np.array(f['frame_list'])
         # if there are no ROIs, raise to generate an empty file
-        if frame_list == 'no_ROIs':
+        if frame_list[0] == 'no_ROIs':
             raise ValueError('empty file')
 
         spikes_data = np.array(f['S'])     # these are inferred spikes
@@ -93,9 +93,8 @@ try:
         footprints = np.array(f['A'])
         processed_frames = np.array(f['processed_frames'])
 
-
     # We aren't scattering calcium data, per se. Instead, we want to use this
-    # function to pad the trimmed ca2+ data
+    # function to pad the trimmed Ca2+ data
     # get the total frame number from the raw calcium movie
     raw_frame_count = [int(el) for el in frame_list[:, 1]][0]
 
