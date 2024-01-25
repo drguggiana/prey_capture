@@ -66,10 +66,11 @@ try:
         if frame_list == 'no_ROIs':
             raise ValueError('empty file')
 
-        calcium_data = np.array(f['S'])    # these are inferred spikes
+        spikes_data = np.array(f['S'])     # these are inferred spikes
         fluor_data = np.array(f['C'])      # This is raw fluorescence
         footprints = np.array(f['A'])
         processed_frames = np.array(f['processed_frames'])
+
 
     # We aren't scattering calcium data, per se. Instead, we want to use this
     # function to pad the trimmed ca2+ data
@@ -81,16 +82,16 @@ try:
     frame_end = processed_frames[-1]
 
     # create NaN-padded arrays in order to match raw movie frame count
-    prepend_pad = np.empty((calcium_data.shape[0], frame_start-1))
-    postpend_pad = np.empty((calcium_data.shape[0], raw_frame_count - frame_end))
+    prepend_pad = np.empty((spikes_data.shape[0], frame_start-1))
+    postpend_pad = np.empty((spikes_data.shape[0], raw_frame_count - frame_end))
     prepend_pad[:] = np.NaN
     postpend_pad[:] = np.NaN
-    current_calcium = np.concatenate((prepend_pad, calcium_data, postpend_pad), axis=1)
+    current_spikes = np.concatenate((prepend_pad, spikes_data, postpend_pad), axis=1)
     current_fluor = np.concatenate((prepend_pad, fluor_data, postpend_pad), axis=1)
 
     # clear the rois that don't pass the size criteria
-    roi_info = fm.get_roi_stats(calcium_data)
-    contours, contour_stats = get_footprint_contours(calcium_data)
+    roi_info = fm.get_roi_stats(footprints)
+    contours, contour_stats = get_footprint_contours(footprints)
 
     if len(roi_info.shape) == 1:
         roi_stats = roi_info.reshape(1, -1)
@@ -104,13 +105,13 @@ try:
                   (compactness > processing_parameters.roi_parameters['compactness'])
 
     # remove from the calcium
-    current_calcium = current_calcium[keep_vector, :]
+    current_spikes = current_spikes[keep_vector, :]
     current_fluor = current_fluor[keep_vector, :]
     roi_info = roi_info[keep_vector, :]
 
     # save the data as an h5py
     with h5py.File(out_path, 'w') as file:
-        file.create_dataset('calcium_data', data=current_calcium)
+        file.create_dataset('calcium_data', data=current_spikes)
         file.create_dataset('fluor_data', data=current_fluor)
         file.create_dataset('roi_info', data=roi_info)
 
@@ -120,7 +121,7 @@ except (KeyError, ValueError):
     with h5py.File(out_path, 'w') as file:
         file.create_dataset('calcium_data', data='no_ROIs')
         file.create_dataset('fluor_data', data='no_ROIs')
-        file.create_dataset('centroids', data='no_ROIs')
+        file.create_dataset('roi_info', data='no_ROIs')
 
 # update the bondjango entry (need to sort out some fields)
 ori_data = video_data.copy()
