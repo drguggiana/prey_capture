@@ -85,7 +85,7 @@ try:
 
         frame_list = np.array(f['frame_list'])
         # if there are no ROIs, raise to generate an empty file
-        if frame_list[0] == 'no_ROIs':
+        if frame_list == 'no_ROIs':
             raise ValueError('empty file')
 
         spikes_data = np.array(f['S'])     # these are inferred spikes
