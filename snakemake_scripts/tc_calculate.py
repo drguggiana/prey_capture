@@ -463,9 +463,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
     return tc_half, tc_full, tc_resp, tc_counts, tc_edges
 
 
-
-
-def extract_consistency(tc_half, target_variables, cell_number, percentile=95):
+def extract_consistency(tc_half, target_variables, cell_number, shuffle_kind='random', percentile=95):
     """Calculate TC consistency"""
 
     # define the number of shuffles
@@ -500,10 +498,35 @@ def extract_consistency(tc_half, target_variables, cell_number, percentile=95):
 
             # shuffle array
             shuffle_array = np.zeros([shuffle_number, 1])
+
+            # Used by if shuffle kind is random_bin or lag_wrap
+            time_vector = np.arange(current_second.shape[0], dtype=float) / processing_parameters.wf_frame_rate
+            bin_edges = np.arange(time_vector[0], time_vector[-1], processing_parameters.tc_lags[feature_name])
+            binned_time_idxs = np.digitize(time_vector, bin_edges)
+            unique_time_bins = np.unique(binned_time_idxs)
+
             # calculate the confidence interval
             for shuffle in np.arange(shuffle_number):
                 random_second = current_second.copy().flatten()
-                random_second = np.random.choice(random_second, random_second.shape[0])
+
+                # shuffle the second half calcium activity
+                if shuffle_kind == 'random':
+                    random_second = np.random.choice(random_second, random_second.shape[0])
+
+                elif shuffle_kind == 'random_bin':
+                    # Shuffle the time while maintaining the binning. Deliberately oversample to ensure we have enough
+                    random_time_bins = np.random.choice(unique_time_bins.copy(), int(unique_time_bins.shape[0] * 1.2),
+                                                        replace=True)
+                    random_time_idxs = np.squeeze(
+                        np.concatenate([np.argwhere(binned_time_idxs == el) for el in random_time_bins]))
+
+                    # Trim the indexes to size of calcium activity and randomize the calcium activity
+                    random_time_idxs = random_time_idxs[:random_second.shape[0]]
+                    random_second = random_second[random_time_idxs]
+
+                else:
+                    raise ValueError('Shuffle kind not recognized')
+
                 shuffle_array[shuffle] = np.corrcoef(current_first, random_second)[1][0]
             # turn nans into 0
             shuffle_array[np.isnan(shuffle_array)] = 0

@@ -110,6 +110,14 @@ for files in calcium_path:
         if (type(calcium_data) == np.ndarray) and np.any(calcium_data.astype(str) == 'no_ROIs'):
             continue
 
+        if rig in ['VTuning', 'VWheel', 'VTuningWF', 'VWheelWF']:
+            trial = re.findall(r'fixed\d', files) + re.findall(r'free\d', files)
+            trial = trial[0]
+            date_list.append('_'.join((date, rig, trial)))
+            rig_list.append(rig)
+        else:
+            date_list.append(date)
+
         # clear the rois that don't pass the size criteria
         roi_stats = fm.get_roi_stats(calcium_data)
         contours, contour_stats = get_footprint_contours(calcium_data)
@@ -134,14 +142,6 @@ for files in calcium_path:
         footprint_list.append(np.moveaxis(calcium_data, 0, -1).reshape((-1, calcium_data.shape[0])))
         size_list.append(calcium_data.shape[1:])
         template_list.append(np.array(f['max_proj']))
-
-        if rig in ['VTuning', 'VWheel', 'VTuningWF', 'VWheelWF']:
-            trial = re.findall(r'fixed\d', files) + re.findall(r'free\d', files)
-            trial = trial[0]
-            date_list.append('_'.join((date, rig, trial)))
-            rig_list.append(rig)
-        else:
-            date_list.append(date)
         # frame_lists.append(np.array(f['frame_list']))
 
 try:
@@ -150,7 +150,7 @@ try:
                                                                   align_flag=True, use_opt_flow=True, max_thr=0.1, thresh_cost=0.8, max_dist=8)
 except Exception:
     # generate an empty array for saving
-    assignments = np.ones((len(date_list), 1))
+    assignments = np.zeros((1, len(date_list)))
 
 # fplot.plot_image([spatial_union[:, 0].reshape((630, 630))])
 # save the matching results

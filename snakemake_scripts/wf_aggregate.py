@@ -18,9 +18,11 @@ def concatenate_cell_matches(data_list, exp_type):
     renamed_data_list = []
     for df in data_list:
         old_cols = list(df.columns)
-        if exp_type != 'repeat':
-            new_cols = [col.split("_")[-2] for col in old_cols[:2]]
-            new_cols += old_cols[2:]
+        if exp_type == 'control':
+            new_cols = ['fixed' if col in ['VWheel', 'VWheelWF'] else 'free' for col in old_cols[:2]]
+        else:
+            new_cols = old_cols
+
         col_map = dict(zip(old_cols, new_cols))
         new_df = df.rename(columns=col_map)
         renamed_data_list.append(new_df)
@@ -30,12 +32,11 @@ def concatenate_cell_matches(data_list, exp_type):
     return cell_matches
 
 
-
 # Main script
-mice = processing_parameters.cohort_1[:1]
-  results = ['multi']    # ['multi', 'fullfield', 'control'], ['repeat']
-lightings = ['normal']
-rigs = ['ALL']     # ['VWheelWF', 'VTuningWF'], ['ALL']    # 'ALL' used for everything but repeat aggs
+mice = processing_parameters.all_mice
+results = ['repeat']  # ['multi', 'fullfield', 'control'], ['repeat']
+lightings = ['normal', 'dark']     # ['normal', 'dark']
+rigs = ['VWheelWF', 'VTuningWF']     # ['VWheelWF', 'VTuningWF'], ['ALL']    # 'ALL' used for everything but repeat aggs
 analysis_type = 'tc_consolidate'
 
 for mouse, result, light, rig in itertools.product(mice, results, lightings, rigs):
@@ -76,6 +77,12 @@ for mouse, result, light, rig in itertools.product(mice, results, lightings, rig
                     for key in tc.keys():
                         label = "_".join(key.split('/')[1:])
                         data = tc[key]
+
+                        # If this is the cell matches, check if empty, and add NaNa if so
+                        if (label == 'cell_matches'):
+                            if data.empty:
+                                data.loc[0, :] = np.nan
+
                         if 'day' not in data.columns:
                             data['day'] = date
                             data['animal'] = mouse
@@ -93,7 +100,7 @@ for mouse, result, light, rig in itertools.product(mice, results, lightings, rig
                     df = pd.concat([d[key] for d in data_list]).reset_index(names='old_index')
 
                 concat_data_dict[key] = df
-                # df.to_hdf(output_path, key)
+                df.to_hdf(output_path, key)
 
             # assemble the entry data
             entry_data = {

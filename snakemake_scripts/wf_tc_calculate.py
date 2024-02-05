@@ -410,7 +410,7 @@ def calculate_kinematic_tuning(df, day, animal, rig):
                                  percentile=percentile, bin_number=bin_num, shuffle_kind=shuffle_kind)
 
     # get the TC consistency
-    tcs_cons = extract_consistency(tcs_half, variable_names, cell_num, percentile=80)
+    tcs_cons = extract_consistency(tcs_half, variable_names, cell_num, shuffle_kind=shuffle_kind, percentile=80)
 
     # convert the outputs into a dataframe
     tcs_dict, tcs_counts_dict, tcs_bins_dict = convert_to_dataframe(tcs_half, tcs_full, tc_count, tcs_resp,
