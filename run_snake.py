@@ -86,6 +86,7 @@ for idx, target_entries in enumerate(full_queries):
                    'dlc_path': paths.dlc_script,
                    'denoising_path': paths.ca_denoising_script,
                    'cnmfe_path': paths.calcium_script,
+                   'ca_reg_path': paths.update_motion_path,
                    'interval': [2, 3],
                    'analysis_type': parsed_search['analysis_type'],
                    }
@@ -98,14 +99,16 @@ for idx, target_entries in enumerate(full_queries):
     if parsed_search['analysis_type'] == 'preprocessing_run':
         # feed the generic txt file for preprocessing
         out_path = os.path.join(paths.analysis_path, 'preprocessing_run.txt')
-    elif parsed_search['analysis_type'] == 'update_matches_run':
-        out_path = os.path.join(paths.analysis_path, 'update_cells_match_run.txt')
-    elif parsed_search['analysis_type'] == 'update_kinem_tcs_run':
-        out_path = os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt')
     elif parsed_search['analysis_type'] == 'tuning_run':
         out_path = os.path.join(paths.analysis_path, 'tuning_run.txt')
     elif parsed_search['analysis_type'] == 'aggregate_run':
         out_path = os.path.join(paths.analysis_path, 'aggregate_run.txt')
+    elif parsed_search['analysis_type'] == 'update_matches_run':
+        out_path = os.path.join(paths.analysis_path, 'update_cells_match_run.txt')
+    elif parsed_search['analysis_type'] == 'update_kinem_tcs_run':
+        out_path = os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt')
+    elif parsed_search['analysis_type'] == 'update_ca_reg_run':
+        out_path = os.path.join(paths.analysis_path, 'ca_reg_run.txt')
     else:
         # feed the aggregation path
         out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
@@ -116,14 +119,14 @@ for idx, target_entries in enumerate(full_queries):
                               '-d', paths.snakemake_working,
                               # '--use-conda',
                               # '-F',         # (hard) force rerun everything
-                              '-f',         # (soft) force rerun last step
+                              # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
                               # '--rerun-incomplete',
                               # '--touch',    # updates output file timestamp, but doesn't process
                               # '--verbose',    # make the output more verbose for debugging
                               # '--debug-dag',  # show the file selection operation, also for debugging
                               # '--dryrun',   # generates the DAG and everything, but doesn't process,
-                              # '--reason',   # print the reason for executing each job
+                              # '--reason'  ,   # print the reason for executing each job
                               ],
                              stdout=sp.PIPE,
                              )
@@ -150,5 +153,8 @@ for idx, target_entries in enumerate(full_queries):
     elif (parsed_search['analysis_type'] == 'update_kinem_tcs_run') & \
             (os.path.isfile(os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt'))):
         os.remove(os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt'))
+    elif (parsed_search['analysis_type'] == 'update_ca_reg_run') & \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'ca_reg_run.txt'))):
+        os.remove(os.path.join(paths.analysis_path, 'ca_reg_run.txt'))
 
 print('yay')

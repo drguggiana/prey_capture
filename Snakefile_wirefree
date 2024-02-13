@@ -456,6 +456,55 @@ rule update_kinematic_tcs:
         "snakemake_scripts/update_kinematic_tc_wf.py"
 
 
+rule update_calcium_registration:
+    input:
+        os.path.join(paths.vrexperiment_path,'{file}.tif')
+    output:
+        temp(os.path.join(paths.analysis_path, "{file}_update_ca_reg.txt"))
+    params:
+        file_info = lambda wildcards: config["file_info"][wildcards.file],
+        reg_path=config["ca_reg_path"]
+    shell:
+        r'conda activate minian && python "{params.reg_path}" "{input}" "{output}" "{params.file_info}"'
+
+# --- Top level rules --- #
+
+rule preprocessing_run:
+    input:
+          expand(os.path.join(paths.analysis_path,"{file}"+'_preproc.hdf5'), file=config['files'])
+    output:
+          os.path.join(paths.analysis_path, "preprocessing_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"
+
+
+rule tuning_run:
+    input:
+          expand(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"), file=config['files'])
+    output:
+          os.path.join(paths.analysis_path, "tuning_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"
+
+
+rule aggregate_run:
+    input:
+          expand(os.path.join(paths.analysis_path,"{file}"+'_combinedanalysis.hdf5'), file=config['files']),
+    output:
+          os.path.join(paths.analysis_path, "aggregate_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"
+
+
 rule update_cell_matches_run:
     input:
         expand(os.path.join(paths.analysis_path,"{file}_update_dummy_matches.txt"), file=config['files'])
@@ -480,41 +529,13 @@ rule update_kinem_tcs_run:
         "snakemake_scripts/full_run.py"
 
 
-# --- Top level rules --- #
-
-rule preprocessing_run:
+rule update_ca_reg_run:
     input:
-          expand(os.path.join(paths.analysis_path,"{file}"+'_preproc.hdf5'), file=config['files'])
+          expand(os.path.join(paths.analysis_path, "{file}_update_ca_reg.txt"), file=config['files'])
     output:
-          os.path.join(paths.analysis_path, "preprocessing_run.txt")
+          os.path.join(paths.analysis_path, "ca_reg_run.txt")
     params:
           file_info=expand("{info}", info=config["file_info"].values()),
           output_info=config["output_info"]
     script:
           "snakemake_scripts/full_run.py"
-
-
-rule tuning_run:
-    input:
-          expand(os.path.join(paths.analysis_path, "{file}_tcday.hdf5"), file=config['files'])
-    output:
-          os.path.join(paths.analysis_path, "tuning_run.txt")
-    params:
-          file_info=expand("{info}", info=config["file_info"].values()),
-          output_info=config["output_info"]
-    script:
-          "snakemake_scripts/full_run.py"
-
-
-rule aggregate_run:
-    input:
-          expand(os.path.join(paths.analysis_path,"{file}"+'_combinedanalysis.hdf5'), file=config['files']),
-    output:
-          os.path.join(paths.analysis_path, "aggregate_run.txt")
-    params:
-          file_info=expand("{info}", info=config["file_info"].values()),
-          output_info=config["output_info"]
-    script:
-          "snakemake_scripts/full_run.py"
-
-
