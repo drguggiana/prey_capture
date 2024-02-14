@@ -1,122 +1,79 @@
-import pandas as pd
-import numpy as np
+# imports
+
 import paths
 import processing_parameters
-import os
-import functions_vame as fv
-import functions_bondjango as bd
-import functions_io as fi
 import cv2
-import random
+import pandas as pd
+import numpy as np
+import functions_bondjango as bd
+import functions_loaders as fl
+import functions_io as fi
+import functions_vame as fv
+import os
 
 
-# Get the path to the involved files
+def save_video(frame_list, base_path, width, height, *args, frame_rate=10, frame_function=None, **kwargs):
+    """Save a video with jpeg compression based on the input array"""
 
-# define the number of files to take
-number_files = 20
-# define the type of VAME
-vame_type = 'prey_capture_15'
-# define the number of frames to remove at beginning and end (due to VAME interval)
-vame_interval = 15
-# define the folder
-target_folder = os.path.join(r'J:\Drago Guggiana Nilo\Prey_capture\temp_VAME', vame_type)
+    # allocate memory for the output
+    output_array = []
+    # create the writer
+    out = cv2.VideoWriter(base_path, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), frame_rate, (width, height))
+    # save the movie
+    for frames in frame_list:
+        # get the frame
+        out_frame = frames.astype('float32')
+        # apply the perspective matrix
+        if frame_function is not None:
+            out_frame = frame_function(out_frame, *args, **kwargs)
+        # save in the output
+        output_array.append(out_frame[:, :, 0])
+        # save to file
+        out.write(out_frame.astype('uint8'))
 
-# load the sorting
-motif_sort = np.array(processing_parameters.motif_sort)
-motif_revsort = np.array(processing_parameters.motif_revsort)
+    out.release()
+    return np.array(output_array).astype('uint8')
 
-# get a list of the result folders
-result_list = os.listdir(os.path.join(target_folder, 'results'))
-# load the search string
-vame_vis_string = processing_parameters.vame_vis_string
 
-# Load the matching prey capture data
-
-# using the slug, perform serial calls to the database
-# (super inefficient, but this is temporary as the VAME data should be included in the hdf5 file)
-
-# for all the files
-
-# define the search string
-# query the database for data to plot
-data_entries = bd.query_database('analyzed_data', vame_vis_string)
-
-# take number_files random samples from the entries
-data_sample = random.sample(data_entries, number_files)
-
-# for the desired number of entries
-for data_all in data_sample:
-    data_path = data_all['analysis_path']
-    data_vame_name = data_all['slug'].replace('_preprocessing', '')
-
-    # load the data
-    beh_data = pd.read_hdf(data_path, 'full_traces')
-    beh_data = beh_data.iloc[vame_interval:-vame_interval, :].reset_index(drop=True)
-    # load the frame bounds
-    frame_bounds = pd.read_hdf(data_path, 'frame_bounds')
-    # get the reference corners
-    ref_corners = paths.arena_coordinates['miniscope']
-    corner_points = pd.read_hdf(data_path, 'corners').to_numpy().T
-
-    # if the file wasn't embedded, skip it
-    if not os.path.isdir(os.path.join(target_folder, 'results', data_vame_name, 'VAME', 'kmeans-15')):
-        continue
-
-    # load the latent and labels
-    label_list = motif_revsort[np.load(os.path.join(target_folder, 'results', data_vame_name, 'VAME',
-                                                    'kmeans-15', '15_km_label_' + data_vame_name + '.npy'))]
-
-    latent_list = np.load(os.path.join(target_folder, 'results', data_vame_name, 'VAME',
-                                       'kmeans-15', 'latent_vector_' + data_vame_name + '.npy'))
-
-    # # load the aligned data
-    # data_list = np.load(os.path.join(target_folder, 'data', data_vame_name,
-    #                                  data_vame_name + '-PE-seq.npy'))
-    # data_list = data_list[:, vame_interval:-vame_interval]
-    # print(beh_data.shape)
-
-    # get the video
-    # assemble the path
-    video_path = os.path.join(paths.videoexperiment_path,
-                              data_all['slug'].replace('_preprocessing', '.avi'))
+def load_video(video_path, frame_bounds):
+    """Load an avi video into an array"""
     # create the video object
     cap = cv2.VideoCapture(video_path)
     # allocate memory for the corners
     frame_list = []
-    # # define sigma for the edge detection parameters
-    # sigma = 0.2
-    # get the frames to mode
-    for frames in np.arange(frame_bounds.loc[0, 'end']-1):
 
+    # get the frames to mode
+    for _ in np.arange(frame_bounds.loc[0, 'end']):
         # read the image
         frame_list.append(cap.read()[1])
 
     # release the capture
     cap.release()
-
     frame_list = frame_list[frame_bounds.loc[0, 'start']:]
-    # keep this for the motif videos
-    frames_formotif = frame_list.copy()
-    # trim to interval
-    frame_list = frame_list[vame_interval:-vame_interval]
-    # print(len(frame_list))
-    # print(frame_list[0].shape)
-    # print(latent_list.shape)
 
-    # Get the motif locations
+    print(f'Frames after trimming bounds: {len(frame_list)}')
+    return frame_list
 
-    # get the motif number
-    motif_number = latent_list.shape[1]
-    # turn the movie into an array
-    movie_array = np.array(frame_list)
+
+def expand_frame_dims(frame_in):
+    """Expand the dims of a single frame to 3 so it's compatible with color movies"""
+    return np.repeat(np.expand_dims(frame_in, 2), 3, axis=2)
+
+
+def find_motif_sequences(motif_vector):
+    """Find the longest sequence of each motif present in the video"""
+
+    present_motifs = np.unique(motif_vector)
+    present_motifs = present_motifs[~np.isnan(present_motifs)]
+
     # allocate memory for all the locations
     location_perfile = []
     duration_perfile = []
     # for all the motifs
-    for motif in np.arange(motif_number):
+    for motif in present_motifs:
 
         # find all the starts and ends for this motif
-        m_idx = (label_list == motif).astype(int)
+        m_idx = (motif_vector == motif).astype(int)
         starts = np.argwhere(np.diff(np.pad(m_idx, (1, 1), mode='constant', constant_values=(0, 0))) == 1)
         ends = np.argwhere(np.diff(np.pad(m_idx, (1, 1), mode='constant', constant_values=(0, 0))) == -1)
 
@@ -148,7 +105,7 @@ for data_all in data_sample:
         # make sure the ends are always bigger than the starts
         try:
             assert np.all((ends - starts) > 0)
-        except AssertionError:
+        except AssertionError("End is located before start"):
             # print(str(idx) + '_' + str(motif))
             print(starts)
             print(ends)
@@ -157,77 +114,18 @@ for data_all in data_sample:
         location_perfile.append([el[0] for el in starts])
         duration_perfile.append([el[0] for el in ends - starts])
 
-    # print(location_perfile[0])
-    # print(duration_perfile[0])
-    # print(label_list)
-    # print(location_perfile)
-    # print(duration_perfile)
+    return location_perfile, duration_perfile, present_motifs
 
-    # create a distortion corrected video
 
-    # define the path for saving the movies
-    temp_path = paths.temp_path
-    # clean the folder
-    fi.delete_contents(temp_path)
-
-    # create a bounded movie to align later
-    # assemble the bounded movie path
-    bounded_path = os.path.join(temp_path, 'bounded.avi')
-    # new_mat = cv2.UMat(rot_matrix)
-
-    # save the bounded movie
-    # get the width and height
-    width = frame_list[0].shape[1]
-    height = frame_list[0].shape[0]
-
-    # test = cv2.warpPerspective(frames_formotif[0].astype('float32'), rot_matrix.to_numpy(), (width, height))
-    # current_matrix = rot_matrix.to_numpy()
-
-    perspective_matrix = cv2.getPerspectiveTransform(corner_points.astype('float32'),
-                                                     (np.array(ref_corners).astype('float32')+5)*20)
-
-    # create the writer
-    out = cv2.VideoWriter(bounded_path, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 10, (1280, 1024))
-    # save the movie
-    for frames in frame_list:
-        # apply the perspective matrix
-        out_frame = cv2.warpPerspective(frames.astype('float32'), perspective_matrix, (1280, 1024))
-        out.write(out_frame.astype('uint8'))
-
-    out.release()
-
-    # Align the video egocentrically
-
-    # create the egocentric movie
-    path_dlc = data_path
-    path_vame = target_folder
-    file_format = '.avi'
-    crop_size = (1000, 1000)
-    use_video = True
-    check_video = False
-    save_align = False
-
-    scaled_data = (beh_data+5)*20
-    # print(scaled_data.shape)
-
-    _, egocentric_frames = fv.align_demo(scaled_data, path_vame, data_vame_name, file_format, crop_size,
-                                         use_video=use_video, check_video=check_video,
-                                         vid_path=bounded_path)
-
-    # turn the list into an array
-    egocentric_frames = np.array(egocentric_frames)
-    # print(egocentric_frames.shape)
-
-    # Create egocentric movies for all motifs
-
-    # get the motifs present
-    present_motifs = np.unique(label_list)
+def save_motif_videos(egocentric_frames, present_motifs, duration_perfile, location_perfile,
+                      target_path, crop_size, slug):
+    """Save the longest sequence of each motif present in the video, creating folders accordingly"""
     # for all the motifs present
-    for current_motif in present_motifs:
+    for idx, motif in enumerate(present_motifs):
         # get the maximum duration
-        max_duration = np.max(duration_perfile[current_motif])
+        max_duration = np.max(duration_perfile[idx])
         # get the start of the maximum duration
-        max_location = location_perfile[current_motif][np.argmax(duration_perfile[current_motif])]
+        max_location = location_perfile[idx][np.argmax(duration_perfile[idx])]
 
         # get the video frames
         frame_idx = np.array(np.arange(max_location, max_location + max_duration))
@@ -235,20 +133,122 @@ for data_all in data_sample:
         # save the movie
 
         # assemble the bounded movie path
-        # motif_path = os.path.join(temp_path, str(current_motif) + '_motif.avi')
-        motif_path = os.path.join(target_folder, 'motif_videos', str(current_motif))
+        motif_folder = os.path.join(target_path, f'{int(motif):02d}')
+
         # check if the folder exists, if not, create
-        if not os.path.isdir(motif_path):
-            os.makedirs(motif_path)
-        # assemble the video path
-        motif_video_path = os.path.join(motif_path,  '_'.join(('m'+str(current_motif), data_vame_name, '.avi')))
+        if not os.path.isdir(motif_folder):
+            os.makedirs(motif_folder)
 
-        # create the writer
-        out2 = cv2.VideoWriter(motif_video_path, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
-                               5, (crop_size[0], crop_size[1]))
-        # save the movie
-        for frames in motif_frames:
-            out_frame = np.repeat(np.expand_dims(frames, 2), 3, axis=2)
-            out2.write(out_frame.astype('uint8'))
+        motif_path = os.path.join(motif_folder, '_'.join((f'{int(motif):02d}motif', slug, '.avi')))
+        # save the motif movie
+        save_video(motif_frames, motif_path, crop_size[0], crop_size[1], frame_function=expand_frame_dims)
+    return
 
-        out2.release()
+
+def create_vame_videos(search_query, video_root, temp_path, ref_corners, target_root,
+                       shift_factor=5, scale_factor=20, crop_size=(200, 200), save_full_egocentric=False,
+                       egocentric=True):
+    """Create egocentric videos from the list of files passed
+    search_query:
+
+    """
+    # TODO: fill up the docstring properly
+    # LOAD THE PREPROCESSING FILE
+
+    # get the paths from the database using search_list
+    data_all = bd.query_database('analyzed_data', search_query)
+    data_all = [el for el in data_all if '_preproc' in el['slug']][0]
+    data_path = data_all['analysis_path']
+    data_vame_name = data_all['slug'].replace('_preprocessing', '')
+
+    data, _, _ = fl.load_preprocessing([data_path], [data_all], behavior_flag=True)
+    data = data[0]
+
+    dlc_corners = pd.read_hdf(data_path, 'corners')
+    frame_bounds = pd.read_hdf(data_path, 'frame_bounds')
+
+    # load the corresponding video
+
+    # assemble the path
+    video_path = os.path.join(video_root,
+                              data_all['slug'].replace('_preprocessing', '.avi'))
+    # get the video data
+    frame_list = load_video(video_path, frame_bounds)
+
+    # CREATE THE UNDISTORTED MOVIE
+
+    # clean the folder
+    fi.delete_contents(temp_path)
+
+    # assemble the bounded movie path
+    unwarped_path = os.path.join(temp_path, 'unwarped.avi')
+
+    # get the width and height
+    width = frame_list[0].shape[1]
+    height = frame_list[0].shape[0]
+    res_tuple = (width, height)
+
+    # generate the perspective matrix to undistort
+    perspective_matrix = cv2.getPerspectiveTransform(dlc_corners.to_numpy().T.astype('float32'),
+                                                     (np.array(ref_corners).astype('float32') +
+                                                      shift_factor)*scale_factor)
+    # create and save the unwarped movie
+    out_frames = save_video(frame_list, unwarped_path, width, height, perspective_matrix, res_tuple,
+                            frame_function=cv2.warpPerspective)
+
+    # ALIGN THE VIDEO EGOCENTRICALLY IF DESIRED
+    if egocentric:
+
+        # create the egocentric movie
+        file_format = '.avi'
+        use_video = True
+        check_video = False
+
+        # select the coordinate columns
+        coordinate_columns = [el for el in data.columns if ('mouse_' in el) | ('cricket_' in el)]
+        # scale the data so it maches the movie scaling (the 1000 factor comes from the alignment function, as it needs
+        # more dynamic range to work with the real scale values instead of pixels)
+        scaled_data = (data[coordinate_columns].fillna(0)+shift_factor)*scale_factor/1000
+        # egocentrically crop the video data
+        _, egocentric_frames, _ = fv.align_demo(scaled_data, [], data_vame_name, file_format, crop_size,
+                                                use_video=use_video, check_video=check_video,
+                                                vid_path=unwarped_path)
+
+        # turn the list into an array
+        egocentric_frames = np.array(egocentric_frames)
+
+        # if egocentric movie is desired
+        if save_full_egocentric:
+            # create the egocentric movie
+
+            # assemble the bounded movie path
+            egocentric_path = os.path.join(temp_path, 'egocentric.avi')
+
+            # get the width and height
+            width = egocentric_frames[0].shape[1]
+            height = egocentric_frames[0].shape[0]
+            # save the egocentric movie
+            save_video(egocentric_frames, egocentric_path, width, height, frame_function=expand_frame_dims)
+        # overwrite the out frames
+        out_frames = egocentric_frames
+        res_tuple = crop_size
+
+    # SAVE THE MOTIF-SPECIFIC VIDEOS
+
+    # get the present motifs
+    motif_vector = data['motifs'].to_numpy()
+    # find the longest sequences
+    location_perfile, duration_perfile, present_motifs = find_motif_sequences(motif_vector)
+    # Create egocentric movies for all motifs
+    save_motif_videos(out_frames, present_motifs, duration_perfile, location_perfile,
+                      target_root, res_tuple, data_vame_name)
+
+
+if __name__ == '__main__':
+
+    # loop through the entries in the VAME search list
+    for vid in processing_parameters.vame_video:
+        create_vame_videos(vid, paths.videoexperiment_path, paths.temp_path,
+                           paths.arena_coordinates['miniscope'], paths.vame_videos,
+                           crop_size=(400, 400), save_full_egocentric=True, egocentric=False)
+

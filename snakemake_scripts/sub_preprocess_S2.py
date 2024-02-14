@@ -361,3 +361,122 @@ def kinematic_calculations(data, kernel_size=11):
 
     # return the dataframe
     return kine_data, real_crickets, vr_crickets
+
+
+def kinematic_calculations_arprey(data, kernel_size=11):
+    """Calculate basic kinematic parameters of mouse and cricket"""
+
+    # check if there are nans. if so, return a badFile dataframe
+    coordinate_columns = [el for el in data.columns if ('_x' in el) | ('_y' in el)]
+
+    # check for bad files
+    if 'trial_num' not in data.columns:
+        if np.any(np.isnan(data[coordinate_columns])):
+            real_crickets = 0
+            vr_crickets = 0
+            kine_data = pd.DataFrame(['badFile'], columns=['badFile'])
+
+            return kine_data, real_crickets, vr_crickets
+
+    # keep the mouse, datetime and syncframes columns (and trial_num if there)
+    meta_columns = [el for el in ['mouse', 'datetime', 'trial_num'] if el in data.columns]
+
+    # get the mouse coordinates too (from bonsai)
+    mouse_coord = data.loc[:, ['mouse_x', 'mouse_y']].to_numpy()
+    # calculate heading based on movement
+    mouse_heading = np.concatenate((heading_calculation(mouse_coord[1:, :], mouse_coord[:-1, :]), [0]))
+    # zero the NaNs
+    mouse_heading[np.isnan(mouse_heading)] = 0
+
+    # get the time
+    time_vector = data.time_vector.to_numpy()
+
+    mouse_speed = np.concatenate(
+        ([0], distance_calculation(mouse_coord[1:, :], mouse_coord[:-1, :]) /
+         (time_vector[1:] - time_vector[:-1])))
+    mouse_acceleration = np.concatenate(([0], np.diff(mouse_speed)))
+
+    # calculate the angular speed
+    head_angular_speed = np.concatenate(([0], np.diff(mouse_heading + 180)), axis=0)
+    delta_time = np.concatenate(([1], np.diff(time_vector)), axis=0)
+    # wrap the angular speed
+    head_angular_speed[head_angular_speed > 180] -= 360
+    head_angular_speed[head_angular_speed < -180] += 360
+    angular_speed = head_angular_speed/delta_time
+
+    # save the traces to a variable
+    angle_traces = np.vstack((mouse_heading, angular_speed, mouse_speed, mouse_acceleration, time_vector)).T
+    # replace infinity values with NaNs (in the kinematic traces)
+    angle_traces[np.isinf(angle_traces)] = np.nan
+
+    # create a dataframe with the results
+    kine_data = pd.DataFrame(angle_traces, columns=['mouse_heading', 'mouse_angular_speed', 'mouse_speed',
+                                                    'mouse_acceleration', 'time_vector'])
+    # add the meta columns
+    kine_data = pd.concat([kine_data, data.loc[:, meta_columns]], axis=1)
+
+    # # if the motive flag is on, also calculate head direction
+    # if 'mouse_x_m' in data.columns:
+    # get the head direction around the vertical axis
+    head_direction = data['mouse_zrot']
+    # get the head height
+    head_height = data['mouse_z']
+
+    # get the offset to correct the head direction due to the center of mass of the tracker
+    # (to single degree accuracy)
+
+    # get offset via correlation
+    angle_offset = np.argmax([np.corrcoef(np.vstack((head_direction - el, mouse_heading)))[0][1]
+                              for el in range(360)])
+
+    head_direction = head_direction - angle_offset
+
+    # include the motive info in the final dataframe
+    kine_data['head_direction'] = head_direction
+    kine_data['head_height'] = head_height
+
+    # # if the head data from DLC is available and there's no motive, calculate head direction and delta_look
+    # if 'mouse_head_x' in data.columns and 'mouse_x_m' not in data.columns:
+    #     # get the head angle with respect to body
+    #     head_direction = heading_calculation(data[['mouse_head_x', 'mouse_head_y']].to_numpy(),
+    #                                          data[['mouse_x', 'mouse_y']].to_numpy())
+    #
+    #     # # calculate the angular speed
+    #     # head_angular_speed = np.concatenate(([0], np.diff(head_direction+180)), axis=0)
+    #     # delta_time = np.concatenate(([1], np.diff(kine_data.loc[:, 'time_vector'].to_numpy())), axis=0)
+    #     # # wrap the angular speed
+    #     # head_angular_speed[head_angular_speed > 180] -= 360
+    #     # head_angular_speed[head_angular_speed < -180] += 360
+    #     # save in the dataframe
+    #     kine_data['head_direction'] = head_direction
+    #     # kine_data['angular_speed'] = head_angular_speed/delta_time
+
+    # add the raw tracks from DLC (already filtered in S1)
+    track_list = [el for el in list(data.columns) if 'mouse_' in el]
+    kine_data = pd.concat([data.loc[:, track_list], kine_data], axis=1)
+
+    # check for a real cricket
+    if 'cricket_0_x' in data.columns:
+        cricket_coord = data[['cricket_0_x', 'cricket_0_y']].to_numpy()
+        # process the cricket related data
+        cricket_data = cricket_processing(cricket_coord, data, mouse_coord, mouse_heading, kine_data)
+        # get the hunt trace
+        hunt_trace = label_hunt(kine_data, cricket_data)
+        # concatenate the cricket data
+        kine_data = pd.concat([kine_data, cricket_data, hunt_trace], axis=1)
+        # set the cricket number
+        real_crickets = 1
+    else:
+        real_crickets = 0
+
+    # set vr crickets to 0
+    vr_crickets = 0
+
+    # define the columns the median
+    target_columns = [el for el in kine_data.columns if el not in
+                      ['time_vector', 'mouse', 'datetime', 'sync_frames', 'cricket_0_size', 'hunt_trace'] + track_list]
+    # median filter the traces
+    kine_data = fp.median_discontinuities(kine_data, target_columns, kernel_size)
+
+    # return the dataframe
+    return kine_data, real_crickets, vr_crickets
