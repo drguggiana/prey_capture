@@ -125,6 +125,55 @@ def parse_features(data, feature_list, bin_number=10):
     return feature_raw_trials, calcium_trials
 
 
+def extract_tc_parts(current_feature_0, cell_number, calcium_trials, feature_counts, bins, num_splits=2):
+    """
+    Extract the split tuning curves for consistency calculation. Generalized version of extract_half_tc
+    :param current_feature_0:
+    :param cell_number:
+    :param calcium_trials:
+    :param feature_counts:
+    :param bins:
+    :return:
+    """
+
+    tc_part_temp = []
+
+    # Split the trace into parts
+    for split in np.arange(num_splits):
+        # get the split vector
+        split_bound = int(np.floor(current_feature_0.shape[0] / num_splits))
+        split_vector = np.arange(split_bound) + split_bound * split
+        split_feature_0 = current_feature_0[split_vector]
+
+        # exclude nan values
+        keep_vector = ~np.isnan(split_feature_0)
+        keep_feature_0 = split_feature_0[keep_vector]
+
+        # allocate a list for the cells
+        tc_cell = []
+
+        # for all the cells
+        for cell in np.arange(cell_number):
+            # get the current cell
+            split_cell = calcium_trials[split_vector, cell]
+            keep_cell = split_cell[keep_vector]
+
+            # get the tc
+            current_tc = stat.binned_statistic(keep_feature_0, keep_cell, statistic='mean', bins=bins)[0]
+
+            # remove nans and infs
+            current_tc[np.isnan(current_tc)] = 0
+            current_tc[np.isinf(current_tc)] = 0
+
+            # store
+            tc_cell.append(current_tc)
+
+        # store the cells
+        tc_part_temp.append(tc_cell)
+
+    return tc_part_temp
+
+
 def extract_half_tc(current_feature_0, cell_number, calcium_trials, feature_counts, bins):
     """Get the half tuning curves for consistency calculation"""
     tc_half_temp = []
@@ -135,6 +184,7 @@ def extract_half_tc(current_feature_0, cell_number, calcium_trials, feature_coun
         half_bound = int(np.floor(current_feature_0.shape[0] / 2))
         half_vector = np.arange(half_bound) + half_bound * half
         half_feature_0 = current_feature_0[half_vector]
+
         # exclude nan values
         keep_vector = ~np.isnan(half_feature_0)
         keep_feature_0 = half_feature_0[keep_vector]
@@ -149,12 +199,12 @@ def extract_half_tc(current_feature_0, cell_number, calcium_trials, feature_coun
             keep_cell = half_cell[keep_vector]
 
             # get the tc
-            current_tc = \
-                stat.binned_statistic(keep_feature_0, keep_cell, statistic='mean', bins=bins)[0]
+            current_tc = stat.binned_statistic(keep_feature_0, keep_cell, statistic='mean', bins=bins)[0]
 
             # remove nans and infs
             current_tc[np.isnan(current_tc)] = 0
             current_tc[np.isinf(current_tc)] = 0
+
             # store
             tc_cell.append(current_tc)
 
@@ -175,8 +225,7 @@ def calculate_quality_index(counts_feature_0, keep_cell, tt_split, bins):
     test_calcium = keep_cell[split_point:]
 
     # calculate the tuning curve with the train data
-    tc_train, train_bins, _ = \
-        stat.binned_statistic(train_behavior, train_calcium, statistic='mean', bins=bins)
+    tc_train, train_bins, _ = stat.binned_statistic(train_behavior, train_calcium, statistic='mean', bins=bins)
     _, _, test_idx = stat.binned_statistic(test_behavior, test_calcium, statistic='count', bins=train_bins)
 
     tc_train[np.isnan(tc_train)] = 0
@@ -203,8 +252,7 @@ def shuffle_random(cell, counts_feature_0, feature_counts, tt_split, bins, shuff
         random_cell = np.random.choice(random_cell, cell.shape[0])
 
         # Get the mean of the bins
-        tc_random = \
-            stat.binned_statistic(counts_feature_0, random_cell, statistic='mean', bins=bins)[0]
+        tc_random = stat.binned_statistic(counts_feature_0, random_cell, statistic='mean', bins=bins)[0]
 
         tc_random[np.isnan(tc_random)] = 0
         tc_random[np.isinf(tc_random)] = 0
@@ -242,8 +290,7 @@ def shuffle_random_bin(cell, counts_feature_0, feature_counts, tt_split, bins, t
         random_cell = random_cell[random_time_idxs]
 
         # Get the mean of the bins
-        tc_random = \
-            stat.binned_statistic(counts_feature_0, random_cell, statistic='mean', bins=bins)[0]
+        tc_random = stat.binned_statistic(counts_feature_0, random_cell, statistic='mean', bins=bins)[0]
 
         tc_random[np.isnan(tc_random)] = 0
         tc_random[np.isinf(tc_random)] = 0
@@ -276,8 +323,7 @@ def add_lag(cell, counts_feature_0, feature_counts, tt_split, bins, lag=0.5):
         lag_cell = np.roll(cell.copy(), shuffle * lag_step)
 
         # Get the mean of the bins
-        tc_random = \
-            stat.binned_statistic(counts_feature_0, lag_cell, statistic='mean', bins=bins)[0]
+        tc_random = stat.binned_statistic(counts_feature_0, lag_cell, statistic='mean', bins=bins)[0]
 
         tc_random[np.isnan(tc_random)] = 0
         tc_random[np.isinf(tc_random)] = 0
@@ -306,8 +352,7 @@ def extract_full_tc(counts_feature_0, feature_counts, cell_number, calcium_trial
         keep_cell = calcium_trials[keep_vector_full, cell]
 
         # Get the mean of the bins
-        tc_cell, _, tc_idx = \
-            stat.binned_statistic(counts_feature_0, keep_cell, statistic='mean', bins=bins)
+        tc_cell, _, tc_idx = stat.binned_statistic(counts_feature_0, keep_cell, statistic='mean', bins=bins)
 
         tc_cell[np.isnan(tc_cell)] = 0
         tc_cell[np.isinf(tc_cell)] = 0
@@ -325,10 +370,10 @@ def extract_full_tc(counts_feature_0, feature_counts, cell_number, calcium_trial
         # shuffle the calcium activity
         if shuffle_kind == 'random':
             shuffle_info, shuffle_quality = shuffle_random(keep_cell, counts_feature_0, feature_counts, tt_split, bins,
-                                                shuffle_number=shuffle_number)
+                                                           shuffle_number=shuffle_number)
         elif shuffle_kind == 'random_bin':
             shuffle_info, shuffle_quality = shuffle_random_bin(keep_cell, counts_feature_0, feature_counts, tt_split, bins,
-                                                    time_bin_width=lag_or_bin, shuffle_number=shuffle_number)
+                                                               time_bin_width=lag_or_bin, shuffle_number=shuffle_number)
         elif shuffle_kind == 'lag_wrap':
             shuffle_info, shuffle_quality = add_lag(keep_cell, counts_feature_0, feature_counts, tt_split, bins,
                                                     lag=lag_or_bin)
@@ -340,8 +385,6 @@ def extract_full_tc(counts_feature_0, feature_counts, cell_number, calcium_trial
         qual_threshold = np.percentile(np.abs(shuffle_quality.flatten()), percentile)
 
         # fill up the responsivity matrix
-        # tc_cell_resp[cell, 0] = np.mean(np.sort(np.abs(tc_cell), axis=None)[-3:]) / resp_threshold
-        # tc_cell_resp[cell, 1] = np.sum(np.abs(tc_cell) > resp_threshold) > 3
         tc_cell_resp[cell, 0] = information_content
         tc_cell_resp[cell, 1] = np.abs(information_content) > resp_threshold
         tc_cell_resp[cell, 2] = tc_quality
@@ -428,8 +471,9 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
         # zero the positions with less than 3 counts
         feature_counts[feature_counts < 3] = 0
 
-        # get the half tuning curves
-        tc_half_temp = extract_half_tc(current_feature_0, cell_number, calcium_trials, feature_counts, bins)
+        # get the partial tuning curves for consistency calculation
+        tc_half_temp = extract_tc_parts(current_feature_0, cell_number, calcium_trials, feature_counts, bins,
+                                        num_splits=processing_parameters.tc_consistency_splits)
 
         # get the full tuning curves
         tc_cell_full, tc_cell_resp = extract_full_tc(counts_feature_0, feature_counts, cell_number,
@@ -688,7 +732,7 @@ if __name__ == '__main__':
         # get the number of bins
         bin_num = processing_parameters.bin_number
         shuffle_kind = processing_parameters.tc_shuffle_kind
-        percentile = processing_parameters.tc_percentile_cutoff
+        percentile = processing_parameters.tc_resp_qual_cutoff
 
         # define the pairs to quantify
         variable_names = processing_parameters.variable_list
