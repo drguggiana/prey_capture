@@ -227,7 +227,7 @@ elif files['rig'] in ['VTuningWF']:
     params.to_hdf(save_path, key='params', mode='a')
 
     # calculate only if calcium is present
-    if files['imaging'] == 'wirefree':
+    if files['imaging'] in ['wirefree']:
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_wf(calcium_path, files['sync_path'], kinematics_data, trials=trials)
         # if there is a calcium output, write to the file
@@ -269,7 +269,7 @@ elif files['rig'] in ['VWheelWF']:
     params.to_hdf(save_path, key='params', mode='a')
 
     # calculate only if calcium is present
-    if files['imaging'] == 'wirefree':
+    if files['imaging'] in ['wirefree']:
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_wf(calcium_path, files['sync_path'], kinematics_data, trials=trials)
 

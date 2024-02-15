@@ -359,10 +359,12 @@ def parse_kinematic_data(matched_calcium, rig):
 
 
 def calculate_kinematic_tuning(df, day, animal, rig):
-    # --- Process kinematic tuning --- #
-    # This is lifted directly from tc_calculate.py
-    # Note here that the kinematic data that was used for the visual tuning is not fed to the kinematic tuning
-    # curve calculation below since the formatting is different.
+    """ Process kinematic tuning
+    This is lifted directly from tc_calculate.py
+    Note here that the kinematic data that was used for the visual tuning is not fed to the kinematic tuning
+    curve calculation below since the formatting is different.
+
+    """
 
     print('Calculating kinematic tuning curves...')
 
@@ -392,7 +394,7 @@ def calculate_kinematic_tuning(df, day, animal, rig):
             pass
 
     # clip the calcium traces
-    clipped_data = clip_calcium([('', df)])
+    clipped_data = clip_calcium([df])
 
     # parse the features (bin number is for spatial bins in this one)
     features, calcium = parse_features(clipped_data, variable_names, bin_number=processing_parameters.spatial_bins)
@@ -410,11 +412,11 @@ def calculate_kinematic_tuning(df, day, animal, rig):
                                  percentile=percentile, bin_number=bin_num, shuffle_kind=shuffle_kind)
 
     # get the TC consistency
-    tcs_cons = extract_consistency(tcs_half, variable_names, cell_num, shuffle_kind=shuffle_kind, percentile=80)
+    tcs_cons = extract_consistency(tcs_half, variable_names, cell_num, percentile=80, shuffle_kind=shuffle_kind)
 
     # convert the outputs into a dataframe
     tcs_dict, tcs_counts_dict, tcs_bins_dict = convert_to_dataframe(tcs_half, tcs_full, tc_count, tcs_resp,
-                                                        tcs_cons, tc_bins, day, animal, rig)
+                                                                    tcs_cons, tc_bins, day, animal, rig)
 
     return tcs_dict, tcs_counts_dict, tcs_bins_dict
 

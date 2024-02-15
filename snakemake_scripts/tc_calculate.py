@@ -150,24 +150,23 @@ def extract_half_tc(current_feature_0, cell_number, calcium_trials, feature_coun
 
             # get the tc
             current_tc = \
-                stat.binned_statistic(keep_feature_0, keep_cell, statistic='sum', bins=bins)[0]
+                stat.binned_statistic(keep_feature_0, keep_cell, statistic='mean', bins=bins)[0]
 
-            # normalize the TC
-            norm_tc = current_tc / feature_counts
             # remove nans and infs
-            norm_tc[np.isnan(norm_tc)] = 0
-            norm_tc[np.isinf(norm_tc)] = 0
+            current_tc[np.isnan(current_tc)] = 0
+            current_tc[np.isinf(current_tc)] = 0
             # store
-            tc_cell.append(norm_tc)
+            tc_cell.append(current_tc)
 
         # store the cells
-        tc_half_temp.append(tc_cell)
+        tc_half_temp.append(current_tc)
 
     return tc_half_temp
 
 
 def calculate_quality_index(counts_feature_0, keep_cell, tt_split, bins):
     """Calculate the quality index with the given traces and train/test split"""
+
     # split in train and test
     split_point = int(np.round(tt_split * keep_cell.shape[0]))
     train_behavior = counts_feature_0[:split_point]
@@ -178,16 +177,14 @@ def calculate_quality_index(counts_feature_0, keep_cell, tt_split, bins):
     # calculate the tuning curve with the train data
     tc_train, train_bins, _ = \
         stat.binned_statistic(train_behavior, train_calcium, statistic='mean', bins=bins)
-    # print(train_bins, test_behavior, test_calcium)
     _, _, test_idx = stat.binned_statistic(test_behavior, test_calcium, statistic='count', bins=train_bins)
 
-    # tc_train = tc_train / feature_counts
     tc_train[np.isnan(tc_train)] = 0
     tc_train[np.isinf(tc_train)] = 0
 
     # use the tc_idx to regenerate the activity
-    # predicted_calcium = tc_cell[tc_idx-2]
     predicted_calcium = tc_train[test_idx-2]
+
     # get the correlation with the real calcium
     tc_quality = stat.spearmanr(test_calcium, predicted_calcium, nan_policy='omit')[0]
     return tc_quality
@@ -205,9 +202,12 @@ def shuffle_random(cell, counts_feature_0, feature_counts, tt_split, bins, shuff
         random_cell = cell.copy()
         random_cell = np.random.choice(random_cell, cell.shape[0])
 
-        # Get the sum of the bins
+        # Get the mean of the bins
         tc_random = \
-            stat.binned_statistic(counts_feature_0, random_cell, statistic='sum', bins=bins)[0]
+            stat.binned_statistic(counts_feature_0, random_cell, statistic='mean', bins=bins)[0]
+
+        tc_random[np.isnan(tc_random)] = 0
+        tc_random[np.isinf(tc_random)] = 0
 
         # get the information
         shuffle_information[shuffle] = calculate_information(feature_counts, tc_random, np.mean(random_cell))
@@ -241,9 +241,12 @@ def shuffle_random_bin(cell, counts_feature_0, feature_counts, tt_split, bins, t
         random_time_idxs = random_time_idxs[:random_cell.shape[0]]
         random_cell = random_cell[random_time_idxs]
 
-        # Get the sum of the bins
+        # Get the mean of the bins
         tc_random = \
-            stat.binned_statistic(counts_feature_0, random_cell, statistic='sum', bins=bins)[0]
+            stat.binned_statistic(counts_feature_0, random_cell, statistic='mean', bins=bins)[0]
+
+        tc_random[np.isnan(tc_random)] = 0
+        tc_random[np.isinf(tc_random)] = 0
 
         # get the information
         shuffle_information[shuffle] = calculate_information(feature_counts, tc_random, np.mean(random_cell))
@@ -272,9 +275,12 @@ def add_lag(cell, counts_feature_0, feature_counts, tt_split, bins, lag=0.5):
         # lag the calcium activity
         lag_cell = np.roll(cell.copy(), shuffle * lag_step)
 
-        # Get the sum of the bins
+        # Get the mean of the bins
         tc_random = \
-            stat.binned_statistic(counts_feature_0, lag_cell, statistic='sum', bins=bins)[0]
+            stat.binned_statistic(counts_feature_0, lag_cell, statistic='mean', bins=bins)[0]
+
+        tc_random[np.isnan(tc_random)] = 0
+        tc_random[np.isinf(tc_random)] = 0
 
         # get the information
         shuffle_information[shuffle] = calculate_information(feature_counts, tc_random, np.mean(lag_cell))
@@ -288,6 +294,7 @@ def add_lag(cell, counts_feature_0, feature_counts, tt_split, bins, lag=0.5):
 def extract_full_tc(counts_feature_0, feature_counts, cell_number, calcium_trials,
                     bins, keep_vector_full, shuffle_number, tt_split, percentile,
                     shuffle_kind='random', lag_or_bin=1):
+
     """Get the full tc"""
 
     # allocate memory for the full tc per cell
@@ -298,15 +305,17 @@ def extract_full_tc(counts_feature_0, feature_counts, cell_number, calcium_trial
     for cell in np.arange(cell_number):
         keep_cell = calcium_trials[keep_vector_full, cell]
 
-        # Get the sum of the bins
+        # Get the mean of the bins
         tc_cell, _, tc_idx = \
-            stat.binned_statistic(counts_feature_0, keep_cell, statistic='sum', bins=bins)
+            stat.binned_statistic(counts_feature_0, keep_cell, statistic='mean', bins=bins)
+
+        tc_cell[np.isnan(tc_cell)] = 0
+        tc_cell[np.isinf(tc_cell)] = 0
 
         # get the information
         information_content = calculate_information(feature_counts, tc_cell, np.mean(keep_cell))
 
         # process the TC
-        tc_cell = tc_cell / feature_counts
         tc_cell[np.isnan(tc_cell)] = 0
         tc_cell[np.isinf(tc_cell)] = 0
 
@@ -372,17 +381,17 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
     tc_edges = {}
     # initialize the template_idx
     template_idx = -1
+
     # for all the features
     for var_idx in np.arange(var_number):
         # get the current feature
         feature_name = target_variables[var_idx]
-        # feature_names = feature_name.split('__')
+
         # skip the pair and save an empty if the feature is not present
         try:
             current_feature_0 = feature_raw_trials.loc[:, feature_name].to_numpy()
             # save the index of the feature
             template_idx = var_idx
-            # current_feature_1 = feature_raw_trials.loc[:, feature_names[1]].to_numpy()
         except KeyError:
             tc_half[feature_name] = []
             tc_full[feature_name] = []
@@ -394,10 +403,10 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
         # get the bins from the parameters file (bins based on range of the data)
         try:
             bin_ranges = processing_parameters.tc_params[feature_name]
+
             # calculate the bin edges based on the ranges
             if len(bin_ranges) == 1:
                 bins = np.arange(bin_ranges[0] + 1) - 0.5
-                # bins = bin_ranges[0]
 
             else:
                 bins = np.linspace(bin_ranges[0], bin_ranges[1], num=bin_number + 1)
@@ -448,7 +457,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
     return tc_half, tc_full, tc_resp, tc_counts, tc_edges
 
 
-def extract_consistency(tc_half, target_variables, cell_number, shuffle_kind='random', percentile=95):
+def extract_consistency(tc_half, target_variables, cell_number, percentile=95, shuffle_kind='random'):
     """Calculate TC consistency"""
 
     # define the number of shuffles
