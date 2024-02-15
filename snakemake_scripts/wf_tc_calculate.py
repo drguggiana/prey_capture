@@ -252,9 +252,9 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
         cell_data_list.append(cell_data)
 
     # -- Assemble large dataframe -- #
-    direction_columns = ['resp_dir', 
+    direction_columns = ['resp_dir',
                          'resp_norm_dir',
-                         'mean_dir', 
+                         'mean_dir',
                          'mean_norm_dir',
                          'std_dir', 'std_norm_dir',
                          'sem_dir', 'sem_norm_dir',
@@ -269,9 +269,9 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
                          'dsi_abs', 'bootstrap_dsi_abs', 'bootstrap_p_dsi_abs',
                          'shuffle_dsi_abs', 'shuffle_p_dsi_abs']
 
-    orientation_columns = ['resp_ori', 
+    orientation_columns = ['resp_ori',
                            'resp_norm_ori',
-                           'mean_ori', 
+                           'mean_ori',
                            'mean_norm_ori',
                            'std_ori', 'std_norm_ori',
                            'sem_ori', 'sem_norm_ori',
@@ -359,10 +359,12 @@ def parse_kinematic_data(matched_calcium, rig):
 
 
 def calculate_kinematic_tuning(df, day, animal, rig):
-    # --- Process kinematic tuning --- #
-    # This is lifted directly from tc_calculate.py
-    # Note here that the kinematic data that was used for the visual tuning is not fed to the kinematic tuning
-    # curve calculation below since the formatting is different.
+    """ Process kinematic tuning
+    This is lifted directly from tc_calculate.py
+    Note here that the kinematic data that was used for the visual tuning is not fed to the kinematic tuning
+    curve calculation below since the formatting is different.
+
+    """
 
     print('Calculating kinematic tuning curves...')
 
@@ -393,7 +395,7 @@ def calculate_kinematic_tuning(df, day, animal, rig):
             pass
 
     # clip the calcium traces
-    clipped_data = clip_calcium([('', df)])
+    clipped_data = clip_calcium([df])
 
     # parse the features (bin number is for spatial bins in this one)
     features, calcium = parse_features(clipped_data, variable_names, bin_number=processing_parameters.spatial_bins)
@@ -416,7 +418,7 @@ def calculate_kinematic_tuning(df, day, animal, rig):
 
     # convert the outputs into a dataframe
     tcs_dict, tcs_counts_dict, tcs_bins_dict = convert_to_dataframe(tcs_half, tcs_full, tc_count, tcs_resp,
-                                                        tcs_cons, tc_bins, day, animal, rig)
+                                                                    tcs_cons, tc_bins, day, animal, rig)
 
     return tcs_dict, tcs_counts_dict, tcs_bins_dict
 

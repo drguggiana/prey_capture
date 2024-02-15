@@ -147,6 +147,9 @@ def parse_path(in_path):
     elif path_parts[6] == 'VWheel':
         rig = 'VWheel'
         counter = 7
+    elif path_parts[6] == 'ARPrey':
+        rig = 'ARPrey'
+        counter = 7
     else:
         rig = 'VR'
         counter = 6
