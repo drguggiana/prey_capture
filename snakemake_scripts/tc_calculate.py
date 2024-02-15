@@ -397,7 +397,7 @@ def extract_full_tc(counts_feature_0, feature_counts, cell_number, calcium_trial
 
 
 def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variables, cell_number,
-                             percentile=99, bin_number=10, shuffle_kind='random'):
+                             tt_split=0.7, percentile=99, bin_number=10, shuffle_kind='random'):
     """
     Extract the tuning curves (full and half) and their responsivity index
 
@@ -478,7 +478,7 @@ def extract_tcs_responsivity(feature_raw_trials, calcium_trials, target_variable
         # get the full tuning curves
         tc_cell_full, tc_cell_resp = extract_full_tc(counts_feature_0, feature_counts, cell_number,
                                                      calcium_trials,  bins, keep_vector_full, shuffle_number,
-                                                     0.7, percentile, shuffle_kind,
+                                                     tt_split, percentile, shuffle_kind,
                                                      lag_or_bin=processing_parameters.tc_lags[feature_name])
         # store the halves and fulls
         tc_half[feature_name] = tc_half_temp
@@ -752,7 +752,7 @@ if __name__ == '__main__':
 
         # get the TCs and their responsivity
         tcs_half, tcs_full, tcs_resp, tc_count, tc_bins = \
-            extract_tcs_responsivity(features, calcium, variable_names, cell_num,
+            extract_tcs_responsivity(features, calcium, variable_names, cell_num, tt_split=0.7,
                                      percentile=percentile, bin_number=bin_num, shuffle_kind=shuffle_kind)
 
         # get the TC consistency

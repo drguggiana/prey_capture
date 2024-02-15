@@ -408,8 +408,10 @@ def calculate_kinematic_tuning(df, day, animal, rig):
     cell_num = calcium.shape[1]
 
     # get the TCs and their responsivity
+
     tcs_half, tcs_full, tcs_resp, tc_count, tc_bins = \
         extract_tcs_responsivity(features, calcium, variable_names, cell_num,
+                                 tt_split=processing_parameters.tc_train_test_split,
                                  percentile=percentile, bin_number=bin_num, shuffle_kind=shuffle_kind)
 
     # get the TC consistency
