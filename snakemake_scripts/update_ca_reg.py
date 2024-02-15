@@ -81,6 +81,8 @@ if __name__ == "__main__":
     if (os.path.isdir(save_path)) and (os.path.isdir(os.path.join(save_path, 'minian\motion.zarr'))):
         print('Motion already calculated, skipping to updating the calciumraw file')
         from minian.utilities import open_minian
+        df = open_minian(os.path.join(save_path, 'minian'))
+        motion = df['motion']
 
     else:
         # Run minian
@@ -247,8 +249,6 @@ if __name__ == "__main__":
         imsave(video_path.replace('.tif', '_registered.tif'), reg_stack, plugin="tifffile", bigtiff=True)
 
     # Update the calciumraw file
-    df = open_minian(os.path.join(save_path, 'minian'))
-    motion = df['motion']
     with h5py.File(ca_raw_path, 'a') as f:
         # save the motion data
         if 'motion' not in f.keys():
