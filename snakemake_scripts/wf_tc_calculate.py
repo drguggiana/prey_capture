@@ -227,10 +227,8 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
                           dir_fit, dir_fit_curve, dir_gof, bootstrap_dir_gof, p_dir_gof,
                           pref_dir, bootstrap_pref_dir, real_pref_dir, bootstrap_real_pref_dir,
                           (resultant_dir_length, resultant_dir), bootstrap_resultant_dir, shuffle_resultant_dir,
-
                           responsivity_dir, bootstrap_responsivity_dir, p_responsivity_dir_bootstrap,
                           shuffle_responsivity_dir, p_responsivity_dir_shuffle,
-
                           null_dir, bootstrap_null_dir, shuffle_null_dir,
                           dsi_nasal_temporal, bootstrap_dsi_nasal_temporal, p_dsi_nasal_temporal_bootstrap,
                           shuffle_dsi_nasal_temporal, p_dsi_nasal_temporal_shuffle,
@@ -246,18 +244,18 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
                             ori_fit, ori_fit_curve, ori_gof, bootstrap_ori_gof, p_ori_gof,
                             pref_ori, null_ori, bootstrap_pref_ori, real_pref_ori, bootstrap_real_pref_ori,
                             (resultant_ori_length, resultant_ori), bootstrap_resultant_ori, shuffle_resultant_ori,
-
                             responsivity_ori, bootstrap_responsivity_ori, p_responsivity_ori_bootstrap,
                             shuffle_responsivity_ori, p_responsivity_ori_shuffle,
-
                             osi, bootstrap_osi, p_osi_bootstrap, shuffle_osi, p_osi_shuffle]
 
         cell_data = direction_data + orientation_data
         cell_data_list.append(cell_data)
 
     # -- Assemble large dataframe -- #
-    direction_columns = ['resp_dir', 'resp_norm_dir',
-                         'mean_dir', 'mean_norm_dir',
+    direction_columns = ['resp_dir', 
+                         'resp_norm_dir',
+                         'mean_dir', 
+                         'mean_norm_dir',
                          'std_dir', 'std_norm_dir',
                          'sem_dir', 'sem_norm_dir',
                          'fit_dir', 'fit_curve_dir', 'gof_dir', 'bootstrap_gof_dir', 'p_gof_dir',
@@ -271,8 +269,10 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
                          'dsi_abs', 'bootstrap_dsi_abs', 'bootstrap_p_dsi_abs',
                          'shuffle_dsi_abs', 'shuffle_p_dsi_abs']
 
-    orientation_columns = ['resp_ori', 'resp_norm_ori',
-                           'mean_ori', 'mean_norm_ori',
+    orientation_columns = ['resp_ori', 
+                           'resp_norm_ori',
+                           'mean_ori', 
+                           'mean_norm_ori',
                            'std_ori', 'std_norm_ori',
                            'sem_ori', 'sem_norm_ori',
                            'fit_ori', 'fit_curve_ori', 'gof_ori', 'bootstrap_gof_ori', 'p_gof_ori',
@@ -373,7 +373,7 @@ def calculate_kinematic_tuning(df, day, animal, rig):
     # get the number of bins
     bin_num = processing_parameters.bin_number
     shuffle_kind = processing_parameters.tc_shuffle_kind
-    percentile = processing_parameters.tc_percentile_cutoff
+    percentile = processing_parameters.tc_resp_qual_cutoff
 
     # define the pairs to quantify
     if rig in ['VWheel', 'VWheelWF']:
@@ -382,7 +382,8 @@ def calculate_kinematic_tuning(df, day, animal, rig):
     else:
         variable_names = processing_parameters.variable_list_free
 
-    # Convert to cm
+    # Convert to cm or cm/s^2 (if acceleration)
+    # Since this is the original dataset and not the visual tuning dataset, the conversion is also done here
     for col in ['wheel_speed', 'wheel_speed_abs', 'wheel_acceleration',
                 'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
                 'head_height', 'mouse_speed', 'mouse_acceleration']:
@@ -410,7 +411,8 @@ def calculate_kinematic_tuning(df, day, animal, rig):
                                  percentile=percentile, bin_number=bin_num, shuffle_kind=shuffle_kind)
 
     # get the TC consistency
-    tcs_cons = extract_consistency(tcs_half, variable_names, cell_num, shuffle_kind=shuffle_kind, percentile=80)
+    tcs_cons = extract_consistency(tcs_half, variable_names, cell_num, shuffle_kind=shuffle_kind,
+                                   percentile=processing_parameters.tc_consistency_cutoff)
 
     # convert the outputs into a dataframe
     tcs_dict, tcs_counts_dict, tcs_bins_dict = convert_to_dataframe(tcs_half, tcs_full, tc_count, tcs_resp,

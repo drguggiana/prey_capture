@@ -6,6 +6,7 @@ import json
 import h5py
 from matplotlib import pyplot as plt
 from skimage.io import imread, imsave
+from dask.distributed import Client, LocalCluster
 
 # Insert the cwd for local imports
 os.chdir(os.getcwd())

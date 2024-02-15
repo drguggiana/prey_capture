@@ -23,6 +23,12 @@ hv_mpi_green_hex = '#00887a'
 hv_mpi_yellow_rgb = tuple(np.array([203, 219, 42]) / 255.)
 hv_mpi_yellow_hex = '#cbdb2a'
 
+hv_white_hex = '#FFFFFF'
+hv_red_hex = '#db3c30'
+
+violin_palette = {'Freely Moving': hv_red_hex, 'Head Fixed': hv_blue_hex}
+swarm_pallete = {'Freely Moving': hv_white_hex, 'Head Fixed': hv_white_hex}  
+
 # define the standard font sizes
 paper = '7pt'
 poster = '15pt'

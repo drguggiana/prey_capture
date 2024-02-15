@@ -24,13 +24,13 @@ def rename_match_df(matches, exp_type):
     return new_df
 
 
-def kine_fraction_responsive(ds):
+def kine_fraction_tuned(ds):
     frac_qual = ds['Qual_test'].sum() / ds['Qual_test'].count()
     frac_cons = ds['Cons_test'].sum() / ds['Cons_test'].count()
-    # frac_resp = ds['Resp_test'].sum() / ds['Resp_test'].count()
+    frac_resp = ds['Resp_test'].sum() / ds['Resp_test'].count()
 
-    # is responsive if quality and consistency are both true
-    is_resp = ds['Qual_test'] + ds['Cons_test']
+    # is tuned if quality and consistency are both true
+    is_resp = ds['Resp_test'] + ds['Qual_test'] + ds['Cons_test']
     is_resp = is_resp > 1
     frac_is_resp = is_resp.sum() / is_resp.count()
     return frac_is_resp, is_resp
@@ -182,7 +182,7 @@ if __name__ == '__main__':
             for feature in kine_features:
                 # Save the whole dataset
                 data[feature].to_hdf(out_path, f'{id_flag}/all_cells/{feature}')
-                frac_kine_resp, cells_kine_resp = kine_fraction_responsive(data[feature])
+                frac_kine_resp, cells_kine_resp = kine_fraction_tuned(data[feature])
                 all_cells_summary_stats[f"frac_resp_{feature}"] = frac_kine_resp
                 multimodal_tuning[feature] = cells_kine_resp
 
@@ -193,13 +193,13 @@ if __name__ == '__main__':
                 # Save matched TCs
                 matched_feature = data[feature].iloc[match_idxs, :].reset_index(names=['original_cell_id'])
                 matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
-                matched_frac_kine_resp, _ = kine_fraction_responsive(matched_feature)
+                matched_frac_kine_resp, _ = kine_fraction_tuned(matched_feature)
                 matched_summary_stats[f"frac_resp_{feature}"] = matched_frac_kine_resp
 
                 # save unmatched tcs
                 unmatched_feature = data[feature].drop(match_idxs, axis=0)
                 unmatched_feature.to_hdf(out_path, f'{id_flag}/unmatched/{feature}')
-                unmatched_frac_kine_resp, _ = kine_fraction_responsive(unmatched_feature)
+                unmatched_frac_kine_resp, _ = kine_fraction_tuned(unmatched_feature)
                 unmatched_summary_stats[f"frac_resp_{feature}"] = unmatched_frac_kine_resp
 
             # Run the visual features

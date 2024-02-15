@@ -328,4 +328,5 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=400):
     print("MiniAn processing finished!")
 
     return {'A': A, 'C': C, 'S': S, 'c0': c0, 'b0': b0, 'b': b, 'f': f,
-            'max_proj': max_proj, 'mean_frame_fluor': mean_frame_fluor}
+            'max_proj': max_proj, 'mean_frame_fluor': mean_frame_fluor,
+            'motion': motion}
