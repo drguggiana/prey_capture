@@ -30,7 +30,7 @@ def kine_fraction_tuned(ds):
     frac_resp = ds['Resp_test'].sum() / ds['Resp_test'].count()
 
     # is tuned if quality and consistency are both true
-    is_resp = ds['Resp_test'] + ds['Qual_test'] + ds['Cons_test']
+    is_resp = ds['Resp_test'] + ds['Qual_test']
     is_resp = is_resp > 1
     frac_is_resp = is_resp.sum() / is_resp.count()
     return frac_is_resp, is_resp
