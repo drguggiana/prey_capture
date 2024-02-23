@@ -167,7 +167,7 @@ def load_regression(all_paths, variable_list, time_shifts):
 
                                 # process the performances and weights
                                 if not skip_flag:
-
+                                    # print(current_shift, reg, rvs, shift, animal, day)
                                     # performance
                                     current_correlation = [el for el in current_shift if
                                                            ('cc' in el) and ('_std' not in el)]
