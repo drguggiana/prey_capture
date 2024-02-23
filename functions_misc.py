@@ -154,7 +154,7 @@ def get_roi_stats(footprints):
     return np.vstack(roi_info)
 
 
-def list_lists_to_array(list_of_lists, prepend=False):
+def list_lists_to_array(list_of_lists, alignment='right', on=None):
     """ Converts a list of lists into a 2D array
 
     Parameters
@@ -171,12 +171,28 @@ def list_lists_to_array(list_of_lists, prepend=False):
     new_array = np.empty((len(list_of_lists), max_length))
     new_array[:] = np.NaN
 
-    for row, l in enumerate(list_of_lists):
-        if prepend:
+    for i, l in enumerate(list_of_lists):
+        if alignment == 'right':
             start = new_array.shape[-1] - len(l)
-            new_array[row, start:] = l
+            new_array[i, start:] = l
+        elif alignment == 'left':
+            new_array[i, :len(l)] = l
+        elif alignment == 'on':
+            if on is not None:
+                if isinstance(on, np.ndarray) or isinstance(on, list):
+                    on_idx = on[i]
+                elif isinstance(on, int) or isinstance(on, float):
+                    on_idx = int(on)
+                else:
+                    raise ValueError('on must be an array, list or int')
+
+                new_array[i, on_idx:on_idx+len(l)] = l
+                
+            else:
+                raise ValueError('index must be provided when using alignment on')
+
         else:
-            new_array[row, :len(l)] = l
+            raise ValueError('alignment can only be right, left or on')
 
     return new_array
 
@@ -184,3 +200,7 @@ def list_lists_to_array(list_of_lists, prepend=False):
 def find_nearest(array, value):
     idx = (np.abs(array - value)).argmin()
     return idx, array[idx]
+
+
+def consecutive(data, stepsize=1):
+    return np.split(data, np.where(np.diff(data) > stepsize)[0]+1)

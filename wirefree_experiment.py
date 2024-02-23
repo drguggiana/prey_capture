@@ -2,11 +2,12 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from os.path import join
+from functions_bondjango import query_database
 
 from ast import literal_eval
 from functions_kinematic import wrap, wrap_negative, smooth_trace
+from functions_tuning import normalize
 import paths
-
 
 
 class DataContainer():
@@ -28,11 +29,17 @@ class Cell(DataContainer):
 
 
 class WirefreeExperiment(DataContainer):
-    def __init__(self, filename, use_xarray=False):
+    def __init__(self, exp_info, preproc_info=None, tc_info=None):
+
         # Experiment attributes
-        self.metadata = None
+        self.metadata = Metadata(exp_info)
+        if preproc_info is not None:
+            self.preproc_info = Metadata(preproc_info)
+        if tc_info is not None:
+            self.tc_info = Metadata(tc_info)
 
         # Experimental metadata
+        self.exp_params = None
         self.cell_matches = None
         self.arena_corners = None
         
@@ -45,20 +52,9 @@ class WirefreeExperiment(DataContainer):
         self.raw_spikes = None
         self.raw_fluor = None
 
-        # Load the data
-        if 'preproc' in filename:
-            self._load_preprocessing(filename, use_xarray)
-
-        if 'tcday' in filename:
-            self._load_tc(filename)
-
-        print(f'Loaded experiment from {filename}')
-
-        self.cells = [el for el in self.raw_spikes.columns if "cell" in el]
-
-
-    # def _load_tc(self, file):
-        # with pd.HDFStore(file, 'r') as tc:
+        # Tuning curve data structures
+        self.visual_tcs = None
+        self.self_motion_tcs = None
 
 
     def save_hdf(self, file, attributes):
@@ -71,68 +67,89 @@ class WirefreeExperiment(DataContainer):
     #         df = self._cellprops_to_dataframe(attribute)
     #         df.to_hdf(file, attribute, mode='a', format='fixed')
 
-    def _load_preprocessing(self, file, use_xarray):
+
+    def _load_tc(self):
+        if self.tc_info is not None:
+            tc_file = self.tc_info.analysis_path
+        else:
+            raise AttributeError('No tuning curve info provided. Cannot load data.')
+
+        tc_dict = {}
+
+        with pd.HDFStore(tc_file, 'r') as tcf:
+
+            if self.cell_matches is not None:
+                self.cell_matches = self._parse_cell_matches(tcf['cell_matches'], self.tc_info.result)
+
+            keys_to_exclude = ['cell_matches', 'counts', 'edges']
+            keys_to_keep = [key for key in tcf.keys() if not any(x in key for x in keys_to_exclude)]
+            for key in keys_to_keep:
+                tc_dict[key[1:]] = tcf[key]
+
+    def _load_preprocessing(self, full_kinem=False):
         """
         Load the data from the HDF file
-        
-        Parameters
-        ----------
-        file : str
-            Path to the HDF file
-        use_xarray : bool
-            Whether to use xarray for the data structures
+
         """	
 
-        with pd.HDFStore(file, 'r') as preproc:
+        if self.preproc_info is not None:
+            preproc_file = self.preproc_info.analysis_path
+        else:
+            raise AttributeError('No preprocessing info provided. Cannot load data.')
+
+        with pd.HDFStore(preproc_file, 'r') as preproc:
 
             self._parse_params(preproc['params'])
             self._add_orientation_to_params()
-        
-            self._parse_kinematic_data(preproc['matched_calcium'], use_xarray)
 
-            if use_xarray:
-                self.full_kinematics = preproc['full_traces'].to_xarray()
-            else:
+            self.cell_matches = self._parse_cell_matches(preproc['cell_matches'], self.preproc_info.result)
+        
+            self._parse_kinematic_data(preproc['matched_calcium'])
+            if full_kinem:
                 self.full_kinematics = preproc['full_traces']
 
             self.roi_info = preproc['roi_info']
             self.trial_set = preproc['trial_set']
-            self.cell_matches = preproc['cell_matches'].dropna().reset_index(drop=True).astype('int')
             self.arena_corners = preproc['arena_corners']
-    #
-    # def _load_tc(self, file):
-    #     with pd.HDFStore(file, 'r') as tc:
 
-    def _parse_kinematic_data(self, matched_calcium, use_xarray):
+    def _parse_kinematic_data(self, matched_calcium):
 
-        # Calculate orientation explicitly
-        if 'orientation' not in matched_calcium.columns:
-            matched_calcium['orientation'] = matched_calcium['direction']
-            matched_calcium['orientation'][(matched_calcium['orientation'] > -180) & (matched_calcium['orientation'] < 0)] += 180
-
-        # Apply wrapping for directions to get range [0, 360]
-        matched_calcium['direction_wrapped'] = matched_calcium['direction']
-        mask = matched_calcium['direction_wrapped'] > -1000
-        matched_calcium.loc[mask, 'direction_wrapped'] = matched_calcium.loc[mask, 'direction_wrapped'].apply(wrap)
-           
-        # For all data
-        self.metadata.id_flag = matched_calcium['mouse'].values[0].split('_', 1)[0]
-        if self.metadata.id_flag in ['VWheel', 'VWheelWF']:
+        if self.metadata.rig in ['VWheel', 'VWheelWF']:
             self.metadata.exp_type = 'fixed'
         else:
             self.metadata.exp_type = 'free'
-        
-        self.metadata.animal = matched_calcium['mouse'].values[0].split('_', 1)[1:]
-        self.metadata.exp_date = matched_calcium['datetime'][0]
+
+         # Apply wrapping for directions to get range [0, 360]
+        matched_calcium['direction_wrapped'] = matched_calcium['direction'].copy()
+        mask = matched_calcium['direction_wrapped'] > -1000
+        matched_calcium.loc[mask, 'direction_wrapped'] = matched_calcium.loc[mask, 'direction_wrapped'].apply(wrap)
+
+        if self.metadata.exp_type == 'free':
+            matched_calcium['direction_rel_ground'] = matched_calcium['direction_wrapped'].copy()
+            matched_calcium.loc[mask, 'direction_rel_ground'] = \
+            matched_calcium.loc[mask, 'direction_rel_ground'] + matched_calcium.loc[mask, 'head_roll']
+        else:
+            matched_calcium['direction_rel_ground'] = matched_calcium['direction_wrapped'].copy()
+
+        # Calculate orientation explicitly
+        if 'orientation' not in matched_calcium.columns:
+            matched_calcium['orientation'] = matched_calcium['direction_wrapped'].copy()
+            matched_calcium['orientation_rel_ground'] = matched_calcium['direction_rel_ground'].copy()
+            mask = matched_calcium['orientation'] > -1000
+            matched_calcium.loc[mask, 'orientation'] = matched_calcium.loc[mask, 'orientation'].apply(wrap, bound=180.1)
+            matched_calcium.loc[mask, 'orientation_rel_ground'] = matched_calcium.loc[mask, 'orientation_rel_ground'].apply(wrap, bound=180.1)
+
+
+        # Get the columns for spikes, fluorescence, and kinematics
         spikes_cols = [key for key in matched_calcium.keys() if 'spikes' in key]
         fluor_cols = [key for key in matched_calcium.keys() if 'fluor' in key]
         motive_tracking_cols = ['mouse_y_m', 'mouse_z_m', 'mouse_x_m', 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m']
 
         # If there is more than one spatial or temporal frequency, include it, othewise don't
         stimulus_cols = ['trial_num', 'time_vector', 'direction', 'direction_wrapped', 'orientation', 'grating_phase']
-        if len(self.metadata.temporal_freq) > 1:
+        if len(self.exp_params.temporal_freq) > 1:
             stimulus_cols.append('temporal_freq')
-        if len(self.metadata.spatial_freq) > 1:
+        if len(self.exp_params.spatial_freq) > 1:
             stimulus_cols.append('spatial_freq')
         
         # For headfixed data
@@ -168,17 +185,24 @@ class WirefreeExperiment(DataContainer):
             self.kinematics['head_yaw'] = smooth_trace(yaw, range=(-180, 180), kernel_size=10, discont=2 * np.pi)
 
             roll = wrap_negative(self.kinematics.mouse_yrot_m.values)
-            self.kinematics['head_roll'] = smooth_trace(roll, range=(-180, 180), kernel_size=10, discont=2 * np.pi)
-            
+            self.kinematics['head_roll'] = smooth_trace(roll, range=(-180, 180), kernel_size=10, discont=2*np.pi)
+        
+        # Convert to cm, cm/s or cm/s^2
+        for col in ['mouse_y_m', 'mouse_z_m', 'mouse_x_m', 'head_height', 'mouse_speed', 'mouse_acceleration']:
+            if col in self.kinematics.columns:
+                self.kinematics[col] = self.kinematics[col] * 100.
+            else:
+                pass
+
+        if 'wheel_speed' in self.kinematics.columns:
+            self.kinematics['wheel_speed_abs'] = np.abs(self.kinematics['wheel_speed'].copy())
+            self.kinematics['wheel_acceleration_abs'] = np.abs(self.kinematics['wheel_acceleration'].copy())
+            self.kinematics['norm_wheel_speed'] = normalize(self.kinematics['wheel_speed_abs'])
+
         self.raw_spikes = matched_calcium.loc[:, stimulus_cols + spikes_cols]
         self.raw_spikes.columns = [key.rsplit('_', 1)[0] if 'spikes' in key else key for key in self.raw_spikes.columns]
         self.raw_fluor = matched_calcium.loc[:, stimulus_cols + fluor_cols]
         self.raw_fluor.columns = [key.rsplit('_', 1)[0] if 'fluor' in key else key for key in self.raw_fluor.columns]
-
-        if use_xarray:
-            self.kinematics = self.kinematics.to_xarray()
-            self.raw_spikes = self.raw_spikes.to_xarray()
-            self.raw_fluor = self.raw_fluor.to_xarray()
 
     def _parse_params(self, df):
         params = df.to_dict('list')
@@ -188,18 +212,30 @@ class WirefreeExperiment(DataContainer):
             except:
                 params[key] = params[key][0]
         
-        self.metadata = Metadata(params)
+        self.exp_params = Metadata(params)
 
     def _add_orientation_to_params(self):
-        self.metadata.direction.sort()
-        self.metadata.orientation = self.metadata.direction.copy()
-        self.metadata.orientation[self.metadata.orientation < 0] += 180
-        self.metadata.orientation.sort()
+        self.exp_params.direction.sort()
+        self.exp_params.orientation = self.exp_params.direction.copy()
+        self.exp_params.orientation[self.exp_params.orientation < 0] += 180
+        self.exp_params.orientation.sort()
 
         # Add wrapped directions, useful for plotting
-        directions_wrapped = np.sort(wrap(self.metadata.direction))
+        directions_wrapped = np.sort(wrap(self.exp_params.direction))
         directions_wrapped = np.concatenate((directions_wrapped, [360.]))
-        self.metadata.direction_wrapped = directions_wrapped
+        self.exp_params.direction_wrapped = directions_wrapped
+
+    def _parse_cell_matches(self, df, result):
+        df = df.dropna().reset_index(drop=True).astype(int)
+        old_cols = list(df.columns)
+        if result != 'repeat':
+            new_cols = [col.split("_")[-2] for col in old_cols[:2]]
+            new_cols += old_cols[2:]
+        else:
+            new_cols = [col.split("_")[-1] for col in old_cols[:2]]
+        col_map = dict(zip(old_cols, new_cols))
+        new_df = df.rename(columns=col_map)
+        return new_df
 
     # def _create_cell_class(self):
     #     cell_props = {}

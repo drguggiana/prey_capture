@@ -313,7 +313,7 @@ def parse_kinematic_data(matched_calcium, rig):
         matched_calcium['orientation_rel_ground'] = matched_calcium['direction_rel_ground'].copy()
         mask = matched_calcium['orientation'] > -1000
         matched_calcium.loc[mask, 'orientation'] = matched_calcium.loc[mask, 'orientation'].apply(fk.wrap, bound=180.1)
-        matched_calcium.loc[mask, 'orientation_rel_ground'] = matched_calcium.loc[mask, 'orientation_rel_ground'].apply(fk.wrap, bound=180)
+        matched_calcium.loc[mask, 'orientation_rel_ground'] = matched_calcium.loc[mask, 'orientation_rel_ground'].apply(fk.wrap, bound=180.1)
 
     spikes_cols = [key for key in matched_calcium.keys() if 'spikes' in key]
     fluor_cols = [key for key in matched_calcium.keys() if 'fluor' in key]
@@ -343,8 +343,7 @@ def parse_kinematic_data(matched_calcium, rig):
         kinematics = matched_calcium.loc[:, stimulus_cols + motive_tracking_cols + mouse_kinem_cols]
 
     # Convert to cm, cm/s or cm/s^2
-    for col in ['wheel_speed', 'wheel_acceleration', 'mouse_y_m', 'mouse_z_m', 'mouse_x_m', 'head_height',
-                'mouse_speed', 'mouse_acceleration']:
+    for col in ['mouse_y_m', 'mouse_z_m', 'mouse_x_m', 'head_height', 'mouse_speed', 'mouse_acceleration']:
         if col in kinematics.columns:
             kinematics[col] = kinematics[col] * 100.
         else:
@@ -380,14 +379,15 @@ def calculate_kinematic_tuning(df, day, animal, rig):
     # define the pairs to quantify
     if rig in ['VWheel', 'VWheelWF']:
         variable_names = processing_parameters.variable_list_fixed
-        df['wheel_speed_abs'] = np.abs(df['wheel_speed'])
+        df['wheel_speed_abs'] = np.abs(df['wheel_speed'].copy())
+        df['wheel_acceleration_abs'] = np.abs(df['wheel_acceleration'].copy())
+        df['norm_wheel_speed'] = tuning.normalize(df['wheel_speed_abs'])
     else:
         variable_names = processing_parameters.variable_list_free
 
     # Convert to cm or cm/s^2 (if acceleration)
     # Since this is the original dataset and not the visual tuning dataset, the conversion is also done here
-    for col in ['wheel_speed', 'wheel_speed_abs', 'wheel_acceleration',
-                'mouse_y_m', 'mouse_z_m', 'mouse_x_m',
+    for col in ['mouse_y_m', 'mouse_z_m', 'mouse_x_m',
                 'head_height', 'mouse_speed', 'mouse_acceleration']:
         if col in df.columns:
             df[col] = df[col] * 100.

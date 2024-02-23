@@ -20,9 +20,9 @@ def get_footprint_contours(calcium_data):
         thresh = cv2.threshold(frame, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
         # get contours and filter out small defects
-        contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        # Only take the top-level contour
-        cntr = contours[0]
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        # Only take the largest contour
+        cntr = max(contours, key=cv2.contourArea)
         area = cv2.contourArea(cntr)
         perimeter = cv2.arcLength(cntr, True)
         compactness = 4 * np.pi * area / (perimeter + 1e-16) ** 2
@@ -138,6 +138,7 @@ try:
 
 except (KeyError, ValueError):
     print('This file did not contain any ROIs: ' + calcium_path)
+    
     # create a dummy empty file
     with h5py.File(out_path, 'w') as file:
         file.create_dataset('calcium_data', data='no_ROIs')

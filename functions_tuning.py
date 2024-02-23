@@ -554,46 +554,49 @@ def normalize(data_in):
         return (data_in - np.nanmin(data_in)) / (np.nanmax(data_in) - np.nanmin(data_in))
 
 
-def normalize_responses(ds, quantile=0.07):
+def normalize_responses(ds, remove_baseline=False, quantile=0.07):
+
     ds_norm = ds.copy().fillna(0)
     
     # get the number of cells
-    # if type(ds) is pd.DataFrame:
     cells = [el for el in ds.columns if "cell" in el]
     # Normalize cell responses across all sessions
-    ds_norm[cells] = ds_norm[cells].apply(normalize)
+    ds_norm[cells] = ds_norm[cells].apply(normalize, raw=True)
 
-    # Get the 7th percentile of activity per cell for each stimulus
-    # Try 7th/8th percentile
-    percentiles = ds_norm.groupby(['direction'])[cells].quantile(quantile)
+    if remove_baseline:
+        # Get the 7th percentile of activity per cell for each stimulus
+        # Try 7th/8th percentile
+        percentiles = ds_norm.groupby(['direction'])[cells].quantile(quantile)
 
-    # get the baselines - The first row is the inter-trial interval
-    baselines = percentiles.iloc[0, :]
+        # get the baselines - The first row is the inter-trial interval
+        baselines = percentiles.iloc[0, :]
 
-    # Subtract baseline from everything
-    ds_norm[cells].subtract(baselines, axis=1)
-
-    #     # TODO
-    # elif type(ds) == xr.Dataset:
-        
-    #     cells = [el for el in ds.data_vars if "cell" in el]
+        # Subtract baseline from everything
+        ds_norm[cells] = ds_norm.loc[:, cells].subtract(baselines, axis=1)
     
     return ds_norm
 
 
-def calculate_dff(ds, baseline_type='iti', inplace=True, **kwargs):
+def calculate_dff(ds, baseline_type='iti_mean', **kwargs):
     
     cells = [el for el in ds.columns if "cell" in el]
-    ds_copy = ds.copy()
+    ds = ds.replace([np.inf, -np.inf], 0).fillna(0)
+    ds[cells][ds[cells] < 0] = 0
+    dff = ds.copy()
 
-    if baseline_type == 'iti':
-        baselines = ds.loc[ds.trial_num == 0][cells].copy().mean()
-    elif baseline_type == 'percentile':
-        baselines = ds[cells].copy().apply(np.percentile, axis=1, args=(kwargs.get('percentile', 8)))
-    
-    if inplace:
-        ds[cells] = ds[cells].subtract(baselines, axis=1).div(baselines, axis=1)
-        return ds
+    if baseline_type == 'iti_mean':
+        baselines = ds[ds.direction == -1000][cells].mean(axis=0).copy()
+
+    elif baseline_type == 'quantile':
+        baselines = ds[cells].quantile(kwargs.get('quantile', 0.20), numeric_only=True, axis=0).copy()
+
     else:
-        ds_copy[cells] = ds_copy[cells].subtract(baselines, axis=1).div(baselines, axis=1)
-        return ds_copy
+        raise NameError('Invalid baseline type')
+    
+    # Where the quantile is zero, replace with the mean baseline of all nonzeros cells
+    baselines[baselines == 0] = baselines[baselines != 0].mean()
+    
+    dff[cells] -= baselines
+    dff[cells] /= baselines
+
+    return dff

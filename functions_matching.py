@@ -663,13 +663,17 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
 
     # find the first motive frame
     first_motive = np.argwhere(motive_traces.loc[:, 'trial_num'].to_numpy() == 0)[0][0]
+    
     # exclude the last frame if it managed to include a single frame of 0
     last_motive = -1 if motive_traces.loc[motive_traces.shape[0] - 1, 'trial_num'] == 0 else motive_traces.shape[0]
+    
     # trim the motive frames to the start and end of the experiment
     trimmed_traces = motive_traces.iloc[first_motive:last_motive, :].reset_index(drop=True)
+    
     # TODO: remove this for regular trials, only here for 21.2.2022 ones
     if np.max(trimmed_traces.loc[:, 'color_factor']) > 81:
         trimmed_traces.loc[:, 'color_factor'] = trimmed_traces.loc[:, 'color_factor'] / 255
+    
     # normalize the number to 0 1 2 3 range
     trimmed_traces.loc[:, 'color_factor'] = np.array([int('0b' + format(int(el) - 1, '#09b')[2] +
                                                           format(int(el) - 1, '#09b')[4], 2)
@@ -679,6 +683,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
     sync_data = pd.read_csv(sync_path, names=['Time', 'projector_frames', 'camera_frames',
                                               'sync_trigger', 'mini_frames', 'wheel_frames', 'projector_frames_2'],
                             index_col=False)
+    
     # get the camera frames (as the indexes from sync_frames are referenced for the uncut sync_data, see match_dlc)
     frame_times_cam_sync = sync_data.loc[kinematics_data['sync_frames'].to_numpy(), 'Time'].to_numpy()
 
@@ -706,6 +711,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
         # binarize both frame streams
         frames_0 = np.round(sync_data.loc[:, 'projector_frames'] / 4).astype(int) * 2
         frames_1 = np.round(sync_data.loc[:, 'projector_frames_2'] / 4).astype(int)
+        
         # assemble the actual sequence
         frame_code = (frames_0 | frames_1).to_numpy()
 
@@ -736,11 +742,14 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
         # get the motive-based frame code in sync
         idx_code = np.argwhere(np.abs(np.diff(fixed_code)) > 0).squeeze() + 1
         motive_code = fixed_code[idx_code]
+        
         # if the frame numbers don't match, find the first motive color number and match that
         last_number = trimmed_traces.loc[trimmed_traces.shape[0] - 1, 'color_factor']
+        
         # trim the idx based on the last appearance of the last_number in motive_code
         trim_idx = np.argwhere(motive_code == last_number)[-1][0] + 1
         idx_code = idx_code[-(trimmed_traces.shape[0] + 1):trim_idx]
+        
         # if idx_code.shape[0] < trimmed_traces.shape[0]:
         #
         #     # get the difference in frames
@@ -748,14 +757,17 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
         #     # get trimmed traces trimmed
         #     idx_code = idx_code[delta_frames:]
         # display_code = fixed_code[idx_code]
+        
         # get the frame times
         frame_times_motive_sync = sync_data.loc[idx_code, 'Time'].to_numpy()
+        
         # trim the motive frames to be contained within the camera frames
         if frame_times_motive_sync[0] < frame_times_cam_sync[0]:
             start_idx = np.argwhere(frame_times_motive_sync > frame_times_cam_sync[0])[0][0]
             frame_times_motive_sync = frame_times_motive_sync[start_idx:]
             idx_code = idx_code[start_idx:]
             trimmed_traces = trimmed_traces.iloc[start_idx:, :].reset_index(drop=True)
+
         if frame_times_motive_sync[-1] > frame_times_cam_sync[-1]:
             end_idx = np.argwhere(frame_times_motive_sync < frame_times_cam_sync[-1])[-1][0] + 1
             frame_times_motive_sync = frame_times_motive_sync[:end_idx]
@@ -808,6 +820,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
     matched_camera['time_vector'] = frame_times_motive_sync
     matched_camera['mouse'] = kinematics_data.loc[kinematics_data.index[0], 'mouse']
     matched_camera['datetime'] = kinematics_data.loc[kinematics_data.index[0], 'datetime']
+    
     # correct the frame indexes to work with the untrimmed sync file
     idx_code += sync_start
     matched_camera['sync_frames'] = idx_code
@@ -991,6 +1004,7 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     if delta_frames > 0:
         print(f'There were {delta_frames} triggers more than frames on file {os.path.basename(calcium_path)}')
         frame_idx_mini_sync = frame_idx_mini_sync[:-delta_frames]
+        
     elif delta_frames < 0:
         print(f'There were {-delta_frames} more frames than triggers on file {os.path.basename(calcium_path)}')
         calcium_data = calcium_data[:delta_frames, :]
@@ -1040,7 +1054,7 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
 
         # find indexes for each trial number > 0. If there are some that aren't consecutive, fix them
         # Seems to be the case the sometimes the transition is split across two frames
-        for trial in matched_bonsai.trial_num.unique():
+        for trial in matched_bonsai.trial_num.unique()[1:]:
             indexes = matched_bonsai.index[matched_bonsai.trial_num == trial]
             if np.any(np.diff(indexes) != 1):
                 where_bad = np.argwhere(np.diff(indexes) > 1).squeeze() + 1
