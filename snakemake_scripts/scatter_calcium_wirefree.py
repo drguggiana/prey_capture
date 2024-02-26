@@ -20,7 +20,7 @@ def get_footprint_contours(calcium_data):
         thresh = cv2.threshold(frame, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
         # get contours and filter out small defects
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
         # Only take the largest contour
         cntr = max(contours, key=cv2.contourArea)
         area = cv2.contourArea(cntr)
