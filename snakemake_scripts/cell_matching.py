@@ -106,10 +106,6 @@ for files in calcium_path:
             calcium_data = np.array(f['frame_list'])
             continue
 
-        # if there are no ROIs, skip
-        if (type(calcium_data) == np.ndarray) and np.any(calcium_data.astype(str) == 'no_ROIs'):
-            continue
-
         if rig in ['VTuning', 'VWheel', 'VTuningWF', 'VWheelWF']:
             trial = re.findall(r'fixed\d', files) + re.findall(r'free\d', files)
             trial = trial[0]
@@ -117,6 +113,10 @@ for files in calcium_path:
             rig_list.append(rig)
         else:
             date_list.append(date)
+
+        # if there are no ROIs, skip
+        if (type(calcium_data) == np.ndarray) and np.any(calcium_data.astype(str) == 'no_ROIs'):
+            continue
 
         # clear the rois that don't pass the size criteria
         roi_stats = fm.get_roi_stats(calcium_data)
