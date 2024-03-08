@@ -74,17 +74,29 @@ if __name__ == "__main__":
     if not is_updated:
 
         # Here is some stupidity to deal with how MiniAn expects the directory to be formatted
-        save_path = os.path.join(paths.temp_path, animal, rig)
+        save_path = os.path.join(paths.temp_path, "_".join([animal, rig, day]))
+
+        # Make a subdirectory so that we can multiprocess
+        minian_temp_path = os.path.join(paths.temp_minian,  "_".join([animal, rig, day]))
+
         # Handle file renaming for denoised file and save the tif in the modified temp path
         out_path_tif = os.path.join(save_path, os.path.basename(video_path).replace('.tif', '_denoised.tif'))
 
         if (os.path.isdir(save_path)) and (os.path.isfile(out_path_tif)):
             print('Already denoised')
+
         else:
             # delete the folder contents
-            fi.delete_contents(paths.temp_minian)
-            fi.delete_contents(paths.temp_path)
-            os.makedirs(save_path)
+            if os.path.exists(save_path):
+                fi.delete_contents(save_path)
+            else:
+                os.makedirs(save_path)
+
+            if os.path.exists(minian_temp_path):
+                fi.delete_contents(minian_temp_path)
+            else:
+                os.makedirs(minian_temp_path)
+
             # denoise the video
             stack = fdn.denoise_stack(video_path)
             # Save the denoised stack
@@ -106,7 +118,7 @@ if __name__ == "__main__":
             # Here is some stupidity to deal with how Minian expects data to be formatted
             dpath = save_path
             minian_ds_path = os.path.join(dpath, "minian")
-            intpath = paths.temp_minian
+            intpath = minian_temp_path
             n_workers = int(os.getenv("MINIAN_NWORKERS", 4))
 
             # Load the yaml file containing the relevant parameters
@@ -261,11 +273,15 @@ if __name__ == "__main__":
             reg_stack = Y.compute().astype(np.uint8)
             imsave(video_path.replace('.tif', '_registered.tif'), reg_stack, plugin="tifffile", bigtiff=True)
 
+            fi.delete_contents(minian_temp_path)
+
         # Update the calciumraw file
         with h5py.File(ca_raw_path, 'a') as f:
             # save the motion data
             if 'motion' not in f.keys():
                 f.create_dataset('motion', data=np.array(motion))
+
+        fi.delete_contents(save_path)
 
         # assemble the entry data
     entry_data = {
