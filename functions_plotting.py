@@ -406,26 +406,35 @@ def plot_polar_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_ang
         ax = fig.add_subplot(111, projection='polar')
 
     tuning = ax.errorbar(np.deg2rad(tuning_curve[:, 0]), tuning_curve[:, 1],
-                         c='k', alpha=0.5, yerr=error, elinewidth=1,
+                         c='k', alpha=0.5, linewidth=2, yerr=error, elinewidth=1,
                          **kwargs)
 
     if fit is not None:
-        ax.plot(np.deg2rad(fit[:, 0]), fit[:, 1], c='#1f77b4')
+        ax.plot(np.deg2rad(fit[:, 0]), fit[:, 1], c='#1f77b4', linewidth=2)
 
     if trials is not None:
         ax.scatter(rand_jitter(np.deg2rad(trials[:, 0])), trials[:, 1], marker='.', color='k', alpha=0.5, edgecolor='none')
 
     if pref_angle is not None:
-        ax.axvline(np.deg2rad(pref_angle), color='r', linewidth=1)
+        ax.axvline(np.deg2rad(pref_angle), color='r', linewidth=2)
 
     ax.set_thetamax(theta_max)
     ax.set_theta_zero_location("W")
     ax.set_theta_direction(-1)
     # ax.set_rorigin(0)
-    radial_ticks = [0.0, 0.25, 0.50, 0.75, 1.00]
+    if "font_size" in kwargs:
+        font_size=kwargs.pop("font_size")
+        font_size = int(font_sizes_raw[font_size]['xlabel'][:-2])
+    else:
+        font_size = 12
+
+    radial_ticks = [0.0, 0.25, 0.5, 0.75, 1.0]
     ax.set_rticks(radial_ticks, color='black')
-    ax.set_yticklabels(['0.0', '', '0.5', '', '1.0'], color='black')
+    ax.set_yticklabels([], color='black')
     ax.set_rlabel_position(0)
+    # ax.set_xticklabels(['0', '', '90', '', '180', '', '270', ''], color='black', fontsize=font_size)
+    ax.set_xticklabels([], color='black', fontsize=font_size)
+
     # ax.yaxis.set_label_position('right')
 
     return tuning
@@ -455,10 +464,15 @@ def plot_tuning_curve_hv(tuning_curve, error, fit=None, trials=None, pref_angle=
     return hv.Overlay(overlay)
 
 
-def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std', norm=True, polar=True, axes=None,
+def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std', 
+                           norm=True, polar=True, subfig=None,
+                           plot_selectivity=True, plot_gof=False,
                            **kwargs):
-    data_cols = ['mean', error, 'trial_resp']
-    fit_cols = ['fit_curve', 'pref', 'resultant']
+
+    num_subplots = 1 + plot_selectivity + plot_gof
+    
+    data_cols = ['mean', error, 'resp']
+    fit_cols = ['fit_curve', 'pref']
 
     if 'direction' in tuning_kind:
         multiplier = 1.
@@ -469,90 +483,84 @@ def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std', 
         data_cols = [el + '_norm' for el in data_cols]
 
     columns = data_cols + fit_cols
+    columns = [el + '_' + tuning_kind[:3] for el in columns]
 
-    if axes is None:
+    if subfig is None:
         figsize = kwargs.get('figsize', (10 * constant_in2cm, 5 * constant_in2cm))
         fig = plt.figure(layout='constrained', figsize=figsize)
         fig.suptitle(f"Cell {cell}", fontsize='x-large')
         subfig = fig.subfigures(nrows=1, ncols=1)
 
-        if polar:
-            ax1 = subfig.add_subplot(121, projection="polar")  # tuning
-        else:
-            ax1 = subfig.add_subplot(121)  # tuning
+    if polar:
+        ax1 = subfig.add_subplot(int(f'1{num_subplots}1'), projection="polar")  # tuning
+    else:
+        ax1 = subfig.add_subplot(int(f'1{num_subplots}1'))  # tuning
 
-        ax2 = subfig.add_subplot(122)  # resp
-        # ax3 = subfig.add_subplot(224)  # error
-        # plt.subplots_adjust(wspace=0.4, hspace=0.4)
-        axes = [ax1, ax2]
+    axes = [ax1]
 
+    # Plot the TC
     if polar:
         tuning_plot_func = plot_polar_tuning_curve
-
     else:
         tuning_plot_func = plot_tuning_curve
 
-    ds = dataset.iloc[cell, :]
+    ds = dataset.loc[cell, :]
     plot_kwargs = {'theta_max': 360 / multiplier}
     # Plot directions
     _ = tuning_plot_func(ds[columns[0]], ds[columns[1]],
                          trials=ds[columns[2]],
                          fit=ds[columns[3]],
                          pref_angle=ds[columns[4]],
-                         ax=axes[0],
+                         ax=ax1,
                          **plot_kwargs
                          )
 
-    resultant = ds[columns[5]][-1]
-    # if resultant <= 180:
-    #     resultant *= 2
-    # else:
-    #     resultant = (360 - resultant)
-
-    # axes[0].axvline(resultant, color='green', linewidth=1)
-    # axes[0].set_title(f"Pref: {ds[columns[4]]: .1f}$^\circ$")
-    axes[0].set_xticks(np.deg2rad(np.linspace(0,  plot_kwargs['theta_max'], int(4/multiplier), endpoint=False)))
-
     # Plot dsi or osi
-    if 'direction' in tuning_kind:
-        si = 'dsi_nasal_temporal'
-        title = 'DSI'
-        xlims = (-1.001, 1.001)
-        step = 0.05
-    else:
-        si = 'responsivity'
-        title = 'OSI'
-        xlims = (-0.05, 1.001)
-        step = 0.025
+    if plot_selectivity:
+        ax2 = subfig.add_subplot(int(f'1{num_subplots}2'))  # resp
+        axes.append(ax2)
+        if 'direction' in tuning_kind:
+            si = 'dsi_abs'
+            title = 'DSI'
+            xlims = (-0.05, 1.001)
+            step = 0.025
+        else:
+            si = 'osi'
+            title = 'OSI'
+            xlims = (-0.05, 1.001)
+            step = 0.025
 
-    hist_resp = ds[f'bootstrap_{si}']
-    hist_resp[np.isnan(hist_resp)] = -0.05
-    real_resp = ds[si]
-    p_resp = ds[f'p_{si}']
-    edges = np.arange(*xlims, step)
-    axes[1].hist(hist_resp, bins=edges, edgecolor="black", color=holoviews_blue_rgb)
-    axes[1].axvline(x=real_resp, color='r', linestyle='dashed', linewidth=2)
-    # axes[1].text(1.0, 1.0, f"%ile={p_resp: .2f}", size=10, ha='right', va='bottom', transform=axes[1].transAxes)
-    axes[1].spines['right'].set_visible(False)
-    axes[1].spines['top'].set_visible(False)
-    axes[1].xaxis.set_ticks_position('bottom')
-    axes[1].yaxis.set_ticks_position('left')
-    axes[1].set_title(title)
+        hist_resp = np.abs(ds[f'bootstrap_{si}'])
+        hist_resp[np.isnan(hist_resp)] = -0.05
+        real_resp = ds[si]
+        p_resp = ds[f'bootstrap_p_{si}']
+        edges = np.arange(*xlims, step)
+        ax2.hist(hist_resp, bins=edges, edgecolor="black", color=hv_blue_rgb)
+        ax2.axvline(x=real_resp, color='r', linestyle='dashed', linewidth=2)
+        # axes[1].text(1.0, 1.0, f"%ile={p_resp: .2f}", size=10, ha='right', va='bottom', transform=ax2.transAxes)
+        ax2.spines['right'].set_visible(False)
+        ax2.spines['top'].set_visible(False)
+        ax2.xaxis.set_ticks_position('bottom')
+        ax2.yaxis.set_ticks_position('left')
+        ax2.set_title(title)
 
     # # Plot goodness of fit
-    # hist_gof = ds['bootstrap_gof']
-    # hist_gof[np.isnan(hist_gof)] = -0.1
-    # real_gof = ds['gof']
-    # p_gof = ds['p_gof']
-    # edges = np.arange(-0.1, 1.001, 0.025)
-    # axes[2].hist(hist_gof, bins=edges, edgecolor="black", color=holoviews_blue_rgb)
-    # axes[2].axvline(x=real_gof, color='r', linestyle='dashed', linewidth=2)
-    # # axes[2].text(1.0, 1.0, f"%ile={p_gof: .2f}", size=10, ha='right', va='bottom', transform=axes[2].transAxes)
-    # axes[2].spines['right'].set_visible(False)
-    # axes[2].spines['top'].set_visible(False)
-    # axes[2].xaxis.set_ticks_position('bottom')
-    # axes[2].yaxis.set_ticks_position('left')
-    # axes[2].set_title(gof_type.upper())
+    # if plot_gof:
+        # ax3 = subfig.add_subplot(int(f'1{num_subplots}3'))  # resp
+        # axes.append(ax3)
+        # hist_gof = ds['bootstrap_gof']
+        # hist_gof[np.isnan(hist_gof)] = -0.1
+        # real_gof = ds['gof']
+        # p_gof = ds['p_gof']
+        # edges = np.arange(-0.1, 1.001, 0.025)
+        # ax3.hist(hist_gof, bins=edges, edgecolor="black", color=holoviews_blue_rgb)
+        # ax3.axvline(x=real_gof, color='r', linestyle='dashed', linewidth=2)
+        # # ax3.text(1.0, 1.0, f"%ile={p_gof: .2f}", size=10, ha='right', va='bottom', transform=ax3.transAxes)
+        # ax3.spines['right'].set_visible(False)
+        # ax3.spines['top'].set_visible(False)
+        # ax3.xaxis.set_ticks_position('bottom')
+        # ax3.yaxis.set_ticks_position('left')
+        # ax3.set_title(gof_type.upper())
 
     return axes
 

@@ -33,7 +33,7 @@ def concatenate_cell_matches(data_list, exp_type):
 
 
 # Main script
-mice = processing_parameters.all_mice
+mice = processing_parameters.cohort_1[-1:]
 results = ['repeat']  # ['multi', 'fullfield', 'control'], ['repeat']
 lightings = ['normal', 'dark']     # ['normal', 'dark']
 rigs = ['VWheelWF', 'VTuningWF']     # ['VWheelWF', 'VTuningWF'], ['ALL']    # 'ALL' used for everything but repeat aggs

@@ -8,11 +8,16 @@ from ast import literal_eval
 from functions_kinematic import wrap, wrap_negative, smooth_trace
 from functions_tuning import normalize
 import paths
+import processing_parameters
 
 
 class DataContainer():
     def list_attributes(self):
         return list(self.__dict__.keys())
+    
+    def load_from_dict(self, dictionary):
+        for k, v in dictionary.items():
+            setattr(self, k, v)
 
 class Metadata(DataContainer):
     def __init__(self, dictionary):
@@ -73,8 +78,12 @@ class WirefreeExperiment(DataContainer):
             tc_file = self.tc_info.analysis_path
         else:
             raise AttributeError('No tuning curve info provided. Cannot load data.')
+        
+        self.visual_tcs = DataContainer()
+        self.self_motion_tcs = DataContainer()
 
-        tc_dict = {}
+        vis_tc_dict = {}
+        self_motion_tc_dict = {}
 
         with pd.HDFStore(tc_file, 'r') as tcf:
 
@@ -84,7 +93,16 @@ class WirefreeExperiment(DataContainer):
             keys_to_exclude = ['cell_matches', 'counts', 'edges']
             keys_to_keep = [key for key in tcf.keys() if not any(x in key for x in keys_to_exclude)]
             for key in keys_to_keep:
-                tc_dict[key[1:]] = tcf[key]
+                if any([x in key for x in processing_parameters.activity_datasets]):
+                    vis_tc_dict[key[1:]] = tcf[key]
+                else:
+                    if ('counts' in key) or ('edges' in key):
+                        pass
+                    else:
+                        self_motion_tc_dict[key[1:]] = tcf[key]
+
+        self.visual_tcs.load_from_dict(vis_tc_dict)
+        self.self_motion_tcs.load_from_dict(self_motion_tc_dict)
 
     def _load_preprocessing(self, full_kinem=False):
         """

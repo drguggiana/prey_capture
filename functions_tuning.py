@@ -581,8 +581,8 @@ def calculate_dff(ds, baseline_type='iti_mean', **kwargs):
     
     cells = [el for el in ds.columns if "cell" in el]
     ds = ds.replace([np.inf, -np.inf], 0).fillna(0)
-    ds[cells][ds[cells] < 0] = 0
     dff = ds.copy()
+    dff[cells].mask(ds[cells] < 0, 0.0, inplace=True)
 
     if baseline_type == 'iti_mean':
         baselines = ds[ds.direction == -1000][cells].mean(axis=0).copy()

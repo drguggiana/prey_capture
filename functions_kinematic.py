@@ -12,12 +12,17 @@ def wrap(angles, bound=360):
 
 def wrap_negative(angles, bound=180):
     """Wrap angles to the range [-180, 180]"""
-    bound_excess_idx = np.argwhere(angles > bound)
-    out_angles = angles.copy()
-    out_angles[bound_excess_idx] = (angles[bound_excess_idx] % bound) - bound
- 
-    return out_angles
 
+    if isinstance(angles, (int, float)):
+        if angles > bound:
+            return (angles % bound) - bound
+        else:
+            return angles
+    elif isinstance(angles, np.ndarray):
+        bound_excess_idx = np.argwhere(angles > bound)
+        out_angles = angles.copy()
+        out_angles[bound_excess_idx] = (angles[bound_excess_idx] % bound) - bound
+        return out_angles
 
 def unwrap(angles, discont=3.141592653589793, axis=0):
     """unwrap angles in degrees"""
