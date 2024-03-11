@@ -101,6 +101,8 @@ for idx, target_entries in enumerate(full_queries):
         out_path = os.path.join(paths.analysis_path, 'preprocessing_run.txt')
     elif parsed_search['analysis_type'] == 'tuning_run':
         out_path = os.path.join(paths.analysis_path, 'tuning_run.txt')
+    elif parsed_search['analysis_type'] == 'mine_run':
+        out_path = os.path.join(paths.analysis_path, 'mine_run.txt')
     elif parsed_search['analysis_type'] == 'aggregate_run':
         out_path = os.path.join(paths.analysis_path, 'aggregate_run.txt')
     elif parsed_search['analysis_type'] == 'update_matches_run':
@@ -125,7 +127,7 @@ for idx, target_entries in enumerate(full_queries):
                               # '--touch',    # updates output file timestamp, but doesn't process
                               # '--verbose',    # make the output more verbose for debugging
                               # '--debug-dag',  # show the file selection operation, also for debugging
-                              # '--dryrun',   # generates the DAG and everything, but doesn't process,
+                              '--dryrun',   # generates the DAG and everything, but doesn't process,
                               # '--reason'  ,   # print the reason for executing each job
                               ],
                              stdout=sp.PIPE,
@@ -143,6 +145,10 @@ for idx, target_entries in enumerate(full_queries):
             (os.path.isfile(os.path.join(paths.analysis_path, 'tuning_run.txt'))):
         # delete the txt file (specify de novo to not run risks)
         os.remove(os.path.join(paths.analysis_path, 'tuning_run.txt'))
+    elif (parsed_search['analysis_type'] == 'mine_run') & \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'mine_run.txt'))):
+        # delete the txt file (specify de novo to not run risks)
+        os.remove(os.path.join(paths.analysis_path, 'mine_run.txt'))
     elif (parsed_search['analysis_type'] == 'aggregate_run') &  \
             (os.path.isfile(os.path.join(paths.analysis_path, 'aggregate_run.txt'))):
         # delete the txt file (specify de novo to not run risks)

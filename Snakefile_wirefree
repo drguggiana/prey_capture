@@ -505,7 +505,7 @@ rule tuning_run:
 
 rule mine_run:
     input:
-          expand(os.path.join(paths.analysis_path,"{file}"+'_preproc.hdf5'), file=config['files'])
+          expand(os.path.join(paths.analysis_path,"{file}"+'_mine.hdf5'), file=config['files'])
     output:
           os.path.join(paths.analysis_path, "mine_run.txt")
     params:

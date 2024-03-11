@@ -10,13 +10,13 @@ import paths
 import processing_parameters
 import functions_kinematic as fk
 import functions_bondjango as bd
+from functions_data_handling import parse_search_string
 from functions_misc import slugify
 from functions_tuning import calculate_dff, normalize_responses
 
 sys.path.insert(0, os.path.abspath(r'C:/Users/mmccann/repos/bonhoeffer/prey_capture/'))
 sys.path.insert(0, os.path.abspath(r'C:/Users/mmccann/repos/mine_pub'))
 from mine import Mine, MineData
-
 
 
 def calculate_extra_angles(ds, exp_type):
@@ -47,7 +47,8 @@ def run_mine(target_trials, mine_params, predictor_columns):
     """Run MINE"""
 
     # concatenate
-    all_trials = pd.concat(target_trials, axis=0)
+    # all_trials = pd.concat(target_trials, axis=0)
+    all_trials = target_trials
     all_trials.dropna(inplace=True)
 
     # get the calcium and predictors
@@ -57,7 +58,7 @@ def run_mine(target_trials, mine_params, predictor_columns):
     predictors = all_trials[predictor_columns].fillna(0).to_numpy()
 
     # split into train and test for scaling and augmentation
-    train_frames = int(mine_params['tt_split'] * calcium.shape[0])
+    train_frames = int(mine_params['train_fraction'] * calcium.shape[0])
 
     calcium_train = calcium[:train_frames, :]
     calcium_test = calcium[train_frames:, :]
@@ -68,10 +69,10 @@ def run_mine(target_trials, mine_params, predictor_columns):
 
     # duplicate calcium for the augmented predictors
     #     if augmentation_factor == -1:
-    #         MINE_params['tt_split'] = 2/3
+    #         MINE_params['train_fraction'] = 2/3
     calcium = np.concatenate([calcium_train, calcium_test], axis=0)
     #     else:
-    #         MINE_params['tt_split'] = 4/5
+    #         MINE_params['train_fraction'] = 4/5
     #         calcium = np.concatenate([calcium_train, calcium_train, calcium_test], axis=0)
 
     predictors_train = predictors[:train_frames, :]
@@ -111,15 +112,17 @@ if __name__ == '__main__':
 
     except NameError:
         # get the paths from the database
+        search_string = processing_parameters.search_string
+        parsed_search = parse_search_string(search_string)
         data_all = bd.query_database('analyzed_data', processing_parameters.search_string)
-        input_path = data_all['analysis_path']
-        out_path = os.path.join([paths.analysis_path, os.path.basename(input_path).replace('preproc', 'mine')])
+        file_info = [entry for entry in data_all if parsed_search['mouse'] in entry['analysis_path']][0]
+        input_path = file_info['analysis_path']
+        out_path = input_path.replace('preproc', 'mine')
         # get the day, animal and rig
-        day = '_'.join(data_all['slug'].split('_')[0:3])
-        rig = data_all['rig']
-        animal = data_all['slug'].split('_')[7:10]
+        day = '_'.join(file_info['slug'].split('_')[0:3])
+        rig = file_info['rig']
+        animal = file_info['slug'].split('_')[7:10]
         animal = '_'.join([animal[0].upper()] + animal[1:])
-
 
     # define ca activity type
     ca_type = 'fluor'    #'spikes' or 'fluor'
