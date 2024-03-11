@@ -472,7 +472,7 @@ rule mine:
     input:
         os.path.join(paths.analysis_path,"{file}_preproc.hdf5"),
     output:
-        os.path.join(paths.wf_mine_path,"{file}_mine.hdf5")
+        os.path.join(paths.analysis_path,"{file}_mine.hdf5")
     params:
         info=lambda wildcards: config["file_info"][wildcards.file]
     script:

@@ -11,10 +11,10 @@ import processing_parameters
 import functions_kinematic as fk
 import functions_bondjango as bd
 from functions_misc import slugify
-from functions_tuning import calculate_dff
+from functions_tuning import calculate_dff, normalize_responses
 
 sys.path.insert(0, os.path.abspath(r'C:/Users/mmccann/repos/bonhoeffer/prey_capture/'))
-sys.path.insert(0, os.path.abspath(r'C:\Users\mmccann\repos\mine_pub'))
+sys.path.insert(0, os.path.abspath(r'C:/Users/mmccann/repos/mine_pub'))
 from mine import Mine, MineData
 
 
@@ -41,6 +41,7 @@ def calculate_extra_angles(ds, exp_type):
         ds.loc[mask, 'orientation_rel_ground'] = ds.loc[mask, 'orientation_rel_ground'].apply(fk.wrap, bound=180.1)
 
     return ds
+
 
 def run_mine(target_trials, mine_params, predictor_columns):
     """Run MINE"""
@@ -106,13 +107,13 @@ if __name__ == '__main__':
         slug = file_info['slug']
         rig = file_info['rig']
         animal = file_info['rig']
-        animal = '_'.join([animal[0].upper()] + animal[1:]
+        animal = '_'.join([animal[0].upper()] + animal[1:])
 
     except NameError:
         # get the paths from the database
         data_all = bd.query_database('analyzed_data', processing_parameters.search_string)
         input_path = data_all['analysis_path']
-        out_path = os.path.join([paths.analysis_path, os.path.basename(input_path).replace('preproc', 'mine'))
+        out_path = os.path.join([paths.analysis_path, os.path.basename(input_path).replace('preproc', 'mine')])
         # get the day, animal and rig
         day = '_'.join(data_all['slug'].split('_')[0:3])
         rig = data_all['rig']
@@ -147,9 +148,10 @@ if __name__ == '__main__':
     cols_to_drop = [el for el in data.columns if ('cell' in el) and (ca_type not in el)]
     data.drop(cols_to_drop, axis='columns', inplace=True)
 
-    # If using fluorescence data, calulate dF/F
+    # If using fluorescence data, calulate normalized dF/F
     if ca_type == 'fluor':
-        ds = calculate_dff(data, baseline_type='iti', inplace=True)
+        data = calculate_dff(data, baseline_type='quantile', inplace=False)
+        data = normalize_responses(data)
 
     # Do a quick calculation of orientation & dir/ori relative to ground
     if ('direction_wrapped' in variable_list) and ('direction_wrapped' not in data.columns):
