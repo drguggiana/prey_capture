@@ -474,7 +474,7 @@ rule mine:
     output:
         os.path.join(paths.analysis_path,"{file}_mine.hdf5")
     params:
-        info=lambda wildcards: config["file_info"][wildcards.file]
+        file_info=lambda wildcards: config["file_info"][wildcards.file]
     script:
         "snakemake_scripts/run_mine_wf.py"
 
