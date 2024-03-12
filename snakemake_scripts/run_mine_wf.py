@@ -106,8 +106,9 @@ if __name__ == '__main__':
         file_info = yaml.load(snakemake.params.file_info, Loader=yaml.FullLoader)
         # get the slugs
         slug = file_info['slug']
+        day = '_'.join(file_info['slug'].split('_')[0:3])
         rig = file_info['rig']
-        animal = file_info['rig']
+        animal = file_info['slug'].split('_')[7:10]
         animal = '_'.join([animal[0].upper()] + animal[1:])
 
     except NameError:
@@ -131,11 +132,13 @@ if __name__ == '__main__':
     # get frame rate
     frame_rate = processing_parameters.wf_frame_rate
 
+    variable_list = processing_parameters.variable_list_visual
+
     if rig in ['VWheelWF', 'VWheel']:
-        variable_list = processing_parameters.variable_list_fixed
+        variable_list += processing_parameters.variable_list_fixed
         exp_type = 'fixed'
     elif rig in ['VTuningWF', 'VTuning']:
-        variable_list = processing_parameters.variable_list_free
+        variable_list += processing_parameters.variable_list_free
         exp_type = 'free'
     else:
         ValueError('Unrecognized rig')
@@ -160,6 +163,9 @@ if __name__ == '__main__':
     if ('direction_wrapped' in variable_list) and ('direction_wrapped' not in data.columns):
         data = calculate_extra_angles(data, exp_type)
 
+    if ('wheel_speed_abs' in variable_list) and ('wheel_speed_abs' not in data.columns):
+        data['wheel_speed_abs'] = np.abs(data['wheel_speed']).copy()
+
     # Drop the ITI
     if drop_ITI:
         data.drop(data[data['trial_num'] == 0].index, inplace=True)
@@ -171,7 +177,6 @@ if __name__ == '__main__':
         'model_history': frame_rate*10,
         'corr_cut': 0.2,
         'compute_taylor': True,
-        # 'complexity': True,
         'return_jacobians': True,
         'taylor_look_ahead': frame_rate*5,
         'taylor_pred_every': frame_rate*5,
