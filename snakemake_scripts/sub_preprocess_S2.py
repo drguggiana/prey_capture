@@ -212,6 +212,7 @@ def kinematic_calculations(data, kernel_size=11):
 
     # define which coordinates to use depending on the available data
     if 'mouse_x_m' in data.columns:
+        # Note here everythig will be calculated using the motive data in meters
         mouse_coord_hd = data.loc[:, ['mouse_x_m', 'mouse_y_m']].to_numpy()
     else:
         mouse_coord_hd = data.loc[:, ['mouse_x', 'mouse_y']].to_numpy()

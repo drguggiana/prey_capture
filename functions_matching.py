@@ -1111,23 +1111,29 @@ def match_wheel(file_info, filtered_traces, wheel_diameter=16):
     else:
         sync_data.columns = ['Time', 'projector_frames', 'camera_frames',
                              'sync_trigger', 'mini_frames', 'wheel_frames', 'projector_frames_2']
-    #
-    # sync_data = pd.read_csv(file_info['sync_path'], names=['Time', 'projector_frames', 'camera_frames',
-    #                                                        'sync_trigger', 'mini_frames', 'wheel_frames'],
-    #                         index_col=False)
+
     # get the wheel trace
     wheel_position = sync_data.loc[filtered_traces['sync_frames'], ['wheel_frames']]
-    # convert the position to radians
+
+    # convert the position (fraction of rotation around the wheel) to radians
     wheel_position = (wheel_position - wheel_position.min()) / (wheel_position.max() - wheel_position.min()) * 2 * np.pi
+
     # unwrap
     wheel_position = np.unwrap(wheel_position).flatten()
-    # get the speed of the wheel
-    wheel_speed = np.diff(wheel_position * np.pi * (wheel_diameter - 1) / 360)
-    # get the wheel acceleration
+
+    # get instantaneous arc length (angular position * radius) in cm
+    arc_length = wheel_position * (wheel_diameter - 1) / 2
+
+    # get the instantaneous speed of the wheel in cm/s
+    wheel_speed = np.diff(arc_length)
+
+    # get the wheel acceleration in cm/s^2
     wheel_acceleration = np.diff(wheel_speed)
+
     # prepend zeros to speed and acceleration arrays
     wheel_speed = np.insert(wheel_speed, 0, 0, axis=0)
     wheel_acceleration = np.insert(wheel_acceleration, [0, 0], 0, axis=0)
+    
     # save in the output frame
     filtered_traces['wheel_speed'] = wheel_speed
     filtered_traces['wheel_acceleration'] = wheel_acceleration
