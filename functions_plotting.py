@@ -605,9 +605,32 @@ def histogram(data_in, rows=1, columns=1, bins=50, fig=None, color=None, fontsiz
     return fig
 
 
-def violin_swarm(ds, save_path, backend='hvplot', save=False, cmap='blue', 
-                 xlabel='', ylabel='',
-                 width=1500, height=1000, font_size='screen', dpi=800):
+def violin_swarm(ds, save_path, backend='hvplot', save=False,
+                 cmap='blue', xlabel='', ylabel='',
+                 width=1500, height=1000, 
+                 font_size='screen', dpi=800):
+    """
+    Generate a violin plot with swarm plot overlay using either hvplot or seaborn backend.
+
+    Parameters:
+    - ds (pandas.DataFrame): The input dataset.
+    - save_path (str): The path to save the generated plot.
+    - backend (str, optional): The plotting backend to use. Default is 'hvplot'.
+    - save (bool, optional): Whether to save the plot. Default is False.
+    - cmap (str, optional): The color map to use for the violin plot. Default is 'blue'.
+    - xlabel (str, optional): The label for the x-axis. Default is an empty string.
+    - ylabel (str, optional): The label for the y-axis. Default is an empty string.
+    - width (int, optional): The width of the plot in pixels. Default is 1500.
+    - height (int, optional): The height of the plot in pixels. Default is 1000.
+    - font_size (str, optional): The font size for the axis labels. Default is 'screen'.
+    - dpi (int, optional): The DPI (dots per inch) for saving the plot. Default is 800.
+
+    Returns:
+    - violinplot (object): The generated violin plot.
+
+    Raises:
+    - Exception: If an invalid backend is specified.
+    """
 
     rename_dict = dict(zip(list(ds.columns), [processing_parameters.wf_label_dictionary_wo_units[col] for col in list(ds.columns)]))
 
