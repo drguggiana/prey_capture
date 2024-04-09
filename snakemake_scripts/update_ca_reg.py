@@ -219,10 +219,10 @@ if __name__ == "__main__":
             cluster.scheduler.add_plugin(annt_plugin)
             client = Client(cluster)
 
-            try:
-                client = Client()
-            except OSError:
-                client = Client(cluster)
+            # try:
+            #     client = Client()
+            # except OSError:
+            #     client = Client(cluster)
 
             # load the videos and the chk parameter
             varr = load_videos(dpath, **param_load_videos)

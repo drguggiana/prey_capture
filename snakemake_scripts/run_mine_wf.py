@@ -14,8 +14,8 @@ from functions_data_handling import parse_search_string
 from functions_misc import slugify
 from functions_tuning import calculate_dff, normalize_responses
 
-sys.path.insert(0, os.path.abspath(r'C:/Users/mmccann/repos/bonhoeffer/prey_capture/'))
-sys.path.insert(0, os.path.abspath(r'C:/Users/mmccann/repos/mine_pub'))
+sys.path.insert(0, os.path.abspath(r'F:\Repositories\mine_pub\prey_capture'))
+sys.path.insert(0, os.path.abspath(r'F:\Repositories\mine_pub'))
 from mine import Mine, MineData
 
 

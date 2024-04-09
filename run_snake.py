@@ -107,6 +107,8 @@ for idx, target_entries in enumerate(full_queries):
         out_path = os.path.join(paths.analysis_path, 'aggregate_run.txt')
     elif parsed_search['analysis_type'] == 'update_matches_run':
         out_path = os.path.join(paths.analysis_path, 'update_cells_match_run.txt')
+    elif parsed_search['analysis_type'] == 'update_vis_tcs_run':
+        out_path = os.path.join(paths.analysis_path, 'update_vis_tc_run.txt')
     elif parsed_search['analysis_type'] == 'update_kinem_tcs_run':
         out_path = os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt')
     elif parsed_search['analysis_type'] == 'update_ca_reg_run':
@@ -116,18 +118,18 @@ for idx, target_entries in enumerate(full_queries):
         out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
 
     # run snakemake
-    preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
+    preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', #'1',
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working,
                               # '--use-conda',
                               # '-F',         # (hard) force rerun everything
                               # '-f',         # (soft) force rerun last step
                               # '--unlock',   # unlocks the files after force quit
-                              # '--rerun-incomplete',
+                              '--rerun-incomplete',
                               # '--touch',    # updates output file timestamp, but doesn't process
                               # '--verbose',    # make the output more verbose for debugging
                               # '--debug-dag',  # show the file selection operation, also for debugging
-                              '--dryrun',   # generates the DAG and everything, but doesn't process,
+                              # '--dryrun',   # generates the DAG and everything, but doesn't process,
                               # '--reason'  ,   # print the reason for executing each job
                               ],
                              stdout=sp.PIPE,
@@ -156,6 +158,9 @@ for idx, target_entries in enumerate(full_queries):
     elif (parsed_search['analysis_type'] == 'update_matches_run') & \
          (os.path.isfile(os.path.join(paths.analysis_path, 'update_cells_match_run.txt'))):
         os.remove(os.path.join(paths.analysis_path, 'update_cells_match_run.txt'))
+    elif (parsed_search['analysis_type'] == 'update_vis_tcs_run') & \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'update_vis_tc_run.txt'))):
+        os.remove(os.path.join(paths.analysis_path, 'update_vis_tc_run.txt'))
     elif (parsed_search['analysis_type'] == 'update_kinem_tcs_run') & \
             (os.path.isfile(os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt'))):
         os.remove(os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt'))

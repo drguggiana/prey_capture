@@ -554,8 +554,8 @@ if __name__ == '__main__':
             tcs_dict, tcs_counts_dict, tcs_bins_dict = calculate_kinematic_tuning(dataframe, day, animal, rig)
 
             # for all the features
-            for feature in tcs_dict.keys():
-                tcs_dict[feature].to_hdf(out_file, feature)
+            for feature in vis_prop_dict.keys():
+                vis_prop_dict[feature].to_hdf(out_file, feature)
                 tcs_counts_dict[feature].to_hdf(out_file, feature + '_counts')
                 tcs_bins_dict[feature].to_hdf(out_file, feature + '_edges')
 
