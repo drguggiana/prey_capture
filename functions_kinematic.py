@@ -3,14 +3,14 @@ import scipy.stats as st
 from functions_matching import interp_motive
 
 
-def wrap(angles, bound=360):
+def wrap(angles, bound=360.):
     """wrap angles to the range 0 to 360 deg"""
     # modified from https://stackoverflow.com/questions/15927755/opposite-of-numpy-unwrap
     out_angles = angles % bound
     return out_angles
 
 
-def wrap_negative(angles, bound=180):
+def wrap_negative(angles, bound=180.):
     """Wrap angles to the range [-180, 180]"""
 
     if isinstance(angles, (int, float)):
@@ -18,7 +18,7 @@ def wrap_negative(angles, bound=180):
             return (angles % bound) - bound
         else:
             return angles
-    elif isinstance(angles, np.ndarray):
+    else:
         bound_excess_idx = np.argwhere(angles > bound)
         out_angles = angles.copy()
         out_angles[bound_excess_idx] = (angles[bound_excess_idx] % bound) - bound

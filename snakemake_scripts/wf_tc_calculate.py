@@ -82,11 +82,6 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
     mean_orientation_activity = activity_df.groupby(['orientation', 'trial_num'])[cells].agg(np.mean).copy().reset_index()
     mean_orientation_activity = mean_orientation_activity.drop(mean_orientation_activity[mean_orientation_activity.trial_num == 0].index).sort_values('trial_num')
 
-    # Make sure to explicitly represent 180 degrees in the orientation data by duplicating the 0 degrees value
-    # dup = mean_orientation_activity.loc[mean_orientation_activity['orientation'] == 0].copy()
-    # dup.loc[:, 'orientation'] = 180.
-    # mean_orientation_activity = pd.concat([mean_orientation_activity, dup], ignore_index=True)
-
     # -- Create the response vectors and normalized response vectors --#
     # Normalize the responses of each cell to the maximum mean response of the cell on any given trial
     mean_dir, sem_dir, std_dir, unique_dirs = generate_tcs_and_stats(mean_direction_activity)
@@ -192,8 +187,8 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
 
         # For orientation data
         bootstrap_resultant_ori = \
-            tuning.bootstrap_resultant(norm_orientation_activity[['orientation', 'trial_num',  cell]],
-                                       sampling_method='equal_trial_nums', multiplier=2, num_shuffles=bootstrap_shuffles)
+            tuning.bootstrap_resultant_orientation(norm_orientation_activity[['orientation', 'trial_num', cell]],
+                                                   sampling_method='equal_trial_nums', multiplier=2, num_shuffles=bootstrap_shuffles)
         bootstrap_responsivity_ori = bootstrap_resultant_ori[:, 0]
         p_responsivity_ori_bootstrap = percentileofscore(bootstrap_responsivity_ori, responsivity_ori, kind='mean') / 100.
 
@@ -211,9 +206,9 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
 
         # For orientation data
         shuffle_resultant_ori = \
-            tuning.bootstrap_resultant(norm_orientation_activity[['orientation', 'trial_num', cell]],
-                                       sampling_method='shuffle_trials', multiplier=2,
-                                       num_shuffles=bootstrap_shuffles)
+            tuning.bootstrap_resultant_orientation(norm_orientation_activity[['orientation', 'trial_num', cell]],
+                                                   sampling_method='shuffle_trials', multiplier=2,
+                                                   num_shuffles=bootstrap_shuffles)
         shuffle_responsivity_ori = shuffle_resultant_ori[:, 0]
         p_responsivity_ori_shuffle = percentileofscore(shuffle_responsivity_ori, responsivity_ori, kind='mean') / 100.
 

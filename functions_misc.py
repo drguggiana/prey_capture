@@ -172,13 +172,18 @@ def list_lists_to_array(list_of_lists, alignment='right', on=None):
     new_array[:] = np.NaN
 
     for i, l in enumerate(list_of_lists):
+
         if alignment == 'right':
             start = new_array.shape[-1] - len(l)
             new_array[i, start:] = l
+
         elif alignment == 'left':
             new_array[i, :len(l)] = l
+
         elif alignment == 'on':
+
             if on is not None:
+                
                 if isinstance(on, np.ndarray) or isinstance(on, list):
                     on_idx = on[i]
                 elif isinstance(on, int) or isinstance(on, float):

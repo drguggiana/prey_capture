@@ -1,28 +1,106 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import itertools
 import os
 import warnings
-import itertools
-from typing import List, Tuple, Dict
+from typing import List
 
+import h5py
+import holoviews as hv
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.stats as st
-import holoviews as hv
-import matplotlib.pyplot as plt
 import sklearn.preprocessing as preproc
+from tqdm import tqdm
 from umap.umap_ import UMAP
 
-import paths
-import processing_parameters
 import functions_bondjango as bd
 import functions_data_handling as fdh
 import functions_kinematic as fk
 import functions_misc as misc
 import functions_plotting as fp
+import paths
+import processing_parameters
 
 warnings.filterwarnings('ignore')
+
+
+def make_aggregate_file(search_string):
+    search_string = search_string.replace('agg_all', 'agg_tc')
+    parsed_search = fdh.parse_search_string(search_string)
+    output_path = os.path.join(paths.analysis_path, f"AGG_{'_'.join(parsed_search.values())}.hdf5")
+
+    # get the paths from the database
+    file_infos = bd.query_database("analyzed_data", search_string)
+    input_paths = np.array([el['analysis_path'] for el in file_infos if ('agg' in el['slug'])])
+
+    data_list = []
+    for file in tqdm(input_paths, desc="Loading files"):
+        print(file)
+        data_dict = {}
+        mouse = '_'.join(os.path.basename(file).split('_')[10:13])
+
+        with pd.HDFStore(file, 'r') as tc:
+
+            if 'no_ROIs' in tc.keys():
+                continue
+
+            else:
+
+                for key in tc.keys():
+                    label = "_".join(key.split('/')[1:])
+                    data = tc[key]
+                    if 'animal' in data.columns:
+                        data = data.drop(columns='animal')
+
+                    if '08_31_2023_VWheelWF_fixed2' in data.columns:
+                        data.drop(columns='08_31_2023_VWheelWF_fixed2', inplace=True)
+
+                    data['mouse'] = mouse
+                    data_dict[label] = data
+
+                data_list.append(data_dict)
+
+    if len(data_list) == 0:
+        print('No data to aggregate')
+        return None
+    else:
+        # Aggregate it all
+        agg_dict = {}
+
+        for key in data_list[0].keys():
+            df = pd.concat([d[key] for d in data_list]).reset_index(drop=True)
+            df.to_hdf(output_path, key)
+            agg_dict[key] = df
+
+        # assemble the entry data
+        entry_data = {
+            'analysis_type': 'agg_all',
+            'analysis_path': output_path,
+            'date': '',
+            'pic_path': '',
+            'result': parsed_search['result'],
+            'rig': parsed_search['rig'],
+            'lighting': parsed_search['lighting'],
+            'imaging': 'wirefree',
+            'slug': misc.slugify(os.path.basename(output_path)[:-5]),
+        }
+
+        # check if the entry already exists, if so, update it, otherwise, create it
+        update_url = '/'.join((paths.bondjango_url, 'analyzed_data', entry_data['slug'], ''))
+        output_entry = bd.update_entry(update_url, entry_data)
+        if output_entry.status_code == 404:
+            # build the url for creating an entry
+            create_url = '/'.join((paths.bondjango_url, 'analyzed_data', ''))
+            output_entry = bd.create_entry(create_url, entry_data)
+
+        print('The output status was %i, reason %s' % (output_entry.status_code, output_entry.reason))
+        if output_entry.status_code in [500, 400]:
+            print(entry_data)
+
+        return agg_dict
 
 
 def get_vis_tuned_cells(ds: pd.DataFrame, vis_stim: str = 'dir', resp_thresh: float = 0.3, sel_tresh: float = 0.5,
@@ -53,7 +131,7 @@ def get_vis_tuned_cells(ds: pd.DataFrame, vis_stim: str = 'dir', resp_thresh: fl
     elif vis_stim == 'ori':
         resp_type = f'responsivity_{vis_stim}'
         sel_type = 'osi'
-    elif (vis_stim == 'vis') or (vis_stim == 'untuned') :
+    elif (vis_stim == 'vis') or (vis_stim == 'untuned'):
         resp_type = ['responsivity_dir', 'responsivity_ori']
     else:
         raise Exception('Invalid vis_stim')
@@ -68,7 +146,8 @@ def get_vis_tuned_cells(ds: pd.DataFrame, vis_stim: str = 'dir', resp_thresh: fl
     return cells
 
 
-def kine_fraction_tuned(ds: pd.DataFrame, use_test: bool = True, include_responsivity: bool = True, include_consistency: bool = False) -> float:
+def kine_fraction_tuned(ds: pd.DataFrame, use_test: bool = True, include_responsivity: bool = True,
+                        include_consistency: bool = False) -> float:
     """
     Calculate the fraction of tuned cells from the given dataset.
 
@@ -199,13 +278,13 @@ def pref_angle_shifts(ds1: pd.DataFrame, ds2: pd.DataFrame, ci_width_cutoff: int
     Exception: If an invalid method value is provided.
     """
 
-    shifts = []
-
     stim_kind = stim_kind[:3]
     if stim_kind == 'ori':
         multiplier = 2
-    else:
+    elif stim_kind == 'dir':
         multiplier = 1
+    else:
+        raise Exception('Invalid stim_kind')
 
     if method == 'fit':
         dist_key = f'bootstrap_pref_{stim_kind}'
@@ -215,6 +294,8 @@ def pref_angle_shifts(ds1: pd.DataFrame, ds2: pd.DataFrame, ci_width_cutoff: int
         pref_key = f'resultant_{stim_kind}'
     else:
         raise Exception('Invalid method')
+
+    shifts = []
 
     for (idxRow, cell_1), (_, cell_2) in zip(ds1.iterrows(), ds2.iterrows()):
 
@@ -242,8 +323,8 @@ def pref_angle_shifts(ds1: pd.DataFrame, ds2: pd.DataFrame, ci_width_cutoff: int
             pass
 
         # Wrap angles
-        pref_dist_1 = fk.wrap(pref_dist_1, 360 / multiplier + 0.1)
-        pref_dist_2 = fk.wrap(pref_dist_2, 360 / multiplier + 0.1)
+        pref_dist_1 = fk.wrap(pref_dist_1, bound=(360. / multiplier) + 0.01)
+        pref_dist_2 = fk.wrap(pref_dist_2, bound=(360. / multiplier) + 0.01)
         delta_pref = np.abs(pref_2 - pref_1)
 
         # Calculate confidence intervals
@@ -271,8 +352,8 @@ def pref_angle_shifts(ds1: pd.DataFrame, ds2: pd.DataFrame, ci_width_cutoff: int
             sig_shift = 0
 
         # wrap to negative domain for plotting
-        pref_1 = fk.wrap_negative(pref_1, bound=360 / (2 * multiplier) + 0.1)
-        pref_2 = fk.wrap_negative(pref_2, bound=360 / (2 * multiplier) + 0.1)
+        # pref_1 = fk.wrap_negative(pref_1, bound=360. / (2 * multiplier))
+        # pref_2 = fk.wrap_negative(pref_2, bound=360. / (2 * multiplier))
 
         shifts.append([idxRow, pref_1, ci_width_1, pref_2, ci_width_2, delta_pref, sig_shift, cell_1.mouse, cell_1.day])
 
@@ -303,8 +384,10 @@ def calculate_pref_angle_shifts(ref_ds: pd.DataFrame, comp_ds: pd.DataFrame, sti
     # Determine the width of the confidence interval based on the stimulus kind
     if stim_kind == 'orientation':
         ci_width = 45
-    else:
+    elif stim_kind == 'direction':
         ci_width = 90
+    else:
+        raise Exception('Invalid stim_kind')
 
     # Find the indices of cells that are tuned
     indices = find_tuned_cell_indices(ref_ds.copy(), comp_ds.copy(), cutoff=upper_cutoff,
@@ -312,11 +395,13 @@ def calculate_pref_angle_shifts(ref_ds: pd.DataFrame, comp_ds: pd.DataFrame, sti
 
     # Calculate the shifts in tuning
     shifts = pref_angle_shifts(ref_ds.iloc[indices, :].copy(), comp_ds.iloc[indices, :].copy(),
-                           ci_width_cutoff=ci_width, stim_kind=stim_kind, method='resultant')
+                           ci_width_cutoff=ci_width, stim_kind=stim_kind, method='fit')
 
     # Calculate the residuals and the root mean square error of the residuals
     residuals = shifts['pref_2'].to_numpy() - shifts['pref_1'].to_numpy()
-    rmse_residual = np.mean(np.sqrt(residuals ** 2))
+    # This is a circular measure, so wrap the residuals
+    residuals = fk.wrap(residuals, ci_width)
+    rmse_residual = np.sqrt(np.mean(residuals ** 2))
 
     return shifts, residuals, rmse_residual
 
@@ -337,22 +422,23 @@ def calculate_delta_selectivity(ref_ds: pd.DataFrame, comp_ds: pd.DataFrame, cut
 
     if stim_kind == 'orientation':
         sel_key = 'osi'
-    else:
+    elif stim_kind == 'direction':
         sel_key = 'dsi_abs'
+    else:
+        raise Exception('Invalid stim_kind')
 
     # Find the indices of cells that are tuned
     indices = find_tuned_cell_indices(ref_ds.copy(), comp_ds.copy(), cutoff=cutoff,
                                       stim_kind=stim_kind, tuning_criteria='both')
 
-    # Calculate the shifts in tuning
-    ref_sel = ref_ds.iloc[indices, :][sel_key].copy()
-    comp_sel = comp_ds.iloc[indices, :][sel_key].copy(),
-    delta_sel = comp_sel - ref_sel
-    shifts = pd.DataFrame(data={'pref_1': ref_sel, 'pref_2': comp_sel, 'delta_sel': delta_sel})
+    # Calculate the shifts in selectivity
+    ref_sel = ref_ds.iloc[indices, ref_ds.columns.get_loc(sel_key)].copy().clip(-1, 1)
+    comp_sel = comp_ds.iloc[indices, comp_ds.columns.get_loc(sel_key)].copy().clip(-1, 1)
+    residuals = comp_sel.abs() - ref_sel.abs()
+    shifts = pd.DataFrame(data={'pref_1': ref_sel, 'pref_2': comp_sel, 'delta_sel': residuals})
 
     # Calculate the residuals and the root mean square error of the residuals
-    residuals = shifts['pref_2'].to_numpy() - shifts['pref_1'].to_numpy()
-    rmse_residual = np.mean(np.sqrt(residuals ** 2))
+    rmse_residual = np.sqrt(np.mean(residuals ** 2))
 
     return shifts, residuals, rmse_residual
 
@@ -386,14 +472,12 @@ def plot_delta_pref(shifts: pd.DataFrame, rmse_residual: float, session_types: L
     scatter_delta = hv.Scatter(shifts[['pref_1', 'pref_2']], kdims=['pref_1'], vdims=['pref_2'], label='sig').opts(
         color='purple', size=8)
 
-    scatter = unity_line * scatter_delta * hv.Text(lower_lim+30, upper_lim-10,
-                                                   f'RMSE: {rmse_residual:.1f}°').opts(color='black', fontsize=15)
+    scatter = unity_line * scatter_delta
 
     scatter.opts(show_legend=False, width=500, height=500,
-                 xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} Pref. '
-                        f'{type[:3].title()}. [°]',
-                 ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} Pref. '
-                        f'{type[:3].title()}. [°]')
+                 xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} Pref. [°]',
+                 ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} Pref. [°]')
+    
     scatter.opts(
         hv.opts.Scatter(xlim=(lower_lim, upper_lim), ylim=(lower_lim, upper_lim),
                         xticks=np.linspace(lower_lim//2, upper_lim, 4),
@@ -436,16 +520,19 @@ fp.set_theme()
 in2cm = 1./2.54
 
 # define the experimental conditions
-results = ['multi'] # ['multi', 'fullfield', 'control', 'repeat']
-lightings = ['normal'] # ['normal', 'dark']
-rigs = [''] # ['', 'VWheelWF', 'VTuningWF']
+results = ['multi']#, 'repeat', 'control', 'fullfield']    #
+lightings = ['normal', 'dark']
+rigs = ['', 'VWheelWF', 'VTuningWF']
 analysis_type = 'agg_all'
 
 for result, light, rig in itertools.product(results, lightings, rigs):
 
+    # Filter out searches that don't make sense
     if (result == 'repeat') and (rig == ''):
         continue
     elif (result != 'repeat') and (rig != ''):
+        continue
+    elif (result == 'fullfield') and (light == 'dark'):
         continue
     else:
         # get the search string
@@ -454,34 +541,55 @@ for result, light, rig in itertools.product(results, lightings, rigs):
     # Load the data and set up figure saving path
     parsed_search = fdh.parse_search_string(search_string)
     file_infos = bd.query_database("analyzed_data", search_string)
-    input_paths = np.array([el['analysis_path'] for el in file_infos])
+    input_paths = [el['analysis_path'] for el in file_infos]
 
-    if input_paths.shape == 0:
-        continue
+    if len(input_paths) == 0:
+        # Need to create the file
+        data_dict = make_aggregate_file(search_string)
+        if data_dict is None:
+            continue
     else:
         input_path = input_paths[0]
 
-    data_dict = {}
-    with pd.HDFStore(input_path, 'r') as tc:
-        for key in tc.keys():
-            label = "_".join(key.split('/')[1:])
-            data = tc[key]
-            data_dict[label] = data
+        data_dict = {}
+        with pd.HDFStore(input_path, 'r') as tc:
+            for key in tc.keys():
+                label = "_".join(key.split('/')[1:])
+                data = tc[key]
+                data_dict[label] = data
 
     save_suffix = f"{parsed_search['result']}_{parsed_search['lighting']}_{parsed_search['rig']}"
     figure_save_path = os.path.join(paths.wf_figures_path, save_suffix)
+    data_save_path = os.path.join(paths.wf_figures_path, save_suffix, 'stats.hdf5')
+
     if not os.path.exists(figure_save_path):
         os.makedirs(figure_save_path)
 
+    # Set color themes depending on experiment type
     if parsed_search['result'] == 'repeat':
         if parsed_search['rig'] == 'VWheelWF':
             session_types = ['fixed0', 'fixed1']
+            scatter_color_theme = 'red'
         else:
             session_types = ['free0', 'free1']
+            scatter_color_theme = fp.hv_blue_hex
+
         session_shorthand = session_types
+
     else:
         session_types = ['VWheelWF', 'VTuningWF']
         session_shorthand = ['fixed', 'free']
+        scatter_color_theme = 'purple'
+
+    if (parsed_search['result'] == 'control') and (parsed_search['lighting'] == 'normal'):
+        fixed_violin_cmap = fp.hv_yellow_hex
+        free_violin_cmap = fp.hv_yellow_hex
+    elif (parsed_search['result'] == 'control') and (parsed_search['lighting'] == 'dark'):
+        fixed_violin_cmap = fp.hv_gray_hex
+        free_violin_cmap = fp.hv_gray_hex
+    else:
+        fixed_violin_cmap = 'red'
+        free_violin_cmap = fp.hv_blue_hex
 
     # Specify the path to the curated cell matches file
     curated_cell_matches_path = os.path.join(r"C:\Users\mmccann\Desktop", 
@@ -502,7 +610,10 @@ for result, light, rig in itertools.product(results, lightings, rigs):
     cell_kind = 'all_cells'
     activity_dataset = 'norm_spikes_viewed_props'
 
-    match_nums = data_dict['cell_matches'].groupby(['mouse', 'day'])[session_types[0]].count().values
+    try:
+        match_nums = data_dict['cell_matches'].groupby(['mouse', 'day'])[session_types[0]].count().values
+    except KeyError:
+        match_nums = data_dict['cell_matches'].groupby(['mouse', 'day'])[session_shorthand[0]].count().values
     num0 = data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'].groupby(['mouse', 'day']).size().values
     num1 = data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'].groupby(['mouse', 'day']).size().values
 
@@ -510,28 +621,34 @@ for result, light, rig in itertools.product(results, lightings, rigs):
     match_frac1 = match_nums/num1
 
     line = hv.Curve((np.linspace(0, 1, 101), np.linspace(0, 1, 101))).opts(color='gray')
-    scatter = hv.Points((match_frac0, match_frac1))
-    scatter.opts(xlim=(0, 1), xlabel=f'Frac. Match {session_shorthand[0].title()}',
-                 ylim=(0, 1), ylabel=f'Frac. Match {session_shorthand[1].title()}',
-                 color='blue', width=500, height=500)
+    scatter = hv.Scatter((match_frac0, match_frac1))
+    scatter.opts(xlim=(0, 1.05), xlabel=f'Frac. Match {session_shorthand[0].title()}',
+                 ylim=(0, 1.05), ylabel=f'Frac. Match {session_shorthand[1].title()}',
+                 color=scatter_color_theme, width=500, height=500)
     frac_cell_match = hv.Overlay([line, scatter])
 
     save_path = os.path.join(figure_save_path, "frac_cells_matched.png")
     frac_cell_match = fp.save_figure(frac_cell_match, save_path=save_path, fig_width=8, dpi=800, fontsize='paper',
                                      target='save', display_factor=0.1)
 
+    with pd.HDFStore(data_save_path, 'a') as store:
+        if 'frac_cell_match' in store.keys():
+            del store['frac_cell_match']
+        store['frac_cell_match'] = pd.DataFrame(data={f'match_frac_{session_shorthand[0]}': match_frac0,
+                                                      f'match_frac_{session_shorthand[1]}': match_frac1})
+
     # --- Get the visual responsivity of the cells --- #
     # Create dataframes to store binary tuning information
     fixed_cell_tunings = data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'][['old_index', 'mouse', 'day']].copy()
     free_cell_tunings = data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'][['old_index', 'mouse', 'day']].copy()
 
-    # Cells that meet direction selectivity criteria
-    free_dir_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'], vis_stim='dir', resp_thresh=0.5)
-    free_ori_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'], vis_stim='ori', resp_thresh=0.5)
-
     # Cells that meet orientation selectivity criteria
     fixed_dir_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'], vis_stim='dir', resp_thresh=0.5)
     fixed_ori_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'], vis_stim='ori', resp_thresh=0.5)
+
+    # Cells that meet direction selectivity criteria
+    free_dir_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'], vis_stim='dir', resp_thresh=0.5)
+    free_ori_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'], vis_stim='ori', resp_thresh=0.5)
 
     # Cells that meet visual responsivity criteria
     free_vis_resp = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'], vis_stim='vis', resp_thresh=0.5)
@@ -583,11 +700,19 @@ for result, light, rig in itertools.product(results, lightings, rigs):
 
     frac_free_vis_resp = free_vis_resp.groupby(['mouse', 'day']).size() / free_cell_per_day
     frac_free_vis_resp = frac_free_vis_resp.reset_index().rename(columns={0: 'visual'})
-    frac_vis_resp_free = pd.concat([frac_free_dir_tuned, frac_free_ori_tuned, frac_free_vis_resp], axis=1).drop(['mouse', 'day'], axis=1)
 
-    save_path = os.path.join(figure_save_path, "frac_vis_tuned_free.png")
+    frac_vis_resp_free = pd.concat([frac_free_dir_tuned.drop(['mouse', 'day'], axis=1),
+                                    frac_free_ori_tuned.drop(['mouse', 'day'], axis=1),
+                                    frac_free_vis_resp], axis=1)
+
+    with pd.HDFStore(data_save_path, 'a') as store:
+        store[f'frac_vis_resp_{session_shorthand[1]}'] = frac_vis_resp_free
+
+    frac_vis_resp_free = frac_vis_resp_free.drop(['mouse', 'day'], axis=1)
+
+    save_path = os.path.join(figure_save_path, f"frac_vis_tuned_{session_shorthand[1]}.png")
     violinplot_free_vis = fp.violin_swarm(frac_vis_resp_free, save_path,
-                                          cmap=fp.hv_blue_hex, font_size='paper', backend='seaborn',
+                                          cmap=free_violin_cmap, font_size='paper', backend='seaborn',
                                           width=4.5, height=5, save=True)
     plt.close()
 
@@ -602,34 +727,58 @@ for result, light, rig in itertools.product(results, lightings, rigs):
     
     frac_fixed_vis_resp = fixed_vis_resp.groupby(['mouse', 'day']).size() / fixed_cell_per_day
     frac_fixed_vis_resp = frac_fixed_vis_resp.reset_index().rename(columns={0: 'visual'})
-    frac_vis_resp_fixed = pd.concat([frac_fixed_dir_tuned, frac_fixed_ori_tuned, frac_fixed_vis_resp], axis=1).drop(['mouse', 'day'], axis=1)
 
-    save_path = os.path.join(figure_save_path, "frac_vis_tuned_fixed.png")
+    frac_vis_resp_fixed = pd.concat([frac_fixed_dir_tuned.drop(['mouse', 'day'], axis=1),
+                                          frac_fixed_ori_tuned.drop(['mouse', 'day'], axis=1),
+                                          frac_fixed_vis_resp], axis=1)
+
+    with pd.HDFStore(data_save_path, 'a') as store:
+        if f'frac_vis_resp_{session_shorthand[0]}' in store.keys():
+            del store[f'frac_vis_resp_{session_shorthand[0]}']
+        store[f'frac_vis_resp_{session_shorthand[0]}'] = frac_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
+
+    frac_vis_resp_fixed = frac_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
+
+    save_path = os.path.join(figure_save_path, f"frac_vis_tuned_{session_shorthand[0]}.png")
     violinplot_fixed_vis = fp.violin_swarm(frac_vis_resp_fixed, save_path,
-                                           cmap='red', font_size='paper', backend='seaborn',
+                                           cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
                                            width=4.5, height=5, save=True)
     plt.close()
 
     # --- Plot swarm plots with fraction of kinematic tuned cells for each variable --- #
 
-    # Within-animal fraction kinematic - freely moving
-    save_path = os.path.join(figure_save_path, "sig_frac_kinem_free.png")
-    frac_kine_resp_free = get_sig_tuned_kinem_cells(data_dict, 'VTuningWF', cell_kind, processing_parameters.variable_list_free,
+    # Within-animal fraction kinematic - fixed or session 0
+    save_path = os.path.join(figure_save_path, f"sig_frac_kinem_{session_shorthand[0]}.png")
+    frac_kine_resp_fixed = get_sig_tuned_kinem_cells(data_dict, session_types[0], cell_kind,
+                                                     processing_parameters.variable_list_fixed,
+                                                     use_test=True, include_responsivity=True, include_consistency=False)
+
+    with pd.HDFStore(data_save_path, 'a') as store:
+        if f'frac_kinem_resp_{session_shorthand[0]}' in store.keys():
+            del store[f'frac_kinem_resp_{session_shorthand[0]}']
+        store[f'frac_kinem_resp_{session_shorthand[0]}'] = frac_kine_resp_fixed
+
+    violinplot_fixed_kinem = fp.violin_swarm(frac_kine_resp_fixed, save_path,
+                                            cmap=fixed_violin_cmap, backend='seaborn', font_size='paper',
+                                            width=3, height=5, save=True)
+    plt.close()
+
+    # Within-animal fraction kinematic - freely moving or session 1
+    save_path = os.path.join(figure_save_path, f"sig_frac_kinem_{session_shorthand[1]}.png")
+    frac_kine_resp_free = get_sig_tuned_kinem_cells(data_dict, session_types[1], cell_kind,
+                                                    processing_parameters.variable_list_free,
                                                     use_test=True, include_responsivity=True, include_consistency=False)
+
+    with pd.HDFStore(data_save_path, 'a') as store:
+        if f'frac_kinem_resp_{session_shorthand[1]}' in store.keys():
+            del store[f'frac_kinem_resp_{session_shorthand[1]}']
+        store[f'frac_kinem_resp_{session_shorthand[1]}'] = frac_kine_resp_free
+
     violinplot_free_kinem = fp.violin_swarm(frac_kine_resp_free, save_path, 
-                                            cmap=fp.hv_blue_hex, backend='seaborn', font_size='paper', 
+                                            cmap=free_violin_cmap, backend='seaborn', font_size='paper',
                                             width=15, height=5, save=True)
     plt.close()
 
-    # Within-animal fraction kinematic - fixed
-    save_path = os.path.join(figure_save_path, "sig_frac_kinem_fixed.png")
-    frac_kine_resp_fixed = get_sig_tuned_kinem_cells(data_dict, 'VWheelWF', cell_kind, processing_parameters.variable_list_fixed, 
-                                                     use_test=True, include_responsivity=True, include_consistency=False)
-    violinplot_fixed_kinem = fp.violin_swarm(frac_kine_resp_fixed, save_path,
-                                            cmap='red', backend='seaborn', font_size='paper',
-                                            width=3, height=5, save=True)
-    plt.close()
-    
     # --- Plot the fraction of multimodal tuned cells--- #
     # TODO
 
@@ -686,47 +835,89 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                                                                               stim_kind='direction',
                                                                               upper_cutoff=dir_cutoff_high)
 
+    with pd.HDFStore(data_save_path, 'a') as store:
+        store['po_shifts'] = po_shifts
+        store['pd_shifts'] = pd_shifts
+        store['po_residuals'] = pd.DataFrame.from_dict({'orientation': ori_residuals})
+        store['pd_residuals'] = pd.DataFrame.from_dict({'direction': dir_residuals})
+        store['angle_residual_rmse'] = pd.DataFrame.from_dict({'orientation': [rmse_residual_ori],
+                                                                'direction': [rmse_residual_dir]})
+
     # Plot the shift in preferred orientation
     scatter_PO = plot_delta_pref(po_shifts, rmse_residual_ori, session_types, type='orientation')
+    scatter_PO.opts(hv.opts.Scatter(color=scatter_color_theme, size=4, show_legend=False))
 
     save_path = os.path.join(figure_save_path, "delta_PO.png")
-    scatter_PO = fp.save_figure(scatter_PO, save_path=save_path, fig_width=8, dpi=800, fontsize='paper',
+    scatter_PO = fp.save_figure(scatter_PO, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
                                 target='save', display_factor=0.1)
 
     # Plot the shift in preferred direction
     scatter_PD = plot_delta_pref(pd_shifts, rmse_residual_dir, session_types, type='direction')
+    scatter_PD.opts(hv.opts.Scatter(color=scatter_color_theme, size=4, show_legend=False))
 
     save_path = os.path.join(figure_save_path, "delta_PD.png")
-    scatter_PD = fp.save_figure(scatter_PD, save_path=save_path, fig_width=8, dpi=800, fontsize='paper',
+    scatter_PD = fp.save_figure(scatter_PD, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
                                 target='save', display_factor=0.1)
 
     # Get the shifts in OSI/DSI
-    osi_shifts, osi_residuals, rmse_residual_osi = calculate_delta_selectivity(ref_ds_ori.copy(), comp_ds_ori.copy(),
+    osi_shifts, osi_residuals, rmse_residual_osi = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
                                                                                cutoff=ori_cutoff_high,
                                                                                stim_kind='orientation')
+    all_osi_shifts, _, _ = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
+                                                       cutoff=0, stim_kind='orientation')
 
-    dsi_shifts, dsi_residuals, rmse_residual_dsi = calculate_delta_selectivity(ref_ds_dir.copy(), comp_ds_dir.copy(),
+    dsi_shifts, dsi_residuals, rmse_residual_dsi = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
                                                                                cutoff=dir_cutoff_high,
                                                                                stim_kind='direction')
+    all_dsi_shifts, _, _ = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
+                                                       cutoff=0, stim_kind='direction')
 
-    # Plot the shift in preferred orientation
+    with pd.HDFStore(data_save_path, 'a') as store:
+        store['osi_shifts'] = osi_shifts
+        store['dsi_shifts'] = dsi_shifts
+        store['osi_residuals'] = pd.DataFrame.from_dict({'osi': osi_residuals})
+        store['dsi_residuals'] = pd.DataFrame.from_dict({'dsi': dsi_residuals})
+        store['selectivity_residual_rmse'] = pd.DataFrame.from_dict({'osi': [rmse_residual_osi],
+                                                                     'dsi': [rmse_residual_dsi]})
+
+    # Plot the shift in OSI
     scatter_OSI = plot_delta_pref(osi_shifts, rmse_residual_osi, session_types, type='orientation')
-    scatter_OSI.opts(hv.opts.Scatter(
-                        xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} OSI',
-                        ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} OSI')
-                    )
+    scatter_OSI.opts(hv.opts.Scatter(color=scatter_color_theme))
+
+    scatter_OSI_all = plot_delta_pref(all_osi_shifts, 0, session_types, type='orientation')
+    scatter_OSI_all.opts(hv.opts.Scatter(color='gray', alpha=0.5))
+
+    scatter_OSI = hv.Overlay([scatter_OSI_all, scatter_OSI]).opts(show_legend=False)
+
+    scatter_OSI.opts(xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} OSI',
+                     ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} OSI')
+    scatter_OSI.opts(
+        hv.opts.Scatter(xlim=(0, 1.05), ylim=(0, 1.05),
+                        xticks=(0, 0.5, 1), yticks=(0, 0.5, 1),
+                        size=4))
+
     save_path = os.path.join(figure_save_path, "delta_OSI.png")
-    scatter_OSI = fp.save_figure(scatter_OSI, save_path=save_path, fig_width=8, dpi=800, fontsize='paper',
+    scatter_OSI = fp.save_figure(scatter_OSI, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
                                 target='save', display_factor=0.1)
 
-    # Plot the shift in preferred direction
+    # Plot the shift in DSI
     scatter_DSI = plot_delta_pref(dsi_shifts, rmse_residual_dsi, session_types, type='direction')
-    scatter_DSI.opts(hv.opts.Scatter(
-                        xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} DSI',
-                        ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} DSI')
-                    )
+    scatter_DSI.opts(hv.opts.Scatter(color=scatter_color_theme))
+
+    scatter_DSI_all = plot_delta_pref(all_dsi_shifts, 0, session_types, type='direction')
+    scatter_DSI_all.opts(hv.opts.Scatter(color='gray', alpha=0.5))
+
+    scatter_DSI = hv.Overlay([scatter_DSI_all, scatter_DSI]).opts(show_legend=False)
+
+    scatter_DSI.opts(xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} DSI',
+                     ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} DSI')
+    scatter_DSI.opts(
+        hv.opts.Scatter(xlim=(0, 1.05), ylim=(0, 1.05),
+                        xticks=(0, 0.5, 1), yticks=(0, 0.5, 1),
+                        size=4))
+
     save_path = os.path.join(figure_save_path, "delta_DSI.png")
-    scatter_DSI = fp.save_figure(scatter_DSI, save_path=save_path, fig_width=8, dpi=800, fontsize='paper',
+    scatter_DSI = fp.save_figure(scatter_DSI, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
                                 target='save', display_factor=0.1)
 
     # --- UMAP --- #
@@ -806,21 +997,27 @@ for result, light, rig in itertools.product(results, lightings, rigs):
 
                 for key in data_keys:
                     ds = data_dict[key]
+                    this_rig = key.split('_')[0]
                     base_label = '_'.join(label.split('_')[1 + len(cell_kind.split('_')):])
 
                     if base_label in kinem_label_list:
                         tuning = ds['Qual_index']
 
-                        if base_label in processing_parameters.variable_list_free:
-                            umap_dict_1[base_label] = tuning
+                        if this_rig in ['VWheelWF', 'VTuningWF']:
+                            if base_label in processing_parameters.variable_list_free:
+                                umap_dict_1[base_label] = tuning
+                            else:
+                                umap_dict_2[base_label] = tuning
                         else:
-                            umap_dict_2[base_label] = tuning
+                            if this_rig in ['free0', 'fixed0']:
+                                umap_dict_1[base_label] = tuning
+                            else:
+                                umap_dict_2[base_label] = tuning
                     else:
-                        this_rig = key.split('_')[0]
                         tuning_dsi = ds['dsi_abs'].abs().to_numpy()
                         tuning_osi = ds['osi'].to_numpy()
 
-                        if this_rig == 'VTuningWF':
+                        if this_rig in ['VTuningWF', 'free0', 'fixed0']:
                             umap_dict_1[f'dsi_{this_rig}'] = np.clip(tuning_dsi, 0, 1)
                             umap_dict_1[f'osi_{this_rig}'] = np.clip(tuning_osi, 0, 1)
                         else:
@@ -862,7 +1059,7 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                     umap_plot = create_umap_plot(plot_data, predictor_column)
 
                     save_name = os.path.join(figure_save_path, f"{cell_kind}_UMAP_{predictor_column}.png")
-                    umap_plot = fp.save_figure(umap_plot, save_path=save_name, fig_width=6, dpi=800, fontsize='paper',
+                    umap_plot = fp.save_figure(umap_plot, save_path=save_name, fig_width=3.5, dpi=800, fontsize='paper',
                                                target='save', display_factor=0.1)
 
 
@@ -902,3 +1099,5 @@ for result, light, rig in itertools.product(results, lightings, rigs):
 #                                    target='save', display_factor=0.1)
 #
 #     return umap_plot
+
+print("Done!")

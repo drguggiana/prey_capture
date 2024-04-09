@@ -290,6 +290,7 @@ def resultant_vector(angles, magnitudes, axial_correction):
     theta_sep = np.mean(np.diff(np.unique(angles)))
     mag = circ.resultant_vector_length(angles, w=magnitudes, d=theta_sep, axial_correction=axial_correction)
     angle = circ.mean(angles, w=magnitudes, d=theta_sep, axial_correction=axial_correction)
+
     return mag, angle
 
 
@@ -300,7 +301,7 @@ def subsample_responses(trial_nums_by_angle, min_trials=4, replace=True):
     return trial_subset
 
 
-def bootstrap_resultant(responses, multiplier, sampling_method, min_trials=3, num_shuffles=1000):
+def bootstrap_resultant_orientation(responses, multiplier, sampling_method, min_trials=3, num_shuffles=1000):
     columns = list(responses.columns)
     tuning_kind = columns[0]
     cell = columns[-1]
@@ -330,10 +331,12 @@ def bootstrap_resultant(responses, multiplier, sampling_method, min_trials=3, nu
                 magnitude_subset = responses[responses.trial_num.isin(trial_subset)][cell].to_numpy()
 
             resultant_length, resultant_angle = resultant_vector(theta_subset, magnitude_subset, multiplier)
-            resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=360/multiplier)
+            # Need this correction because pycircstat does mod2pi by default
+            resultant_angle = fk.wrap(resultant_angle, bound=np.pi)
+            resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=180.)
 
             shuffled_resultant[i, 0] = resultant_length
-            shuffled_resultant[i, 1] = np.rad2deg(resultant_angle)
+            shuffled_resultant[i, 1] = resultant_angle
 
     return shuffled_resultant
 
@@ -393,18 +396,18 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
         angles = unique_angles
         magnitudes = np.array(tc)
 
-    theta_sep = np.mean(np.diff(angles))
-
-    # Get half periods
+    # Get resultant on first half of the data
     half_period_angles_1 = angles[angles <= np.pi]
     half_period_mags_1 = magnitudes[angles <= np.pi]
 
-    half_period_angles_2 = angles[angles > np.pi] - np.pi
-    half_period_mags_2 = magnitudes[angles > np.pi]
-
     res_mag_1, res_angle_1 = resultant_vector(half_period_angles_1, half_period_mags_1, 2)
+    res_angle_1 = fk.wrap(res_angle_1, bound=np.pi)     # Need this correction because pycircstat does mod2pi by default
     closest_idx1 = np.argmin(np.abs(angles - res_angle_1))
     resp1 = magnitudes[closest_idx1]
+
+    # Get resultant on second half of the data
+    half_period_angles_2 = fk.wrap(angles[angles > np.pi], bound=np.pi)
+    half_period_mags_2 = magnitudes[angles > np.pi]
 
     res_mag_2, res_angle_2 = resultant_vector(half_period_angles_2, half_period_mags_2, 2)
     res_angle_2 = fk.wrap(res_angle_2, bound=np.pi) + np.pi
