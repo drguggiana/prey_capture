@@ -25,6 +25,8 @@ hv_mpi_green_rgb = tuple(np.array([0, 136, 122]) / 255.)
 hv_mpi_green_hex = '#00887a'
 hv_mpi_yellow_rgb = tuple(np.array([203, 219, 42]) / 255.)
 hv_mpi_yellow_hex = '#cbdb2a'
+hv_gray_hex = '#bcbcbc'
+hv_yellow_hex = '#fae365'
 
 hv_white_hex = '#FFFFFF'
 hv_red_hex = '#db3c30'
@@ -120,7 +122,7 @@ attr_dict = {
         # },
         'Text':
             {
-                'text_font': 'Arial',
+                'text_font': 'arial',
                 'text_color': 'black',
                 'text_font_style': 'normal',
                 'text_alpha': 1.0,
@@ -375,22 +377,23 @@ def rand_jitter(arr):
     return arr + np.random.randn(len(arr)) * stdev
 
 
-def plot_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_angle=None, ax=None, **kwargs):
+def plot_tuning_curve(tuning_curve, error, plot_fit=True, plot_trials=False, plot_pref_angle=False,
+                      fit=None, trials=None, pref_angle=None, ax=None, **kwargs):
     if ax is None:
         fig = plt.figure(dpi=300, figsize=(10, 6))
         ax = fig.add_subplot(111)
 
     tuning = ax.errorbar(tuning_curve[:, 0], tuning_curve[:, 1],
-                         c='k', alpha=0.5, yerr=error, elinewidth=1,
+                         c='k', alpha=1, yerr=error, elinewidth=1,
                          **kwargs)
 
-    if fit is not None:
+    if (fit is not None) and plot_fit:
         ax.plot(fit[:, 0], fit[:, 1], c='#1f77b4')
 
-    if pref_angle is not None:
+    if (pref_angle is not None) and plot_pref_angle:
         ax.axvline(pref_angle, color='r', linewidth=1)
 
-    if trials is not None:
+    if (trials is not None) and plot_trials:
         ax.scatter(rand_jitter(trials[:, 0]), trials[:, 1], marker='.', c='k', alpha=0.5, edgecolor='none')
 
     ax.spines['right'].set_visible(False)
@@ -401,37 +404,37 @@ def plot_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_angle=Non
     return tuning
 
 
-def plot_polar_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_angle=None, ax=None, **kwargs):
+def plot_polar_tuning_curve(tuning_curve, error, plot_fit=True, plot_trials=False, plot_pref_angle=True,
+                            fit=None, trials=None, pref_angle=None, ax=None, **kwargs):
     theta_max = kwargs.pop('theta_max', 360)
+    font_size = kwargs.pop('font_size', 'poster')
+    font_size = int(font_sizes_raw[font_size]['xlabel'][:-2])
 
     if ax is None:
         fig = plt.figure(dpi=300, figsize=(5, 5))
         ax = fig.add_subplot(111, projection='polar')
+        ax.grid(linewidth=0.25, zorder=0)
 
-    tuning = ax.errorbar(np.deg2rad(tuning_curve[:, 0]), tuning_curve[:, 1],
-                         c='k', alpha=0.5, linewidth=2, yerr=error, elinewidth=1,
-                         **kwargs)
+    ax.errorbar(np.deg2rad(tuning_curve[:, 0]), tuning_curve[:, 1],
+                c='k', alpha=1, linewidth=2, yerr=error, elinewidth=1,
+                zorder=2, **kwargs)
 
-    if fit is not None:
-        ax.plot(np.deg2rad(fit[:, 0]), fit[:, 1], c='#1f77b4', linewidth=2)
+    if (fit is not None) and plot_fit:
+        ax.plot(np.deg2rad(fit[:, 0]), fit[:, 1], c='#1f77b4', linewidth=1, zorder=2.5)
 
-    if trials is not None:
-        ax.scatter(rand_jitter(np.deg2rad(trials[:, 0])), trials[:, 1], marker='.', color='k', alpha=0.5, edgecolor='none')
+    if (trials is not None) and plot_trials:
+        ax.scatter(rand_jitter(np.deg2rad(trials[:, 0])), trials[:, 1], 
+                   marker='.', color='k', alpha=0.5, edgecolor='none',
+                   zorder=2)
 
-    if pref_angle is not None:
-        ax.axvline(np.deg2rad(pref_angle), color='r', linewidth=2)
+    if (pref_angle is not None) and plot_pref_angle:
+        ax.axvline(np.deg2rad(pref_angle), color='r', linewidth=1, zorder=2)
 
     ax.set_thetamax(theta_max)
     ax.set_theta_zero_location("W")
     ax.set_theta_direction(-1)
     # ax.set_rorigin(0)
-    if "font_size" in kwargs:
-        font_size=kwargs.pop("font_size")
-        font_size = int(font_sizes_raw[font_size]['xlabel'][:-2])
-    else:
-        font_size = 12
-
-    radial_ticks = [0.0, 0.25, 0.5, 0.75, 1.0]
+    radial_ticks = [0.0, 0.5,1.0]
     ax.set_rticks(radial_ticks, color='black')
     ax.set_yticklabels([], color='black')
     ax.set_rlabel_position(0)
@@ -440,7 +443,7 @@ def plot_polar_tuning_curve(tuning_curve, error, fit=None, trials=None, pref_ang
 
     # ax.yaxis.set_label_position('right')
 
-    return tuning
+    return ax
 
 
 def plot_tuning_curve_hv(tuning_curve, error, fit=None, trials=None, pref_angle=None, **kwargs):
@@ -489,7 +492,7 @@ def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std',
     columns = [el + '_' + tuning_kind[:3] for el in columns]
 
     if subfig is None:
-        figsize = kwargs.get('figsize', (10 * constant_in2cm, 5 * constant_in2cm))
+        figsize = kwargs.pop('figsize', (5 * constant_in2cm, 5 * constant_in2cm))
         fig = plt.figure(layout='constrained', figsize=figsize)
         fig.suptitle(f"Cell {cell}", fontsize='x-large')
         subfig = fig.subfigures(nrows=1, ncols=1)
@@ -509,6 +512,7 @@ def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std',
 
     ds = dataset.loc[cell, :]
     plot_kwargs = {'theta_max': 360 / multiplier}
+    plot_kwargs.update(kwargs)
     # Plot directions
     _ = tuning_plot_func(ds[columns[0]], ds[columns[1]],
                          trials=ds[columns[2]],
