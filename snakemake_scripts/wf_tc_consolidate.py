@@ -132,7 +132,7 @@ if __name__ == '__main__':
     input_paths = [path for id in id_flags for path in input_paths if id in path]
 
     # Load file to exclude from analysis
-    with open('exps_to_drop.yaml', 'r') as f:
+    with open(paths.file_exclusion_path, 'r') as f:
         # Load the contents of the file into a dictionary
         files_to_exclude = yaml.unsafe_load(f)
 
@@ -144,7 +144,7 @@ if __name__ == '__main__':
 
     slugs_wo_filetype = [slug.replace('_tcday.hdf5', '') for slug in slugs]
     if any([s in exclude_from_this for s in slugs_wo_filetype]):
-        print('At least one experiment has a file teo exclude. Skipping')
+        print('At least one experiment has a file to exclude. Skipping')
 
         # Write to the dummy output file
         with open(dummy_out, 'w') as f:
