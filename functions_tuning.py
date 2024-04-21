@@ -410,7 +410,8 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     half_period_mags_2 = magnitudes[angles > np.pi]
 
     res_mag_2, res_angle_2 = resultant_vector(half_period_angles_2, half_period_mags_2, 2)
-    res_angle_2 = fk.wrap(res_angle_2, bound=np.pi) + np.pi
+    res_angle_2 = fk.wrap(res_angle_2, bound=np.pi)
+    res_angle_2 += np.pi
     closest_idx2 = np.argmin(np.abs(angles - res_angle_2))
     resp2 = magnitudes[closest_idx2]
 

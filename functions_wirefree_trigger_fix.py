@@ -1,18 +1,42 @@
 import os
-import pandas as pd 
+
+import pandas as pd
 import numpy as np
 from skimage import io
 
+from processing_parameters import wf_frame_rate
+from functions_misc import consecutive
 
-def get_trial_duration_stats(df, trial_key, time_key):
+
+def drop_partial_or_long_trials(df, min_trial_length=4.8, max_trial_length=5.2):
+    trial_lengths = df[df.trial_num >= 1].groupby('trial_num').apply(lambda x: x.shape[0] /wf_frame_rate)
+
+    # Drop trials that are shorter than min_trial_length (partial trials)
+    short_trials = trial_lengths[trial_lengths < min_trial_length].index
+    df = df.drop(df[df.trial_num.isin(short_trials)].index)
+
+    # Drop trials that are longer than max_trial_length (errors in trial number indexing)
+    long_trials = trial_lengths[trial_lengths > max_trial_length].index
+    df = df.drop(df[df.trial_num.isin(long_trials)].index)
+
+    return df
+
+
+def get_trial_duration_stats(df, trial_key, time_key, display_info=True):
     grouped_trials = df[df[trial_key] > 0].groupby(trial_key)
-    trial_durations = grouped_trials.apply(lambda x: x[time_key].to_list()[-1] - x[time_key].to_list()[0])
+    itis = consecutive(df[df.trial_num == 0].time_vector.to_numpy())
 
-    print(f"Min. trial. dur.: {trial_durations.min():.2f}")
-    print(f"Max. trial. dur.: {trial_durations.max():.2f}")
-    print(f"Mean. trial. dur.: {trial_durations.mean():.2f}")
-    
-    return np.array((trial_durations.min(), trial_durations.max(), trial_durations.mean()))
+    trial_durations = grouped_trials.apply(lambda x: x[time_key].to_list()[-1] - x[time_key].to_list()[0])
+    iti_durations = np.array([iti[-1] - iti[0] for iti in itis])
+
+    if display_info:
+        print(f"Trial duration\n    Min: {trial_durations.min():.2f}, Max: {trial_durations.max():.2f}, Mean: {trial_durations.mean():.2f}")
+        print(f"ITI duration\n    Min: {iti_durations.min():.2f}, Max: {iti_durations.max():.2f}, Mean: {iti_durations.mean():.2f}\n")
+
+    trial_stats = np.array((trial_durations.min(), trial_durations.max(), trial_durations.mean()))
+    iti_stats = np.array((iti_durations.min(), iti_durations.max(), iti_durations.mean()))
+
+    return trial_durations, iti_durations, trial_stats, iti_stats
 
 
 def extract_timestamp(frame):

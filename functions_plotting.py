@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import holoviews as hv
@@ -10,7 +11,6 @@ from bokeh.themes.theme import Theme
 from bokeh.plotting import show as bokeh_show
 
 import processing_parameters
-from functions_kinematic import wrap
 
 
 # define in to cm
@@ -612,7 +612,7 @@ def histogram(data_in, rows=1, columns=1, bins=50, fig=None, color=None, fontsiz
 def violin_swarm(ds, save_path, backend='hvplot', save=False,
                  cmap='blue', xlabel='', ylabel='',
                  width=1500, height=1000, 
-                 font_size='screen', dpi=800):
+                 font_size='screen', dpi=800, **kwargs):
     """
     Generate a violin plot with swarm plot overlay using either hvplot or seaborn backend.
 
@@ -636,30 +636,46 @@ def violin_swarm(ds, save_path, backend='hvplot', save=False,
     - Exception: If an invalid backend is specified.
     """
 
-    rename_dict = dict(zip(list(ds.columns), [processing_parameters.wf_label_dictionary_wo_units[col] for col in list(ds.columns)]))
+    ylim = kwargs.pop('ylim', (-0.05, 1.05))
 
+    rename_dict = dict(zip(list(ds.columns), [processing_parameters.wf_label_dictionary_wo_units[col] for col in list(ds.columns)]))
     ds = ds.rename(columns=rename_dict)
 
-    if backend=='hvplot':
+    if backend == 'hvplot':
         violinplot = ds[list(rename_dict.values())].hvplot.violin(legend=False, inner='quartiles', color=cmap)
-        violinplot.opts(xlabel=xlabel, ylabel=ylabel, ylim=(-0.05, 1.05), xrotation=45, width=width, height=height)
+        violinplot.opts(xlabel=xlabel, ylabel=ylabel, ylim=ylim, xrotation=45, width=width, height=height)
         if save:
-            violinplot = save_figure(violinplot, save_path=save_path, fig_width=width, dpi=dpi, fontsize='screen', target='both', display_factor=0.1)
+            violinplot = save_figure(violinplot, save_path=save_path, fig_width=width, dpi=dpi, fontsize='screen',
+                                     target='both', display_factor=0.1)
         else:
-            violinplot = save_figure(violinplot, save_path=save_path, fig_width=width, dpi=dpi, fontsize='screen', target='screen', display_factor=0.1)
+            violinplot = save_figure(violinplot, save_path=save_path, fig_width=width, dpi=dpi, fontsize='screen',
+                                     target='screen', display_factor=0.1)
         return violinplot
+
+    # elif backend=='holoviews':
     
-    elif backend=='seaborn':
-        swarm_palette = {k:'k' for k in rename_dict.values()}
+    elif backend == 'seaborn':
+        swarm_palette = {k: 'k' for k in rename_dict.values()}
         fig, ax = plt.subplots(figsize=(width, height))
         violinplot = sns.violinplot(data=ds[list(rename_dict.values())], color=cmap, native_scale=True, width=1)
         violinplot = sns.stripplot(data=ds[list(rename_dict.values())], size=2, palette=swarm_palette, marker="x", linewidth=1)
-        ax.set_ylim((-0.05, 1.05))
+        ax.set_ylim(ylim)
+
         violinplot.spines[['right', 'top']].set_visible(False)
         font_size = int(font_sizes_raw[font_size]['xlabel'][:-2])
-        violinplot.set_xlabel(xlabel, fontsize=font_size)
-        violinplot.set_ylabel(ylabel, fontsize=font_size)
-        plt.xticks(rotation=45)
+
+        if len(list(rename_dict.values())) == 1:
+            ax.spines[['left']].set_visible(False)
+            ax.set(xticklabels=[])
+            ax.set(xlabel=None)  # remove the y-axis label
+            ax.set(yticklabels=[])
+            ax.set(ylabel=None)  # remove the y-axis label
+            ax.tick_params(left=False)  # remove the ticks
+        else:
+            violinplot.set_ylabel(ylabel, fontsize=font_size)
+            violinplot.set_xlabel(xlabel, fontsize=font_size)
+            plt.xticks(rotation=45)
+
         plt.tight_layout()
 
         if save:
