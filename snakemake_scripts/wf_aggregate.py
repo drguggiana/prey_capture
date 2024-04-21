@@ -1,5 +1,4 @@
 import os
-import yaml
 import itertools
 import warnings
 
@@ -36,8 +35,8 @@ def concatenate_cell_matches(data_list, exp_type):
 
 # Main script
 
-mice = processing_parameters.cohort_2
-results = ['repeat']  # ['multi', 'fullfield', 'control'], ['repeat']
+mice = ['MM_230706_b']
+results = ['multi', 'fullfield', 'control']  # ['multi', 'fullfield', 'control'], ['repeat']
 lightings = ['normal', 'dark']     # ['normal', 'dark']
 rigs = ['ALL']     # ['VWheelWF', 'VTuningWF'], ['ALL']    # 'ALL' used for everything but repeat aggs
 analysis_type = 'tc_consolidate'
@@ -100,7 +99,7 @@ for mouse, result, light, rig in itertools.product(mice, results, lightings, rig
                 if key == 'cell_matches':
                     df = concatenate_cell_matches([d[key] for d in data_list], parsed_search['result'])
                 else:
-                    df = pd.concat([d[key] for d in data_list]).reset_index(names='old_index')
+                    df = pd.concat([d[key] for d in data_list if key in d.keys()]).reset_index(names='old_index')
 
                 concat_data_dict[key] = df
                 df.to_hdf(output_path, key)
