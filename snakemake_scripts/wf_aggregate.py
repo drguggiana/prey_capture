@@ -36,8 +36,8 @@ def concatenate_cell_matches(data_list, exp_type):
 
 # Main script
 
-mice = processing_parameters.all_mice
-results = ['multi', 'fullfield', 'control']  # ['multi', 'fullfield', 'control'], ['repeat']
+mice = processing_parameters.cohort_2
+results = ['repeat']  # ['multi', 'fullfield', 'control'], ['repeat']
 lightings = ['normal', 'dark']     # ['normal', 'dark']
 rigs = ['ALL']     # ['VWheelWF', 'VTuningWF'], ['ALL']    # 'ALL' used for everything but repeat aggs
 analysis_type = 'tc_consolidate'
@@ -54,8 +54,6 @@ for mouse, result, light, rig in itertools.product(mice, results, lightings, rig
     parsed_search = fdh.parse_search_string(search_string)
 
     input_paths = np.array([el['analysis_path'] for el in file_infos if (parsed_search['mouse'].lower() in el['slug'])])
-
-    input_paths = [in_path for in_path in input_paths if os.path.basename(in_path) not in exclude_from_this]
     input_paths = np.array([in_path for in_path in input_paths if os.path.isfile(in_path)])
 
     if len(input_paths) == 0:
