@@ -13,26 +13,6 @@ warnings.simplefilter(action='ignore', category=UserWarning)
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 
-def parse_trial_frames(df):
-    trial_idx_frames = df[df.trial_num > 0].groupby(['trial_num']).apply(lambda x: [x.index[0], x.index[0] +
-                                                                                    5*wf_frame_rate])
-    trial_idx_frames = np.array(trial_idx_frames.to_list())
-
-    if trial_idx_frames[-1, 1] > df.index[-1]:
-        trial_idx_frames[-1, 1] = df.index[-1]
-    if trial_idx_frames[0, 0] < 0:
-        trial_idx_frames[0, 0] = 0
-
-    traces = []
-    for i, frame in enumerate(trial_idx_frames):
-        df_slice = df.iloc[frame[0]:frame[1], :].copy()
-        df_slice['trial_num'] = i + 1
-        traces.append(df_slice)
-    
-    traces = pd.concat(traces, axis=0).reset_index(drop=True)
-    return traces
-
-
 def drop_partial_or_long_trials(df, min_trial_length=4.5, max_trial_length=5.5):
     trial_lengths = df[df.trial_num > 0].groupby('trial_num').apply(lambda x: x.shape[0] / wf_frame_rate)
 
@@ -55,7 +35,8 @@ def generate_tcs_and_stats(df):
 
 
 def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tuning_fit='von_mises',
-                            bootstrap_shuffles=500):
+                            bootstrap_shuffles=500, min_trials_for_bootstraping=3):
+
     # --- Parse trials and cells--- #
     # Fill any NaNs in the data with 0
     activity_df = activity_df.fillna(0)
@@ -99,6 +80,15 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
         fit_function = tuning.calculate_pref_von_mises
     else:
         fit_function = tuning.calculate_pref_gaussian
+
+    # --- Get the trial counts per angle --- #
+    angle_counts = norm_direction_activity[direction_label].value_counts()
+    min_presentations = int(angle_counts.min())
+    if min_presentations < min_trials_for_bootstraping:
+        print('Not enough presentations per angle to bootstrap DSI/OSI')
+        do_equal_trial_nums_boostrap = False
+    else:
+        do_equal_trial_nums_boostrap = True
 
     # For all cells
     cell_data_list = []
@@ -169,32 +159,49 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
         responsivity_ori = 1 - circ_var_ori
 
         # -- Run permutation tests using single trial mean responses-- #
-        # A. Bootstrap resultant length and angle while guaranteeing the same number of presentations per angle
-        #    This is what Joel does for significant shifts in tuning curves
-        # B. Shuffle the trial IDs and compare the real selectivity indices to the bootstrapped distribution
 
         # A. Bootstrap resultant vector while guaranteeing the same number of presentations per angle
-        # For direction data
-        bootstrap_dsi_nasal_temporal, bootstrap_dsi_abs, bootstrap_osi, bootstrap_resultant_dir, bootstrap_null_dir \
-            = tuning.boostrap_dsi_osi_resultant(norm_direction_activity[[direction_label, 'trial_num', cell]],
-                                                sampling_method='equal_trial_nums', num_shuffles=bootstrap_shuffles)
+        #    This is what Joel does for significant shifts in tuning curves
 
-        bootstrap_resultant_dir[:, 1] = fk.wrap(np.rad2deg(bootstrap_resultant_dir[:, 1]), bound=360.)
-        bootstrap_null_dir[:, 1] = fk.wrap(np.rad2deg(bootstrap_null_dir[:, 1]), bound=360.)
+        if do_equal_trial_nums_boostrap:
+            # For direction data
+            bootstrap_dsi_nasal_temporal, bootstrap_dsi_abs, bootstrap_osi, bootstrap_resultant_dir, bootstrap_null_dir \
+                = tuning.boostrap_dsi_osi_resultant(norm_direction_activity[[direction_label, 'trial_num', cell]],
+                                                    sampling_method='equal_trial_nums', num_shuffles=bootstrap_shuffles)
 
-        # TODO check nonetype output here
-        bootstrap_responsivity_dir = bootstrap_resultant_dir[:, 0]
-        p_dsi_nasal_temporal_bootstrap = percentileofscore(bootstrap_dsi_nasal_temporal, dsi_nasal_temporal, kind='mean') / 100.
-        p_dsi_abs_bootstrap = percentileofscore(bootstrap_dsi_abs, dsi_abs, kind='mean') / 100.
-        p_osi_bootstrap = percentileofscore(bootstrap_osi, osi, kind='mean') / 100.
-        p_responsivity_dir_bootstrap = percentileofscore(bootstrap_responsivity_dir, responsivity_dir, kind='mean') / 100.
+            bootstrap_resultant_dir[:, 1] = fk.wrap(bootstrap_resultant_dir[:, 1], bound=360.)
+            bootstrap_null_dir = fk.wrap(bootstrap_null_dir, bound=360.)
 
-        # For orientation data
-        bootstrap_resultant_ori = \
-            tuning.bootstrap_resultant_orientation(norm_orientation_activity[['orientation', 'trial_num', cell]],
-                                                   sampling_method='equal_trial_nums', multiplier=2, num_shuffles=bootstrap_shuffles)
-        bootstrap_responsivity_ori = bootstrap_resultant_ori[:, 0]
-        p_responsivity_ori_bootstrap = percentileofscore(bootstrap_responsivity_ori, responsivity_ori, kind='mean') / 100.
+            bootstrap_responsivity_dir = bootstrap_resultant_dir[:, 0]
+            p_dsi_nasal_temporal_bootstrap = percentileofscore(bootstrap_dsi_nasal_temporal, dsi_nasal_temporal, kind='mean') / 100.
+            p_dsi_abs_bootstrap = percentileofscore(bootstrap_dsi_abs, dsi_abs, kind='mean') / 100.
+            p_osi_bootstrap = percentileofscore(bootstrap_osi, osi, kind='mean') / 100.
+            p_responsivity_dir_bootstrap = percentileofscore(bootstrap_responsivity_dir, responsivity_dir, kind='mean') / 100.
+
+            # For orientation data
+            bootstrap_resultant_ori = \
+                tuning.bootstrap_resultant_orientation(norm_orientation_activity[['orientation', 'trial_num', cell]],
+                                                       sampling_method='equal_trial_nums', multiplier=2, num_shuffles=bootstrap_shuffles)
+            bootstrap_responsivity_ori = bootstrap_resultant_ori[:, 0]
+            p_responsivity_ori_bootstrap = percentileofscore(bootstrap_responsivity_ori, responsivity_ori, kind='mean') / 100.
+
+        else:
+            # Fill everything with NaNs
+            bootstrap_dsi_nasal_temporal = np.zeros(bootstrap_shuffles).fill(np.nan)
+            bootstrap_dsi_abs = np.zeros(bootstrap_shuffles).fill(np.nan)
+            bootstrap_osi = np.zeros(bootstrap_shuffles).fill(np.nan)
+            bootstrap_resultant_dir = np.zeros((bootstrap_shuffles, 2)).fill(np.nan)
+            bootstrap_responsivity_dir = bootstrap_resultant_dir[:, 0]
+            bootstrap_null_dir = np.zeros(bootstrap_shuffles).fill(np.nan)
+
+            p_dsi_nasal_temporal_bootstrap = np.zeros(bootstrap_shuffles).fill(np.nan)
+            p_dsi_abs_bootstrap = np.zeros(bootstrap_shuffles).fill(np.nan)
+            p_osi_bootstrap = np.zeros(bootstrap_shuffles).fill(np.nan)
+            p_responsivity_dir_bootstrap = np.zeros(bootstrap_shuffles).fill(np.nan)
+
+            bootstrap_resultant_ori = np.zeros((bootstrap_shuffles, 2)).fill(np.nan)
+            bootstrap_responsivity_ori = bootstrap_resultant_ori[:, 0]
+            p_responsivity_ori_bootstrap = np.zeros(bootstrap_shuffles).fill(np.nan)
 
         # B. Shuffle the trial IDs and compare the real selectivity indices to the bootstrapped distribution
         # For direction data

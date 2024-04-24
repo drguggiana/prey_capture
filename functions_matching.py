@@ -1045,7 +1045,12 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
             trial_val = matched_bonsai.loc[idx, 'trial_num']
             rounded_trial = np.round(trial_val)
             prec_trial = matched_bonsai.loc[idx - 1, 'trial_num']
-            next_trial = matched_bonsai.loc[idx + 1, 'trial_num']
+
+            # handle edge cases
+            if idx + 1 == matched_bonsai.shape[0]:
+                next_trial = 0
+            else:
+                next_trial = matched_bonsai.loc[idx + 1, 'trial_num']
 
             if (rounded_trial <= prec_trial) and (next_trial == 0):
                 # Trial is ending, assign to preceding trial
