@@ -103,7 +103,7 @@ try:
     frame_end = processed_frames[-1]
 
     # create NaN-padded arrays in order to match raw movie frame count
-    prepend_pad = np.empty((spikes_data.shape[0], frame_start-1))
+    prepend_pad = np.empty((spikes_data.shape[0], frame_start))
     postpend_pad = np.empty((spikes_data.shape[0], raw_frame_count - frame_end))
     prepend_pad[:] = np.NaN
     postpend_pad[:] = np.NaN

@@ -171,14 +171,14 @@ def list_lists_to_array(list_of_lists, alignment='right', on=None):
     new_array = np.empty((len(list_of_lists), max_length))
     new_array[:] = np.NaN
 
-    for i, l in enumerate(list_of_lists):
+    for i, sublist in enumerate(list_of_lists):
 
         if alignment == 'right':
-            start = new_array.shape[-1] - len(l)
-            new_array[i, start:] = l
+            start = new_array.shape[-1] - len(sublist)
+            new_array[i, start:] = sublist
 
         elif alignment == 'left':
-            new_array[i, :len(l)] = l
+            new_array[i, :len(sublist)] = sublist
 
         elif alignment == 'on':
 
@@ -191,7 +191,7 @@ def list_lists_to_array(list_of_lists, alignment='right', on=None):
                 else:
                     raise ValueError('on must be an array, list or int')
 
-                new_array[i, on_idx:on_idx+len(l)] = l
+                new_array[i, on_idx:on_idx+len(sublist)] = sublist
                 
             else:
                 raise ValueError('index must be provided when using alignment on')

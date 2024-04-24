@@ -683,7 +683,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
     sync_data = pd.read_csv(sync_path, names=['Time', 'projector_frames', 'camera_frames',
                                               'sync_trigger', 'mini_frames', 'wheel_frames', 'projector_frames_2'],
                             index_col=False)
-    
+
     # get the camera frames (as the indexes from sync_frames are referenced for the uncut sync_data, see match_dlc)
     frame_times_cam_sync = sync_data.loc[kinematics_data['sync_frames'].to_numpy(), 'Time'].to_numpy()
 
@@ -742,22 +742,24 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
         # get the motive-based frame code in sync
         idx_code = np.argwhere(np.abs(np.diff(fixed_code)) > 0).squeeze() + 1
         motive_code = fixed_code[idx_code]
-        
-        # if the frame numbers don't match, find the first motive color number and match that
-        last_number = trimmed_traces.loc[trimmed_traces.shape[0] - 1, 'color_factor']
-        
+
+        # Here was assume that the frame triggers as recorded in motive are earlier compared to the sync file
+        # trim the idx based on the first appearance of the first_number in motive_code
+        first_number = trimmed_traces.loc[0, 'color_factor']
+        trim_idx = np.argwhere(motive_code == first_number)[0][0]
+        idx_code = idx_code[trim_idx:]
+
         # trim the idx based on the last appearance of the last_number in motive_code
-        trim_idx = np.argwhere(motive_code == last_number)[-1][0] + 1
-        idx_code = idx_code[-(trimmed_traces.shape[0] + 1):trim_idx]
+        # last_number = trimmed_traces.loc[trimmed_traces.shape[0] - 1, 'color_factor']
+        # trim_idx = np.argwhere(motive_code == last_number)[-1][0] + 1
+        # idx_code = idx_code[:trim_idx]
         
-        # if idx_code.shape[0] < trimmed_traces.shape[0]:
-        #
-        #     # get the difference in frames
-        #     delta_frames = trimmed_traces.shape[0] - idx_code.shape[0]
-        #     # get trimmed traces trimmed
-        #     idx_code = idx_code[delta_frames:]
-        # display_code = fixed_code[idx_code]
-        
+        if idx_code.shape[0] < trimmed_traces.shape[0]:
+            # get the difference in frames
+            delta_frames = trimmed_traces.shape[0] - idx_code.shape[0]
+            # get trimmed traces trimmed
+            trimmed_traces = trimmed_traces.iloc[:-delta_frames, :].reset_index(drop=True)
+
         # get the frame times
         frame_times_motive_sync = sync_data.loc[idx_code, 'Time'].to_numpy()
         
@@ -778,7 +780,7 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
             delta_frames = trimmed_traces.shape[0] - frame_times_motive_sync.shape[0]
             trimmed_traces = trimmed_traces.iloc[delta_frames:, :].reset_index(drop=True)
 
-    # interpolate the camera traces to match the unity frames
+    # interpolate the camera (DLC) traces to match the unity frames
     matched_camera = kinematics_data.drop(['time_vector', 'mouse', 'datetime', 'sync_frames'],
                                           axis=1).apply(interp_trace, raw=False, args=(frame_times_cam_sync,
                                                                                        frame_times_motive_sync))
@@ -806,15 +808,15 @@ def match_motive_2(motive_traces, sync_path, kinematics_data):
     # ax.plot(sync_data.loc[:, 'Time'], sync_data.loc[:, 'sync_trigger'])
     # ax.scatter(frame_times_motive_sync, np.ones_like(frame_times_motive_sync))
     #
-    #
     # fig5 = plt.figure()
     # ax = fig5.add_subplot(211)
-    # ax.plot(trimmed_traces.loc[:, 'time_m'], trimmed_traces.loc[:, 'trial_num'])
-    # ax.plot(trimmed_traces.loc[:, 'time_m'], trimmed_traces.loc[:, 'sync_trigger'])
+    # ax.scatter(trimmed_traces.loc[:, 'time_m'], trimmed_traces.loc[:, 'trial_num'])
+    # # ax.plot(trimmed_traces.loc[:, 'time_m'], trimmed_traces.loc[:, 'sync_trigger'])
     #
     # fig6 = plt.figure()
     # ax = fig6.add_subplot(111)
-    # ax.plot(np.diff(motive_code), marker='o')
+    # ax.plot(np.diff(motive_code))
+    # ax.plot(np.diff(trimmed_traces.color_factor))
 
     # add the correct time vector from the interpolated traces
     matched_camera['time_vector'] = frame_times_motive_sync
@@ -944,6 +946,7 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
 
 
 def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
+
     # load the calcium data (cells x time), transpose to get time x cells
     with h5py.File(calcium_path, mode='r') as f:
         calcium_data = np.array(f['calcium_data']).T
@@ -983,6 +986,8 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     frame_idx_mini_sync = np.argwhere(np.diff(np.round(sync_data.loc[:, 'mini_frames'])) > 0).squeeze() + 1
 
     # correct for the calcium starting before and/or ending after the behavior
+
+    # if the calcium starts before the behavior (expected)
     if frame_idx_mini_sync[0] < frame_idx_camera_sync[0]:
         start_idx = np.argwhere(frame_idx_mini_sync > frame_idx_camera_sync[0])[0][0]
         frame_idx_mini_sync = frame_idx_mini_sync[start_idx:]
@@ -990,6 +995,7 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
         fluor_data = fluor_data[start_idx:, :]
         ca_frames = ca_frames[start_idx:]
 
+    # if the calcium ends after the behavior (when experiment runs to completion)
     if frame_idx_mini_sync[-1] > frame_idx_camera_sync[-1]:
         end_idx = np.argwhere(frame_idx_mini_sync < frame_idx_camera_sync[-1])[-1][0] + 1
         frame_idx_mini_sync = frame_idx_mini_sync[:end_idx]
@@ -1040,19 +1046,26 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
             rounded_trial = np.round(trial_val)
             prec_trial = matched_bonsai.loc[idx - 1, 'trial_num']
             next_trial = matched_bonsai.loc[idx + 1, 'trial_num']
-            
-            if (rounded_trial == prec_trial) and (next_trial == 0):
+
+            if (rounded_trial <= prec_trial) and (next_trial == 0):
+                # Trial is ending, assign to preceding trial
                 matched_bonsai.loc[idx, 'trial_num'] = prec_trial
-            elif (rounded_trial == next_trial) and (prec_trial == 0):
+
+            elif (prec_trial == 0) and (rounded_trial <= next_trial):
+                # Trial is starting, assign to next trial
                 matched_bonsai.loc[idx, 'trial_num'] = next_trial
-            elif (rounded_trial == prec_trial) and (rounded_trial == next_trial):
+
+            elif (prec_trial == next_trial) and ((rounded_trial != prec_trial) or (rounded_trial != next_trial)):
+                # Trial is starting and ending in the same frame, assign to preceding trial
                 matched_bonsai.loc[idx, 'trial_num'] = prec_trial
+
             else:
-                matched_bonsai.loc[idx, 'trial_num'] = 0
+                # Some weird case, pass
+                pass
         
         matched_bonsai.loc[:, 'trial_num'] = np.round(matched_bonsai.loc[:, 'trial_num'])
 
-        # find indexes for each trial number > 0. If there are some that aren't consecutive, fix them
+        # find indices for each trial number > 0. If there are some that aren't consecutive, fix them
         # Seems to be the case the sometimes the transition is split across two frames
         for trial in matched_bonsai.trial_num.unique()[1:]:
             indexes = matched_bonsai.index[matched_bonsai.trial_num == trial]
@@ -1266,13 +1279,18 @@ def match_dlc(filtered_traces, file_info, file_date):
         time = sync_data.loc[cam_idx, 'Time'].to_numpy()
 
     # correct if there's a discrepancy and report
+    # This looks for difference between length of recorded video and length of time vector from sync file
     if time.shape[0] != filtered_traces.shape[0]:
         delta_frame = time.shape[0] - filtered_traces.shape[0]
         print(f'Discrepancy of {delta_frame} frames between time and traces')
         if delta_frame < 0:
+            # Recorded video is longer than time vector - implies that the video process stopped after the
+            # main recording process ended
             # correct the traces
             filtered_traces = filtered_traces.iloc[-delta_frame:, :]
         else:
+            # Time vector is longer than recorded video - implies that the video process after before the
+            # main recording process, which is expected
             # correct the time vector and camera idx
             time = time[delta_frame:]
             cam_idx = cam_idx[delta_frame:]

@@ -129,12 +129,12 @@ def update_sync_file(timestamps_in, target_sync_in, miniscope_channel=4):
 def fix_wirefree_timestamps(tif_path, sync_path):
     stack = io.imread(tif_path)
     timestamps = np.array([extract_timestamp(el)/1000 for el in stack])
-    corrected_timestamps , idxs, _ = correct_timestamp_jumps(timestamps)
+    corrected_timestamps, idxs, _ = correct_timestamp_jumps(timestamps)
 
     # There are still these little mistakes throughout that cause timing errors down the line.
     # Let's try to fix them by fitting a line to the timestamps and then using that as the correction
-    x = np.arange(len(corrected_timestamps))
-    slope, intercept = np.polyfit(x, corrected_timestamps, deg=1)
+    x = np.arange(len(corrected_timestamps) - 1)
+    slope, intercept = np.polyfit(x, corrected_timestamps[:-1], deg=1)
     regressed_timestamps = x * slope + intercept
     message = update_sync_file(regressed_timestamps, sync_path)
     return message

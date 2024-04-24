@@ -520,9 +520,9 @@ def create_umap_plot(plot_data: np.ndarray, predictor_column: str) -> hv.Scatter
 
     if any([predictor_column.startswith('dsi'), predictor_column.startswith('osi')]):
         umap_plot.opts(title=f"{predictor_column[:3].upper()} "
-                             f"{processing_parameters.wf_label_dictionary[predictor_column.split('_')[-1]]}")
+                             f"{processing_parameters.wf_label_dictionary_wo_units[predictor_column.split('_')[-1]]}")
     else:
-        umap_plot.opts(title=processing_parameters.wf_label_dictionary[predictor_column])
+        umap_plot.opts(title=processing_parameters.wf_label_dictionary_wo_units[predictor_column])
 
     umap_plot.opts(width=300, height=300, size=2)
 
@@ -534,7 +534,7 @@ fp.set_theme()
 in2cm = 1./2.54
 
 # define the experimental conditions
-results = ['multi', 'repeat', 'control', 'fullfield']
+results = ['multi', 'repeat', 'control', 'fullfield']    # 'multi', 'repeat', 'control', 'fullfield'
 lightings = ['normal', 'dark']
 rigs = ['', 'VWheelWF', 'VTuningWF']
 analysis_type = 'agg_all'
@@ -565,12 +565,21 @@ for result, light, rig in itertools.product(results, lightings, rigs):
     else:
         input_path = input_paths[0]
 
-        data_dict = {}
-        with pd.HDFStore(input_path, 'r') as tc:
-            for key in tc.keys():
-                label = "_".join(key.split('/')[1:])
-                data = tc[key]
-                data_dict[label] = data
+        # If the file exists, just load it
+        if os.path.isfile(input_path):
+
+            data_dict = {}
+            with pd.HDFStore(input_path, 'r') as tc:
+                for key in tc.keys():
+                    label = "_".join(key.split('/')[1:])
+                    data = tc[key]
+                    data_dict[label] = data
+
+        # Otherwise the entry exists but the file doesn't. Create the file
+        else:
+            data_dict = make_aggregate_file(search_string)
+            if data_dict is None:
+                continue
 
     save_suffix = f"{parsed_search['result']}_{parsed_search['lighting']}_{parsed_search['rig']}"
     figure_save_path = os.path.join(paths.wf_figures_path, save_suffix)

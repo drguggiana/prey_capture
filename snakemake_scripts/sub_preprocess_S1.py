@@ -478,16 +478,16 @@ def extract_motive(file_path_motive, rig, trials=None):
 
             We also track the body and other objects using DeepLabCut, which does pose estimation on 2D, top down images. 
             We only get X and Y coordinates there. However, the DLC convention is to take Z as the upward (anti-gravity) vector. 
-            We want all of these coordinate spaces to match, so we remap the Unity coordiantes such that:
+            We want all of these coordinate spaces to match, so we remap the Unity coordinates such that:
             (up) Unity Y = DLC Z
             (forward) Unity Z = DLC X
             (lateral) Unity X = DLC Y
 
             We rename the rotations similarly. Note here that the names correspond to rotations about tha axis in DLC space.
             Because of the handedness shift, all Unity rotations are negated from what we see in Motive
-            mouse_xrot_m is rotation about unity Z axis (x axis moves up/down), correponds to mouse pitch.
-            mouse_yrot_m is rotation about unity X axis (y axis moves side to side), correponds to mouse roll.
-            mouse_zrot_m is rotation about unity Y axis (z axis moves left/right), correponds to mouse yaw.
+            mouse_xrot_m is rotation about unity Z axis (x axis moves up/down), corresponds to mouse pitch.
+            mouse_yrot_m is rotation about unity X axis (y axis moves side to side), corresponds to mouse roll.
+            mouse_zrot_m is rotation about unity Y axis (z axis moves left/right), corresponds to mouse yaw.
             
             """
 
