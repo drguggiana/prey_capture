@@ -428,6 +428,10 @@ def calculate_kinematic_tuning(df, day, animal, rig):
     tcs_dict, tcs_counts_dict, tcs_bins_dict = convert_to_dataframe(tcs_half, tcs_full, tc_count, tcs_resp,
                                                                     tcs_cons, tc_bins, day, animal, rig)
 
+
+    # Do a extra calculation for the running evoked responses
+
+
     return tcs_dict, tcs_counts_dict, tcs_bins_dict
 
 
@@ -493,7 +497,7 @@ if __name__ == '__main__':
 
             # Calculate dFF and normalize other neural data
             activity_ds_dict = {}
-            dff = tuning.calculate_dff(raw_fluor)
+            dff = tuning.calculate_dff(raw_fluor, baseline_type='quantile', quantile=0.25)
             norm_spikes = tuning.normalize_responses(raw_spikes)
             norm_fluor = tuning.normalize_responses(raw_fluor)
             norm_dff = tuning.normalize_responses(dff)
