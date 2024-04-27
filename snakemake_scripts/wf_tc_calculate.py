@@ -1,6 +1,6 @@
-import os.path
 import pycircstat as circ
-from scipy.stats import percentileofscore, sem
+from hmmlearn import hmm
+from scipy.stats import percentileofscore, sem, t
 import warnings
 
 import functions_kinematic as fk
@@ -40,8 +40,10 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
     # --- Parse trials and cells--- #
     # Fill any NaNs in the data with 0
     activity_df = activity_df.fillna(0)
+
     # Drop trials that are poorly indexed or incomplete
     activity_df = drop_partial_or_long_trials(activity_df)
+
     # Get the column names for the cells
     cells = [col for col in activity_df.columns if 'cell' in col]
 
@@ -85,7 +87,7 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
     angle_counts = norm_direction_activity[direction_label].value_counts()
     min_presentations = int(angle_counts.min())
     if min_presentations < min_trials_for_bootstraping:
-        print(f'Not enough presentations per angle to bootstrap resultant/DSI/OSI with at least '
+        print(f'    Not enough presentations per angle to bootstrap resultant/DSI/OSI with at least '
               f'{min_trials_for_bootstraping} trials.')
         do_equal_trial_nums_boostrap = False
     else:
@@ -364,6 +366,59 @@ def parse_kinematic_data(matched_calcium, rig):
     return kinematics, raw_spikes, raw_fluor
 
 
+def predict_running_gmm_hmm(running_trace, n_components=2):
+    scores = list()
+    models = list()
+
+    for idx in range(10):  # ten different random starting states
+        # define our hidden Markov model
+        model = hmm.GMMHMM(n_components=n_components, random_state=idx, n_iter=100)
+        model.fit(running_trace)
+        models.append(model)
+        scores.append(model.score(running_trace))
+
+    # get the best model
+    model = models[np.argmax(scores)]
+    print(f'The best model had a score of {max(scores)} and '
+          f'{model.n_components} components')
+
+    # use the Viterbi algorithm to predict the most likely sequence of states
+    # given the model
+    states = model.predict(running_trace)
+    return states
+
+
+def get_running_modulated_cells(activity_df, running_bouts_idxs, ci_interval=0.95):
+    cells = [col for col in activity_df.columns if 'cell' in col]
+
+    # Find cells that are significantly modulated by running in general
+    still_bouts_idxs = np.setdiff1d(activity_df.index, running_bouts_idxs)
+    cell_running_activity = activity_df.loc[running_bouts_idxs, cells].apply(np.nanmean, axis=0)
+    cell_still_activity = activity_df.loc[still_bouts_idxs, cells].apply(np.nanmean, axis=0)
+    running_diff = cell_running_activity - cell_still_activity
+    running_cis = t.interval(ci_interval, len(running_diff) - 1,
+                             loc=np.mean(running_diff), scale=sem(running_diff))
+    sig_running_modulated = (running_diff < running_cis[0]) | (running_diff > running_cis[1])
+
+    # Find cells that are significantly modulated by running during visual stimulus
+    vis_stim_idxs = activity_df[activity_df.trial_num >= 1].index
+    vis_running_idxs = np.intersect1d(running_bouts_idxs, vis_stim_idxs)
+    vis_still_idxs = np.intersect1d(still_bouts_idxs, vis_stim_idxs)
+    vis_cell_running_activity = activity_df.loc[vis_running_idxs, cells].apply(np.nanmean, axis=0)
+    vis_cell_still_activity = activity_df.loc[vis_still_idxs, cells].apply(np.nanmean, axis=0)
+    vis_running_diff = vis_cell_running_activity - vis_cell_still_activity
+    vis_running_cis = t.interval(ci_interval, len(vis_running_diff) - 1,
+                                 loc=np.mean(vis_running_diff), scale=sem(vis_running_diff))
+    sig_vis_running_modulated = (vis_running_diff < vis_running_cis[0]) | (vis_running_diff > vis_running_cis[1])
+
+    df = pd.DataFrame({'cell': cells, 'run_activity': cell_running_activity, 'still_activity': cell_still_activity,
+                       'run_diff': running_diff, 'sig_run_modulated': sig_running_modulated,
+                       'vis_run_activity': cell_running_activity, 'vis_still_activity': cell_still_activity,
+                       'vis_run_diff': vis_running_diff, 'sig_vis_run_modulated': sig_vis_running_modulated})
+
+    return df
+
+
 def calculate_kinematic_tuning(df, day, animal, rig):
     """ Process kinematic tuning
     This is lifted directly from tc_calculate.py
@@ -534,14 +589,16 @@ if __name__ == '__main__':
             if rig == 'VTuningWF':
                 speed_column = 'mouse_speed'
             else:
-                speed_column = 'wheel_speed'
+                speed_column = 'wheel_speed_abs'
 
-            speed_cutoff = np.percentile(np.abs(kinematics[speed_column]), 80)
-            kinematics['is_running'] = np.abs(kinematics[speed_column]) >= speed_cutoff
-            kinematics[f'{speed_column}_abs'] = np.abs(kinematics[speed_column])
+            # Use GMM - HMM to predict running state
+            running_prediction = predict_running_gmm_hmm(kinematics[speed_column].to_numpy().reshape(-1,1),
+                                                         n_components=2)
+            running_idxs = np.argwhere(running_prediction > 0).flatten()
+            still_idxs = np.argwhere(running_prediction == 0).flatten()
+            kinematics['is_running'] = running_prediction > 0
 
-            still_trials = kinematics.groupby('trial_num').filter(
-                lambda x: x[f'{speed_column}_abs'].mean() < speed_cutoff).trial_num.unique()
+            still_trials = kinematics.iloc[still_idxs, :].groupby('trial_num').trial_num.unique()
             still_trials = viewed_trials[np.in1d(viewed_trials, still_trials)]
 
             raw_spikes_viewed_still = raw_spikes_viewed.loc[raw_spikes_viewed.trial_num.isin(still_trials)]
@@ -557,7 +614,8 @@ if __name__ == '__main__':
             vis_prop_dict = {}
             for ds_name in processing_parameters.activity_datasets:
                 activity_ds = activity_ds_dict[ds_name]
-                props = calculate_visual_tuning(activity_ds, bootstrap_shuffles=processing_parameters.bootstrap_repeats)
+                props = calculate_visual_tuning(activity_ds,
+                                                bootstrap_shuffles=processing_parameters.bootstrap_repeats)
                 # Save visual features to hdf5 file
                 props.to_hdf(out_file, f'{ds_name}_props')
 
@@ -565,15 +623,17 @@ if __name__ == '__main__':
             tcs_dict, tcs_counts_dict, tcs_bins_dict = calculate_kinematic_tuning(dataframe, day, animal, rig)
 
             # for all the features
-            for feature in vis_prop_dict.keys():
-                vis_prop_dict[feature].to_hdf(out_file, feature)
+            for feature in tcs_dict.keys():
+                tcs_dict[feature].to_hdf(out_file, feature)
                 tcs_counts_dict[feature].to_hdf(out_file, feature + '_counts')
                 tcs_bins_dict[feature].to_hdf(out_file, feature + '_edges')
 
-            # --- save the metadata --- #
+            # calculate locomotion modulated cells
+            running_modulated_cells = get_running_modulated_cells(raw_spikes, running_idxs)
+            running_modulated_cells.to_hdf(out_file, 'running_modulated_cells')
+
+            # --- save the cell matches --- #
             cell_matches.to_hdf(out_file, 'cell_matches')
-            # meta_data = pd.DataFrame(np.vstack(meta_list), columns=processing_parameters.meta_fields)
-            # meta_data.to_hdf(out_path, 'meta_data')
 
         # save as a new entry to the data base
         # assemble the entry data
