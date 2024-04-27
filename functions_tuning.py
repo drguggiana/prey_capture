@@ -483,6 +483,15 @@ def boostrap_dsi_osi_resultant(responses, sampling_method, min_trials=3, num_shu
             dsi_nasal_temporal, dsi_abs, osi, resultant_length, resultant_angle, null_angle = \
                 calculate_dsi_osi_resultant(theta_subset, magnitude_subset, bootstrap=True)
 
+            # check if any of the outputs is None
+            if any([el is None for el in [dsi_nasal_temporal, dsi_abs, osi, resultant_length, resultant_angle, null_angle]]):
+                print('hi')
+                # shuffled_dsi_nasal_temporal[i] = np.nan
+                # shuffled_dsi_abs[i] = np.nan
+                # shuffled_osi[i] = np.nan
+                # shuffled_resultant[i, :] = np.nan
+                # shuffled_null_angle[i] = np.nan
+
             shuffled_dsi_nasal_temporal[i] = dsi_nasal_temporal
             shuffled_dsi_abs[i] = dsi_abs
             shuffled_osi[i] = osi

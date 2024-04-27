@@ -85,7 +85,8 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
     angle_counts = norm_direction_activity[direction_label].value_counts()
     min_presentations = int(angle_counts.min())
     if min_presentations < min_trials_for_bootstraping:
-        print('Not enough presentations per angle to bootstrap DSI/OSI')
+        print(f'Not enough presentations per angle to bootstrap resultant/DSI/OSI with at least '
+              f'{min_trials_for_bootstraping} trials.')
         do_equal_trial_nums_boostrap = False
     else:
         do_equal_trial_nums_boostrap = True
@@ -187,21 +188,21 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
 
         else:
             # Fill everything with NaNs
-            bootstrap_dsi_nasal_temporal = np.zeros(bootstrap_shuffles).fill(np.nan)
-            bootstrap_dsi_abs = np.zeros(bootstrap_shuffles).fill(np.nan)
-            bootstrap_osi = np.zeros(bootstrap_shuffles).fill(np.nan)
-            bootstrap_resultant_dir = np.zeros((bootstrap_shuffles, 2)).fill(np.nan)
+            bootstrap_dsi_nasal_temporal = np.full(bootstrap_shuffles, np.nan)
+            bootstrap_dsi_abs = np.full(bootstrap_shuffles, np.nan)
+            bootstrap_osi = np.full(bootstrap_shuffles, np.nan)
+            bootstrap_resultant_dir = np.full((bootstrap_shuffles, 2), np.nan)
             bootstrap_responsivity_dir = bootstrap_resultant_dir[:, 0]
-            bootstrap_null_dir = np.zeros(bootstrap_shuffles).fill(np.nan)
+            bootstrap_null_dir = np.full(bootstrap_shuffles, np.nan)
 
-            p_dsi_nasal_temporal_bootstrap = np.zeros(bootstrap_shuffles).fill(np.nan)
-            p_dsi_abs_bootstrap = np.zeros(bootstrap_shuffles).fill(np.nan)
-            p_osi_bootstrap = np.zeros(bootstrap_shuffles).fill(np.nan)
-            p_responsivity_dir_bootstrap = np.zeros(bootstrap_shuffles).fill(np.nan)
+            p_dsi_nasal_temporal_bootstrap = np.full(bootstrap_shuffles, np.nan)
+            p_dsi_abs_bootstrap = np.full(bootstrap_shuffles, np.nan)
+            p_osi_bootstrap = np.full(bootstrap_shuffles, np.nan)
+            p_responsivity_dir_bootstrap = np.full(bootstrap_shuffles, np.nan)
 
-            bootstrap_resultant_ori = np.zeros((bootstrap_shuffles, 2)).fill(np.nan)
+            bootstrap_resultant_ori = np.full((bootstrap_shuffles, 2), np.nan)
             bootstrap_responsivity_ori = bootstrap_resultant_ori[:, 0]
-            p_responsivity_ori_bootstrap = np.zeros(bootstrap_shuffles).fill(np.nan)
+            p_responsivity_ori_bootstrap = np.full(bootstrap_shuffles, np.nan)
 
         # B. Shuffle the trial IDs and compare the real selectivity indices to the bootstrapped distribution
         # For direction data
