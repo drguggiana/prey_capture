@@ -341,6 +341,7 @@ def parse_kinematic_data(matched_calcium, rig):
     # For free data
     mouse_kinem_cols = ['mouse_heading', 'mouse_angular_speed', 'mouse_speed', 'mouse_acceleration', 'head_direction',
                         'head_height', 'head_pitch', 'head_yaw', 'head_roll']
+
     mouse_dlc_cols = ['mouse_snout_x', 'mouse_snout_y', 'mouse_barl_x', 'mouse_barl_y', 'mouse_barr_x', 'mouse_barr_y',
                       'mouse_x', 'mouse_y', 'mouse_body2_x', 'mouse_body2_y', 'mouse_body3_x', 'mouse_body3_y',
                       'mouse_base_x', 'mouse_base_y', 'mouse_head_x', 'mouse_head_y', 'miniscope_top_x',
@@ -357,6 +358,12 @@ def parse_kinematic_data(matched_calcium, rig):
             kinematics[col] = kinematics[col] * 100.
         else:
             pass
+
+    # Incorporate wheel speed absolute
+    if exp_type == 'fixed':
+        kinematics['wheel_speed_abs'] = np.abs(kinematics['wheel_speed'])
+        kinematics['wheel_acceleration_abs'] = np.abs(kinematics['wheel_acceleration'])
+        kinematics['norm_wheel_speed'] = tuning.normalize(kinematics['wheel_speed_abs'])
 
     raw_spikes = matched_calcium.loc[:, stimulus_cols + spikes_cols]
     raw_spikes.columns = [key.rsplit('_', 1)[0] if 'spikes' in key else key for key in raw_spikes.columns]
