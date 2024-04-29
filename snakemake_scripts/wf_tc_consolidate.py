@@ -203,6 +203,31 @@ if __name__ == '__main__':
                 kine_features = [el for el in data.keys() if not any([x in el for x in ['props', 'counts', 'edges']])]
                 vis_features = [el for el in data.keys() if 'props' in el]
 
+                # Save the running modulated cells
+                run_mod = data['running_modulated_cells']
+                run_mod.to_hdf(out_path, f'{id_flag}/all_cells/running_modulated_cells')
+                frac_run_mod = run_mod['sig_run_modulated'].sum() / run_mod['sig_run_modulated'].count()
+                frac_run_vis_mod = run_mod['sig_vis_run_modulated'].sum() / run_mod['sig_vis_run_modulated'].count()
+                all_cells_summary_stats['frac_run_mod'] = frac_run_mod
+                all_cells_summary_stats['frac_run_vis_mod'] = frac_run_vis_mod
+
+                matched_run_mod = run_mod.iloc[match_idxs, :].reset_index(drop=True)
+                matched_run_mod.to_hdf(out_path, f'{id_flag}/matched/running_modulated_cells')
+                matched_frac_run_mod = matched_run_mod['sig_run_modulated'].sum() / matched_run_mod[
+                    'sig_run_modulated'].count()
+                matched_frac_run_vis_mod = matched_run_mod['sig_vis_run_modulated'].sum() / matched_run_mod[
+                    'sig_vis_run_modulated'].count()
+                matched_summary_stats['frac_run_mod'] = matched_frac_run_mod
+                matched_summary_stats['frac_run_vis_mod'] = matched_frac_run_vis_mod
+
+                unmatched_run_mod = run_mod.reset_index(drop=True).drop(index=match_idxs)
+                unmatched_run_mod.to_hdf(out_path, f'{id_flag}/unmatched/running_modulated_cells')
+                unmatched_frac_run_mod = unmatched_run_mod['sig_run_modulated'].sum() / unmatched_run_mod['sig_run_modulated'].count()
+                unmatched_frac_run_vis_mod = unmatched_run_mod['sig_vis_run_modulated'].sum() / unmatched_run_mod[
+                    'sig_vis_run_modulated'].count()
+                unmatched_summary_stats['frac_run_mod'] = unmatched_frac_run_mod
+                unmatched_summary_stats['frac_run_vis_mod'] = unmatched_frac_run_vis_mod
+
                 # Run the kinematic features
                 for feature in kine_features:
                     # Save the whole dataset
