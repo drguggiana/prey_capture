@@ -417,12 +417,10 @@ rule tc_day_combine:
     input:
         matched_tc_files,
         # match_rig_selector
-    # wildcard_constraints:
-    #     query=".*_agg.*"
     output:
         temp(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"))
     params:
-        info=lambda wildcards: config["file_info"][wildcards.file]
+        info=lambda wildcards: config["file_info"]
     script:
         "snakemake_scripts/wf_tc_consolidate.py"
 
@@ -506,7 +504,7 @@ rule preprocessing_run:
 
 rule tuning_run:
     input:
-          expand(os.path.join(paths.analysis_path, "{file}_tcday.hdf5"), file=config['files'])    #tcdummy.txt
+          expand(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"), file=config['files'])    #tcdummy.txt
     output:
           os.path.join(paths.analysis_path, "tuning_run.txt")
     params:

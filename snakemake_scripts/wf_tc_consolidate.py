@@ -200,7 +200,8 @@ if __name__ == '__main__':
                 matched_summary_stats['num_cells'] = len(match_idxs)
                 unmatched_summary_stats['num_cells'] = num_cells - len(match_idxs)
 
-                kine_features = [el for el in data.keys() if not any([x in el for x in ['props', 'counts', 'edges']])]
+                kine_features = [el for el in data.keys() if not any([x in el for x in ['props', 'counts', 'edges',
+                                                                                        'running_modulated']])]
                 vis_features = [el for el in data.keys() if 'props' in el]
 
                 # Save the running modulated cells
