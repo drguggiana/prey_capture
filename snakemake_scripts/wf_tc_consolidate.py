@@ -44,28 +44,27 @@ def vis_frac_responsive(ds, sel_tresh=0.5, drop_na=True):
     data = ds.copy()
 
     # Get boolean vector of direction tuned cells
-    is_dir_resp = np.sum((data['is_vis_responsive'] == 0) & (data['is_dir_responsive'] == 1) & \
-                       (data['dsi_abs'] >= sel_tresh), axis=0) > 0
+    is_dir_resp = np.sum((data['is_vis_responsive'] == 0) & (data['is_dir_responsive'] == 1) &
+                         (data['dsi_abs'] >= sel_tresh), axis=0) > 0
     frac_dir_resp = is_dir_resp.sum() / is_dir_resp.count()
 
     # Get boolean vector of orientation tuned cells
-    is_ori_resp =np.sum((data['is_vis_responsive'] == 0) & (data['is_ori_responsive'] == 1) & \
-                       (data['osi'] >= sel_tresh), axis=0) > 0
+    is_ori_resp = np.sum((data['is_vis_responsive'] == 0) & (data['is_ori_responsive'] == 1) &
+                         (data['osi'] >= sel_tresh), axis=0) > 0
     frac_ori_resp = is_ori_resp.sum() / is_ori_resp.count()
 
-    # Get boolean vector of generally visually tuned cells
-    is_vis_resp = data['is_vis_responsive'] == 1
+    # Get boolean vector of visually responsive cells
+    is_vis_resp = np.sum((data['is_gen_responsive'] == 0) & (data['is_vis_responsive'] == 1)) == 1
     frac_vis_resp = is_vis_resp.sum() / is_vis_resp.count()
 
-    non_resp = data[data.loc[:, ['is_vis_responsive', 'is_ori_responsive', 'is_dir_responsive']].sum(axis=1,
-                                                                                                  numeric_only=True) == 0]
+    # Get boolean vector of generally responsive cells
+    is_gen_resp = data['is_gen_responsive']
+    frac_gen_resp = is_gen_resp.sum() / is_gen_resp.count()
 
-    is_resp = np.sum([is_dir_resp, is_ori_resp, is_vis_resp], axis=0) > 0
+    is_vis_resp = np.sum([is_dir_resp, is_ori_resp, is_vis_resp], axis=0) > 0
 
-    return is_resp, frac_vis_resp, frac_ori_resp, frac_dir_resp
+    return is_vis_resp, frac_gen_resp, frac_vis_resp, frac_ori_resp, frac_dir_resp
 
-
-# def cell_multimodal_reponses(resp_data):
 
 
 def dicts_to_dataframe(dicts, index):
@@ -277,10 +276,12 @@ if __name__ == '__main__':
                     feat = 'vis_' + feat
 
                     # Save the whole dataset
-                    all_is_resp, all_frac_resp, frac_ori_resp, frac_dir_resp = vis_frac_responsive(data[feature])
+                    all_is_resp, all_frac_gen_resp, all_frac_vis_resp, frac_ori_resp, frac_dir_resp = \
+                        vis_frac_responsive(data[feature])
                     data[feature]['Resp_test'] = all_is_resp
                     data[feature].reset_index(names=['original_cell_id']).to_hdf(out_path, f'{id_flag}/all_cells/{feature}')
-                    all_cells_summary_stats[f"frac_resp_{feat}"] = all_frac_resp
+                    all_cells_summary_stats[f"frac_gen_ resp_{feat}"] = all_frac_gen_resp
+                    all_cells_summary_stats[f"frac_vis_resp_{feat}"] = all_frac_vis_resp
                     all_cells_summary_stats[f"frac_ori_resp_{feat}"] = frac_ori_resp
                     all_cells_summary_stats[f"frac_dir_resp_{feat}"] = frac_dir_resp
 
@@ -290,9 +291,10 @@ if __name__ == '__main__':
                     # Save matched TCs
                     matched_feature = data[feature].iloc[match_idxs, :].reset_index(names=['original_cell_id'])
                     matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
-                    _, matched_frac_resp, matched_frac_ori_resp, matched_frac_dir_resp = vis_frac_responsive(
-                        matched_feature)
-                    matched_summary_stats[f"frac_resp_{feat}"] = matched_frac_resp
+                    _, matched_frac_gen_resp, matched_frac_vis_resp, matched_frac_ori_resp, matched_frac_dir_resp = \
+                        vis_frac_responsive( matched_feature)
+                    matched_summary_stats[f"frac_gen_resp_{feat}"] = matched_frac_gen_resp
+                    matched_summary_stats[f"frac_vis_resp_{feat}"] = matched_frac_vis_resp
                     matched_summary_stats[f"frac_ori_resp_{feat}"] = matched_frac_ori_resp
                     matched_summary_stats[f"frac_dir_resp_{feat}"] = matched_frac_dir_resp
 
@@ -312,9 +314,10 @@ if __name__ == '__main__':
                     # save unmatched tcs
                     unmatched_feature = data[feature].reset_index(names=['original_cell_id']).drop(index=match_idxs)
                     unmatched_feature.to_hdf(out_path, f'{id_flag}/unmatched/{feature}')
-                    _, unmatched_frac_resp, unmatched_frac_ori_resp, unmatched_frac_dir_resp = vis_frac_responsive(
-                        unmatched_feature)
-                    unmatched_summary_stats[f"frac_resp_{feat}"] = unmatched_frac_resp
+                    (_, unmatched_frac_gen_resp, unmatched_frac_vis_resp, unmatched_frac_ori_resp,
+                     unmatched_frac_dir_resp) = vis_frac_responsive(unmatched_feature)
+                    unmatched_summary_stats[f"frac_gen_resp_{feat}"] = unmatched_frac_gen_resp
+                    unmatched_summary_stats[f"frac_vis_resp_{feat}"] = unmatched_frac_vis_resp
                     unmatched_summary_stats[f"frac_ori_resp_{feat}"] = unmatched_frac_ori_resp
                     unmatched_summary_stats[f"frac_dir_resp_{feat}"] = unmatched_frac_dir_resp
 
