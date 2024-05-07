@@ -40,17 +40,17 @@ def kine_fraction_tuned(ds):
     return frac_is_resp, is_resp
 
 
-def vis_frac_responsive(ds, sel_tresh=0.5, drop_na=True):
+def vis_frac_responsive(ds, sel_tresh=0.5):
     data = ds.copy()
 
     # Get boolean vector of direction tuned cells
     is_dir_resp = np.sum((data['is_vis_responsive'] == 0) & (data['is_dir_responsive'] == 1) &
-                         (data['dsi_abs'] >= sel_tresh), axis=0) > 0
+                         (data['dsi_abs'] >= sel_tresh) & (data['osi'] < sel_tresh), axis=0) > 0
     frac_dir_resp = is_dir_resp.sum() / is_dir_resp.count()
 
     # Get boolean vector of orientation tuned cells
     is_ori_resp = np.sum((data['is_vis_responsive'] == 0) & (data['is_ori_responsive'] == 1) &
-                         (data['osi'] >= sel_tresh), axis=0) > 0
+                         (data['responsivity_ori'] >= sel_tresh) & (data['dsi_abs'] < sel_tresh), axis=0) > 0
     frac_ori_resp = is_ori_resp.sum() / is_ori_resp.count()
 
     # Get boolean vector of visually responsive cells

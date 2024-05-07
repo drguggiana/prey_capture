@@ -415,8 +415,8 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     angle1 = angles[closest_idx1]
 
     # Get resultant on second half of the data
-    half_period_angles_2 = fk.wrap(angles[angles > np.pi], bound=np.deg2rad(180.1))
-    half_period_mags_2 = magnitudes[angles > np.pi]
+    half_period_angles_2 = fk.wrap(angles[angles >= np.pi], bound=np.deg2rad(180.1))
+    half_period_mags_2 = magnitudes[angles >= np.pi]
 
     res_mag_2, res_angle_2 = resultant_vector(half_period_angles_2, half_period_mags_2, 1)
     res_angle_2 = fk.wrap(res_angle_2, bound=np.pi)
