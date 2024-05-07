@@ -35,10 +35,10 @@ def concatenate_cell_matches(data_list, exp_type):
 
 # Main script
 
-mice = processing_parameters.all_mice
-results = ['repeat']  # ['multi', 'fullfield', 'control'], ['repeat']
+mice = processing_parameters.cohort_1
+results = ['multi', 'fullfield', 'control']  # ['multi', 'fullfield', 'control'], ['repeat']
 lightings = ['normal', 'dark']     # ['normal', 'dark']
-rigs = ['VWheelWF']     # ['VWheelWF', 'VTuningWF'], ['ALL']    # 'ALL' used for everything but repeat aggs
+rigs = ['ALL']     # ['VWheelWF', 'VTuningWF'], ['ALL']    # 'ALL' used for everything but repeat aggs
 analysis_type = 'tc_consolidate'
 
 for mouse, result, light, rig in itertools.product(mice, results, lightings, rigs):

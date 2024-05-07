@@ -40,17 +40,29 @@ def kine_fraction_tuned(ds):
     return frac_is_resp, is_resp
 
 
-def vis_frac_responsive(ds):
-    is_ori_resp = ds['osi'] > 0.5
-    is_dir_resp = ds['dsi_abs'] > 0.5
-    frac_ori_resp = is_ori_resp.sum() / is_ori_resp.count()
+def vis_frac_responsive(ds, sel_tresh=0.5, drop_na=True):
+    data = ds.copy()
+
+    # Get boolean vector of direction tuned cells
+    is_dir_resp = np.sum((data['is_vis_responsive'] == 0) & (data['is_dir_responsive'] == 1) & \
+                       (data['dsi_abs'] >= sel_tresh), axis=0) > 0
     frac_dir_resp = is_dir_resp.sum() / is_dir_resp.count()
 
-    is_vis_resp = is_ori_resp + is_dir_resp
-    is_vis_resp = is_vis_resp > 0
+    # Get boolean vector of orientation tuned cells
+    is_ori_resp =np.sum((data['is_vis_responsive'] == 0) & (data['is_ori_responsive'] == 1) & \
+                       (data['osi'] >= sel_tresh), axis=0) > 0
+    frac_ori_resp = is_ori_resp.sum() / is_ori_resp.count()
+
+    # Get boolean vector of generally visually tuned cells
+    is_vis_resp = data['is_vis_responsive'] == 1
     frac_vis_resp = is_vis_resp.sum() / is_vis_resp.count()
 
-    return is_vis_resp, frac_vis_resp, frac_ori_resp, frac_dir_resp
+    non_resp = data[data.loc[:, ['is_vis_responsive', 'is_ori_responsive', 'is_dir_responsive']].sum(axis=1,
+                                                                                                  numeric_only=True) == 0]
+
+    is_resp = np.sum([is_dir_resp, is_ori_resp, is_vis_resp], axis=0) > 0
+
+    return is_resp, frac_vis_resp, frac_ori_resp, frac_dir_resp
 
 
 # def cell_multimodal_reponses(resp_data):

@@ -436,7 +436,7 @@ def plot_polar_tuning_curve(tuning_curve, error, plot_fit=True, plot_trials=Fals
     ax.set_theta_zero_location("W")
     ax.set_theta_direction(-1)
     # ax.set_rorigin(0)
-    radial_ticks = [0.0, 0.5,1.0]
+    radial_ticks = [0.0, 0.5, 1.0]
     ax.set_rticks(radial_ticks, color='black')
     ax.set_yticklabels([], color='black')
     ax.set_rlabel_position(0)
