@@ -218,10 +218,10 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
     is_gen_responsive = gen_responsive.pvalue >= 0.05
 
     # 1.3.2 Determine if cell is visually responsive
-    #    A cell is responsive if during a trial its max response during that trial is greater than 4 stds above the
+    #    A cell is responsive if during a trial its max response during that trial is greater than 6 stds above the
     #    ITI mean. To be considered visually responsive, a cell must respond during at least 50% of the trials
     vis_trial_resps = ((trial_max_activity[cells] - iti_mean_activity[cells]) >=
-                       (iti_mean_activity[cells] + 4 * iti_std_activity[cells]))
+                       (iti_mean_activity[cells] + 6 * iti_std_activity[cells]))
     vis_trial_resps.insert(0, 'trial_num', trial_max_activity['trial_num'])
     vis_trial_resps.insert(1, direction_label, trial_max_activity[direction_label])
     vis_trial_resps.insert(2, 'orientation', trial_max_activity['orientation'])
