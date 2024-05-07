@@ -7,8 +7,8 @@ import numpy as np
 
 import paths
 import processing_parameters
-import functions_data_handling as fdh
 import functions_bondjango as bd
+import functions_data_handling as fdh
 from functions_misc import slugify
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
