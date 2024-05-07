@@ -433,12 +433,13 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     dsi_abs = 1 - (resp_null/resp_pref)
 
     # for osi
+    resp_pref_osi = np.nanmean([resp_pref, resp_null])
     closest_idx_to_null_1 = np.argmin(np.abs(angles - fk.wrap(pref + np.pi/2, bound=2*np.pi)))
     closest_idx_to_null_2 = np.argmin(np.abs(angles - fk.wrap(pref - np.pi/2, bound=2*np.pi)))
     resp_null_1 = magnitudes[closest_idx_to_null_1]
     resp_null_2 = magnitudes[closest_idx_to_null_2]
     resp_null_osi = np.nanmean([resp_null_1, resp_null_2])
-    osi = (resp_pref - resp_null_osi) / (resp_pref + resp_null_osi)
+    osi = (resp_pref_osi - resp_null_osi) / (resp_pref_osi + resp_null_osi)
     
     return dsi_nasal_temporal, dsi_abs, osi, resultant_length, pref, null
 

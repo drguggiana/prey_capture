@@ -1,12 +1,14 @@
-import pycircstat as circ
-from hmmlearn import hmm
-from scipy.stats import percentileofscore, sem, t
 import warnings
 
+import pandas as pd
+import pycircstat as circ
+from hmmlearn import hmm
+from scipy.stats import percentileofscore, sem, t, mannwhitneyu
+
+import processing_parameters
 import functions_kinematic as fk
 import functions_tuning as tuning
 from snakemake_scripts.tc_calculate import *
-from processing_parameters import wf_frame_rate
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
@@ -14,7 +16,20 @@ warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 
 def drop_partial_or_long_trials(df, min_trial_length=4.5, max_trial_length=5.5):
-    trial_lengths = df[df.trial_num > 0].groupby('trial_num').apply(lambda x: x.shape[0] / wf_frame_rate)
+    """
+    This function drops trials that are shorter than min_trial_length (partial trials) and
+    trials that are longer than max_trial_length (errors in trial number indexing) from the dataframe.
+
+    Parameters:
+    df (DataFrame): The dataframe containing the trials.
+    min_trial_length (float): The minimum length for a trial. Defaults to 4.5.
+    max_trial_length (float): The maximum length for a trial. Defaults to 5.5.
+
+    Returns:
+    DataFrame: The dataframe after dropping the partial and long trials.
+    """
+
+    trial_lengths = df[df.trial_num > 0].groupby('trial_num').apply(lambda x: x.shape[0] / processing_parameters.wf_frame_rate)
 
     # Drop trials that are shorter than min_trial_length (partial trials)
     short_trials = trial_lengths[trial_lengths < min_trial_length].index
@@ -28,76 +43,288 @@ def drop_partial_or_long_trials(df, min_trial_length=4.5, max_trial_length=5.5):
 
 
 def generate_tcs_and_stats(df):
+    """
+    This function generates tuning curves and statistics for the given dataframe.
+
+    Parameters:
+    df (DataFrame): The dataframe for which to generate tuning curves and statistics.
+
+    Returns:
+    Tuple: A tuple containing the mean, standard error of the mean, standard deviation, and unique angles.
+    """
+
     _mean, unique_angles = tuning.generate_response_vector(df, np.mean)
     _sem, _ = tuning.generate_response_vector(df, sem, nan_policy='omit')
     _std, _ = tuning.generate_response_vector(df, np.std)
     return _mean, _sem, _std, unique_angles
 
 
-def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tuning_fit='von_mises',
-                            bootstrap_shuffles=500, min_trials_for_bootstraping=3):
+def calculate_response_ratios(trial_activity, iti_activity, cells):
+    """
+    This function calculates the ratio of activity during the trial to the activity during the ITI.
 
-    # --- Parse trials and cells--- #
-    # Fill any NaNs in the data with 0
-    activity_df = activity_df.fillna(0)
+    Parameters:
+    trial_activity (DataFrame): The dataframe containing the trial activity.
+    iti_activity (DataFrame): The dataframe containing the ITI activity.
+    cells (List[str]): The list of cells.
 
-    # Drop trials that are poorly indexed or incomplete
-    activity_df = drop_partial_or_long_trials(activity_df)
+    Returns:
+    DataFrame: The dataframe containing the ratio of activity during the trial to the activity during the ITI.
+    """
 
-    # Get the column names for the cells
-    cells = [col for col in activity_df.columns if 'cell' in col]
+    ratio_activity = trial_activity[cells] / iti_activity[cells]
+    ratio_activity.fillna(0, inplace=True)
+    mask = np.isinf(ratio_activity)
+    ratio_activity[mask] = trial_activity[mask]
+    return ratio_activity
 
-    # --- Threshold data --- #
-    # define the clipping threshold in percentile of baseline and do the cell clipping
-    clip_threshold = 8
-    activity_df[cells] = activity_df.loc[:, cells].apply(clipping_function, axis=1, raw=True, threshold=clip_threshold)
 
-    # -- Mean activity per trial -- #
-    # Get the mean direction response per trial and drop the inter-trial interval from df
-    mean_direction_activity = activity_df.groupby([direction_label, 'trial_num'])[cells].agg(np.mean).copy().reset_index()
-    mean_direction_activity = mean_direction_activity.drop(mean_direction_activity[mean_direction_activity.trial_num == 0].index).sort_values('trial_num')
+def calculate_response_diff(trial_activity, iti_activity, cells):
+    """
+    This function calculates the difference of activity during the trial to the activity during the ITI.
 
-    # Make sure to explicitly represent 360 degrees in the direction data by duplicating the 0 degrees value
-    dup = mean_direction_activity.loc[mean_direction_activity[direction_label] == 0].copy()
-    dup.loc[:, direction_label] = 360.
-    mean_direction_activity = pd.concat([mean_direction_activity, dup], ignore_index=True)
+    Parameters:
+    trial_activity (DataFrame): The dataframe containing the trial activity.
+    iti_activity (DataFrame): The dataframe containing the ITI activity.
+    cells (List[str]): The list of cells.
 
-    mean_orientation_activity = activity_df.groupby(['orientation', 'trial_num'])[cells].agg(np.mean).copy().reset_index()
-    mean_orientation_activity = mean_orientation_activity.drop(mean_orientation_activity[mean_orientation_activity.trial_num == 0].index).sort_values('trial_num')
+    Returns:
+    DataFrame: The dataframe containing the difference of activity during the trial to the activity during the ITI.
+    """
 
-    # -- Create the response vectors and normalized response vectors --#
-    # Normalize the responses of each cell to the maximum mean response of the cell on any given trial
-    mean_dir, sem_dir, std_dir, unique_dirs = generate_tcs_and_stats(mean_direction_activity)
-    norm_direction_activity = mean_direction_activity.copy()
-    norm_direction_activity[cells] = norm_direction_activity[cells].apply(tuning.normalize)
-    norm_mean_dir, norm_sem_dir, norm_std_dir, _ = generate_tcs_and_stats(norm_direction_activity)
+    ratio_activity = trial_activity[cells] - iti_activity[cells]
+    ratio_activity.fillna(0, inplace=True)
+    mask = np.isinf(ratio_activity)
+    ratio_activity[mask] = trial_activity[mask]
+    return ratio_activity
 
-    mean_ori, sem_ori, std_ori, unique_oris = generate_tcs_and_stats(mean_orientation_activity)
-    norm_orientation_activity = mean_orientation_activity.copy()
-    norm_orientation_activity[cells] = norm_orientation_activity[cells].apply(tuning.normalize)
-    norm_mean_ori, norm_sem_ori, norm_std_ori, _ = generate_tcs_and_stats(norm_orientation_activity)
 
-    # -- Fit tuning curves to get preference-- #
+def calculate_visual_tuning(activity_df, activity_type, direction_label='direction_wrapped',
+                            tuning_fit='von_mises', metric_for_analysis='diff_auc',
+                            bootstrap_shuffles=500, min_trials_for_bootstrapping=3):
+    """
+    This function calculates the visual tuning for the given activity dataframe.
+
+    Parameters:
+    activity_df (DataFrame): The dataframe containing the activity data.
+    activity_type (str): The type of activity.
+    direction_label (str, optional): The label for the direction data column. Defaults to 'direction_wrapped'.
+    tuning_fit (str, optional): The type of tuning fit. Defaults to 'von_mises'.
+    metric_for_analysis (str, optional): The metric for analysis. Defaults to 'diff_auc'.
+        Options are 'ratio_mean', 'diff_mean', 'ratio_auc', 'diff_auc', 'ratio_max', 'diff_max'
+    bootstrap_shuffles (int, optional): The number of bootstrap shuffles. Defaults to 500.
+    min_trials_for_bootstrapping (int, optional): The minimum number of trials for bootstrapping. Defaults to 3.
+
+    Returns:
+    DataFrame: The dataframe containing the visual tuning data.
+    """
+
+    # --- 0. Setup--- #
+
+    # Set fitting function
     if tuning_fit == 'von_mises':
         fit_function = tuning.calculate_pref_von_mises
     else:
         fit_function = tuning.calculate_pref_gaussian
 
-    # --- Get the trial counts per angle --- #
-    angle_counts = norm_direction_activity[direction_label].value_counts()
+    # Parse trials and cells
+    activity_df.reset_index(drop=True, inplace=True)
+    activity_df = activity_df.fillna(0)
+    cells = [col for col in activity_df.columns if 'cell' in col]
+
+    # Drop trials that are poorly indexed or incomplete
+    activity_df = drop_partial_or_long_trials(activity_df)
+    num_trials = len(activity_df.trial_num.unique())
+
+    # Get the trial counts per angle and decide if we can do equal trial number bootstrapping
+    angle_counts = activity_df.loc[activity_df.trial_num > 0].groupby(direction_label).apply(lambda x: x.trial_num.nunique())
     min_presentations = int(angle_counts.min())
-    if min_presentations < min_trials_for_bootstraping:
+    if min_presentations < min_trials_for_bootstrapping:
         print(f'    Not enough presentations per angle to bootstrap resultant/DSI/OSI with at least '
-              f'{min_trials_for_bootstraping} trials.')
+              f'{min_trials_for_bootstrapping} trials.')
         do_equal_trial_nums_boostrap = False
     else:
         do_equal_trial_nums_boostrap = True
 
-    # For all cells
+    # Threshold data if using inferred spikes
+    if activity_type == 'spikes':
+        # define the clipping threshold in percentile of baseline and do the cell clipping
+        clip_threshold = 8
+        activity_df[cells] = activity_df.loc[:, cells].apply(clipping_function, threshold=clip_threshold,
+                                                             raw=True, axis=1)
+
+    # --- 1. Calculate Responsivity --- #
+
+    # -- 1.0 Get std of each cell across whole experiment
+    std_activity = activity_df.loc[:, cells].apply(np.std)
+
+    # -- 1.1 Get the std or cell response, and mean, max and AUC of response during trials
+    trial_max_activity = (activity_df.loc[activity_df.trial_num > 0]
+                          .groupby(['trial_num', direction_label, 'orientation'])[cells]
+                          .agg(np.max).copy().reset_index())
+    trial_mean_activity = (activity_df.loc[activity_df.trial_num > 0]
+                           .groupby(['trial_num', direction_label, 'orientation'])[cells]
+                           .agg(np.mean).copy().reset_index())
+    trial_auc_activity = (activity_df.loc[activity_df.trial_num > 0]
+                          .groupby(['trial_num', direction_label, 'orientation'])[cells]
+                          .agg(np.trapz).copy().reset_index())
+
+    # -- 1.2 Get the std or cell response, and mean, max and AUC of response during ITI
+    #    Parse the dataframe into trial frames, which are the trial + 1.5 sec of the preceding inter-trial interval
+    #    This will be used for evaluating per-trial responsivity
+    trial_frames_short_iti, _ = tuning.parse_trial_frames(activity_df, pre_trial=1.5)
+
+    iti_std_activity = (trial_frames_short_iti.groupby('frame_num')
+                        .apply(lambda x: x.loc[x.trial_num == 0, cells].std())
+                        .reset_index(names='trial_num'))
+    iti_std_activity.insert(1, direction_label, trial_max_activity[direction_label])
+    iti_std_activity.insert(2, 'orientation', trial_max_activity['orientation'])
+
+    iti_mean_activity = (trial_frames_short_iti.groupby('frame_num')
+                         .apply(lambda x: x.loc[x.trial_num == 0, cells].mean())
+                         .reset_index(names='trial_num'))
+    iti_mean_activity.insert(1, direction_label, trial_max_activity[direction_label])
+    iti_mean_activity.insert(2, 'orientation', trial_max_activity['orientation'])
+
+    iti_max_activity = (trial_frames_short_iti.groupby('frame_num')
+                        .apply(lambda x: x.loc[x.trial_num == 0, cells].max())
+                        .reset_index(names='trial_num'))
+    iti_max_activity.insert(1, direction_label, trial_max_activity[direction_label])
+    iti_max_activity.insert(2, 'orientation', trial_max_activity['orientation'])
+
+    iti_auc_activity = (trial_frames_short_iti.groupby('frame_num')
+                        .apply(lambda x: x.loc[x.trial_num == 0, cells].apply(np.trapz))
+                        .reset_index(names='trial_num'))
+    iti_auc_activity.insert(1, direction_label, trial_max_activity[direction_label])
+    iti_auc_activity.insert(2, 'orientation', trial_max_activity['orientation'])
+
+    # -- 1.3 Responsivity Evaluations
+
+    # 1.3.1 Determine if the cell is generally responsive.
+    #    This is done by comparing the AUC activity during each 5 sec ITI to the AUC activity during the trial. If a
+    #    cell fails a Mann-Whitney U test where the test checks if activity during the trials is greater than that
+    #    during the ITI (i.e. alternative='greater'), then the cell is considered generally responsive.
+    trial_frames_long_iti, _ = tuning.parse_trial_frames(activity_df, pre_trial=5.0)
+    long_iti_auc_activity = (trial_frames_long_iti.groupby('frame_num')
+                             .apply(lambda x: x.loc[x.trial_num == 0, cells]
+                             .apply(np.trapz))
+                             .reset_index(names='trial_num'))
+    long_iti_auc_activity.insert(1, direction_label, trial_max_activity[direction_label])
+    long_iti_auc_activity.insert(2, 'orientation', trial_max_activity['orientation'])
+
+    stat, pval = mannwhitneyu(trial_auc_activity[cells], long_iti_auc_activity[cells],
+                              alternative='greater', axis=0)
+    gen_responsive = pd.DataFrame(index=cells, data={'statistic': stat, 'pvalue': pval})
+    is_gen_responsive = gen_responsive.pvalue >= 0.05
+
+    # 1.3.2 Determine if cell is visually responsive
+    #    A cell is responsive if during a trial its max response during that trial is greater than 6 stds above the
+    #    ITI mean. To be considered visually responsive, a cell must respond during at least 50% of the trials
+    vis_trial_resps = ((trial_max_activity[cells] - iti_mean_activity[cells]) >=
+                       (iti_mean_activity[cells] + 6 * iti_std_activity[cells]))
+    vis_trial_resps.insert(0, 'trial_num', trial_max_activity['trial_num'])
+    vis_trial_resps.insert(1, direction_label, trial_max_activity[direction_label])
+    vis_trial_resps.insert(2, 'orientation', trial_max_activity['orientation'])
+    is_vis_responsive = vis_trial_resps[cells].apply(lambda x: x.sum() >= np.ceil(x.count() / 2))
+
+    # 1.3.3 Determine if a cell is direction responsive
+    #    To be considered direction responsive, a cell must respond to at least 50% of the trials for at least one
+    #    direction stimulus
+    is_direction_responsive = (vis_trial_resps.groupby([direction_label])[cells].agg(list).applymap(
+                                lambda x: np.sum(x) >= np.ceil(len(x) / 2)))
+    is_direction_responsive = is_direction_responsive[cells].apply(lambda x: x.sum() > 0)
+
+    # 1.3.4 Determine if a cell is orientation responsive
+    #    To be considered direction responsive, a cell must respond to at least 50% of the trials for at least one
+    #    orientation stimulus
+    is_orientation_responsive = (vis_trial_resps.groupby(['orientation'])[cells].agg(list).applymap(
+                                 lambda x: np.sum(x) >= np.ceil(len(x) / 2)))
+    is_orientation_responsive = is_orientation_responsive[cells].apply(lambda x: x.sum() > 0)
+
+    # --- 2. Generate Response Vectors --- #
+
+    # -- 2.1 Calculate the ratios and differences of activity between trials and ITIs
+    #    We can choose one of these metrics as the basis for all further analyses
+
+    # Get the ratio of activity during the trial to the activity during the ITI
+    ratio_mean_activity = calculate_response_ratios(trial_mean_activity, iti_mean_activity, cells)
+    ratio_mean_activity = pd.concat(
+        [trial_mean_activity[['trial_num', direction_label, 'orientation']], ratio_mean_activity], axis=1)
+
+    ratio_max_activity = calculate_response_ratios(trial_max_activity, iti_max_activity, cells)
+    ratio_max_activity = pd.concat(
+        [trial_max_activity[['trial_num', direction_label, 'orientation']], ratio_max_activity], axis=1)
+
+    ratio_auc_activity = calculate_response_ratios(trial_auc_activity, iti_auc_activity, cells)
+    ratio_auc_activity = pd.concat(
+        [trial_auc_activity[['trial_num', direction_label, 'orientation']], ratio_auc_activity], axis=1)
+
+    # Get the difference of activity during the trial to the activity during the ITI
+    diff_mean_activity = calculate_response_diff(trial_mean_activity, iti_mean_activity, cells)
+    diff_mean_activity = pd.concat(
+        [trial_mean_activity[['trial_num', direction_label, 'orientation']], diff_mean_activity], axis=1)
+
+    diff_max_activity = calculate_response_diff(trial_max_activity, iti_max_activity, cells)
+    diff_max_activity = pd.concat(
+        [trial_max_activity[['trial_num', direction_label, 'orientation']], diff_max_activity], axis=1)
+
+    diff_auc_activity = calculate_response_diff(trial_auc_activity, iti_auc_activity, cells)
+    diff_auc_activity = pd.concat(
+        [trial_auc_activity[['trial_num', direction_label, 'orientation']], diff_auc_activity], axis=1)
+
+    # -- 2.2 Choose the metric to use for further analyses
+    if metric_for_analysis == 'ratio_mean':
+        used_activity_ds = ratio_mean_activity
+    elif metric_for_analysis == 'ratio_max':
+        used_activity_ds = ratio_max_activity
+    elif metric_for_analysis == 'ratio_auc':
+        used_activity_ds = ratio_auc_activity
+    elif metric_for_analysis == 'diff_mean':
+        used_activity_ds = diff_mean_activity
+    elif metric_for_analysis == 'diff_max':
+        used_activity_ds = diff_max_activity
+    elif metric_for_analysis == 'diff_auc':
+        used_activity_ds = diff_auc_activity
+    else:
+        raise ValueError('metric_for_analysis must be one of ratio_mean, ratio_max, ratio_auc, diff_mean, diff_max, diff_auc')
+
+    # -- 2.3 Get the mean direction and orientation response per trial and drop the inter-trial interval from df
+    mean_direction_activity_by_trial = (used_activity_ds.groupby([direction_label, 'trial_num'])[cells].agg(np.mean)
+                                        .copy().reset_index())
+    mean_direction_activity_by_trial = (mean_direction_activity_by_trial
+                                        .drop(mean_direction_activity_by_trial[mean_direction_activity_by_trial.trial_num == 0].index)
+                                        .sort_values([direction_label, 'trial_num']))
+
+    # Make sure to explicitly represent 360 degrees in the direction data by duplicating the 0 degrees value
+    dup = mean_direction_activity_by_trial.loc[mean_direction_activity_by_trial[direction_label] == 0].copy()
+    dup.loc[:, direction_label] = 360.
+    mean_direction_activity_by_trial = pd.concat([mean_direction_activity_by_trial, dup], ignore_index=True)
+
+    # Get the mean orientation response per trial and drop the inter-trial interval from df
+    mean_orientation_activity_by_trial = (used_activity_ds.groupby(['orientation', 'trial_num'])[cells].agg(np.mean)
+                                          .copy().reset_index())
+    mean_orientation_activity_by_trial = (mean_orientation_activity_by_trial
+                                          .drop(mean_orientation_activity_by_trial[mean_orientation_activity_by_trial.trial_num == 0].index)
+                                          .sort_values(['orientation', 'trial_num']))
+
+    # -- 2.4 Create the response vectors and normalized response vectors
+    mean_dir, sem_dir, std_dir, unique_dirs = generate_tcs_and_stats(mean_direction_activity_by_trial)
+    mean_ori, sem_ori, std_ori, unique_oris = generate_tcs_and_stats(mean_orientation_activity_by_trial)
+
+    # Normalize the responses of each cell to the maximum mean response of the cell on any given trial
+    norm_direction_activity_by_trial = mean_direction_activity_by_trial.copy()
+    norm_direction_activity_by_trial[cells] = norm_direction_activity_by_trial[cells].apply(tuning.normalize)
+    norm_mean_dir, norm_sem_dir, norm_std_dir, _ = generate_tcs_and_stats(norm_direction_activity_by_trial)
+
+    norm_orientation_activity_by_trial = mean_orientation_activity_by_trial.copy()
+    norm_orientation_activity_by_trial[cells] = norm_orientation_activity_by_trial[cells].apply(tuning.normalize)
+    norm_mean_ori, norm_sem_ori, norm_std_ori, _ = generate_tcs_and_stats(norm_orientation_activity_by_trial)
+
+    # --- Run the main loop for all cells --- #
     cell_data_list = []
     for cell in cells:
 
-        # -- 1. Calculate fit and responsivity using all trials -- #
+        # -- 3. Calculate fit using all trials -- #
         try:
             mean_guess_dir = np.deg2rad(unique_dirs[np.argmax(norm_mean_dir[cell].fillna(0), axis=0)])
             mean_guess_ori = np.deg2rad(unique_oris[np.argmax(norm_mean_ori[cell].fillna(0), axis=0)])
@@ -112,32 +339,34 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
         ori_fit, ori_fit_curve, pref_ori, real_pref_ori = \
             fit_function(unique_oris, norm_mean_ori[cell].to_numpy(), 'orientation', mean=mean_guess_ori)
 
-        dir_gof = tuning.goodness_of_fit(norm_direction_activity[direction_label].to_numpy(),
-                                         norm_direction_activity[cell].to_numpy(),
+        dir_gof = tuning.goodness_of_fit(norm_direction_activity_by_trial[direction_label].to_numpy(),
+                                         norm_direction_activity_by_trial[cell].to_numpy(),
                                          dir_fit_curve[:, 0], dir_fit_curve[:, 1],
                                          type=processing_parameters.gof_type)
 
-        ori_gof = tuning.goodness_of_fit(norm_orientation_activity['orientation'].to_numpy(),
-                                         norm_orientation_activity[cell].to_numpy(),
+        ori_gof = tuning.goodness_of_fit(norm_orientation_activity_by_trial['orientation'].to_numpy(),
+                                         norm_orientation_activity_by_trial[cell].to_numpy(),
                                          ori_fit_curve[:, 0], ori_fit_curve[:, 1],
                                          type=processing_parameters.gof_type)
 
-        # --- Bootstrap fit and responsivity using all trials -- #
+        # -- 3.1 Bootstrap fit and responsivity using all trials
         # Split the data with an 80-20 train-test split. Fit the tuning curve on the training data and calculate
         # goodness of fit on the test data.
         bootstrap_dir_gof, bootstrap_pref_dir, bootstrap_real_pref_dir = \
-            tuning.bootstrap_tuning_curve(norm_direction_activity[[direction_label, 'trial_num', cell]], fit_function,
+            tuning.bootstrap_tuning_curve(norm_direction_activity_by_trial[[direction_label, 'trial_num', cell]],
+                                          fit_function,
                                           gof_type=processing_parameters.gof_type,
                                           num_shuffles=bootstrap_shuffles, mean=mean_guess_dir)
         p_dir_gof = percentileofscore(bootstrap_dir_gof[~np.isnan(bootstrap_dir_gof)], dir_gof, kind='mean') / 100.
 
         bootstrap_ori_gof, bootstrap_pref_ori, bootstrap_real_pref_ori = \
-            tuning.bootstrap_tuning_curve(norm_orientation_activity[['orientation', 'trial_num', cell]], fit_function,
+            tuning.bootstrap_tuning_curve(norm_orientation_activity_by_trial[['orientation', 'trial_num', cell]],
+                                          fit_function,
                                           gof_type=processing_parameters.gof_type,
                                           num_shuffles=bootstrap_shuffles, mean=mean_guess_ori)
         p_ori_gof = percentileofscore(bootstrap_ori_gof[~np.isnan(bootstrap_ori_gof)], ori_gof, kind='mean') / 100.
 
-        # -- 2. Get resultant vector, variance, DSI and OSI using the tuning curves (normalized means) -- #
+        # --- 4. Get resultant vector, variance, DSI and OSI using the tuning curves (normalized means) --- #
 
         # Use the direction dataset first
         theta_dirs = np.deg2rad(unique_dirs)
@@ -154,22 +383,22 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
         ori_sep = np.mean(np.diff(theta_oris))
         ori_magnitudes = norm_mean_ori[cell].copy().to_numpy()
 
-        resultant_ori_length, resultant_ori = tuning.resultant_vector(theta_oris, ori_magnitudes, 2)
+        resultant_ori_length, resultant_ori = tuning.resultant_vector(theta_oris, ori_magnitudes, 1)
         resultant_ori = fk.wrap(np.rad2deg(resultant_ori), bound=180.)
         null_ori = fk.wrap(resultant_ori + 90, bound=180.)
 
         circ_var_ori = circ.var(theta_oris, w=ori_magnitudes, d=ori_sep)
         responsivity_ori = 1 - circ_var_ori
 
-        # -- Run permutation tests using single trial mean responses-- #
+        # --- 5. Run permutation tests using single trial mean responses --- #
 
-        # A. Bootstrap resultant vector while guaranteeing the same number of presentations per angle
+        # -- 5.1  Bootstrap resultant vector while guaranteeing the same number of presentations per angle
         #    This is what Joel does for significant shifts in tuning curves
 
         if do_equal_trial_nums_boostrap:
             # For direction data
             bootstrap_dsi_nasal_temporal, bootstrap_dsi_abs, bootstrap_osi, bootstrap_resultant_dir, bootstrap_null_dir \
-                = tuning.boostrap_dsi_osi_resultant(norm_direction_activity[[direction_label, 'trial_num', cell]],
+                = tuning.boostrap_dsi_osi_resultant(norm_direction_activity_by_trial[[direction_label, 'trial_num', cell]],
                                                     sampling_method='equal_trial_nums', num_shuffles=bootstrap_shuffles)
 
             bootstrap_resultant_dir[:, 1] = fk.wrap(bootstrap_resultant_dir[:, 1], bound=360.)
@@ -183,7 +412,7 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
 
             # For orientation data
             bootstrap_resultant_ori = \
-                tuning.bootstrap_resultant_orientation(norm_orientation_activity[['orientation', 'trial_num', cell]],
+                tuning.bootstrap_resultant_orientation(norm_orientation_activity_by_trial[['orientation', 'trial_num', cell]],
                                                        sampling_method='equal_trial_nums', multiplier=2, num_shuffles=bootstrap_shuffles)
             bootstrap_responsivity_ori = bootstrap_resultant_ori[:, 0]
             p_responsivity_ori_bootstrap = percentileofscore(bootstrap_responsivity_ori, responsivity_ori, kind='mean') / 100.
@@ -206,10 +435,10 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
             bootstrap_responsivity_ori = bootstrap_resultant_ori[:, 0]
             p_responsivity_ori_bootstrap = np.full(bootstrap_shuffles, np.nan)
 
-        # B. Shuffle the trial IDs and compare the real selectivity indices to the bootstrapped distribution
+        # -- 5.2 Shuffle the trial IDs and compare the real selectivity indices to the bootstrapped distribution
         # For direction data
         shuffle_dsi_nasal_temporal, shuffle_dsi_abs, shuffle_osi, shuffle_resultant_dir, shuffle_null_dir \
-            = tuning.boostrap_dsi_osi_resultant(norm_direction_activity[[direction_label, 'trial_num', cell]],
+            = tuning.boostrap_dsi_osi_resultant(norm_direction_activity_by_trial[[direction_label, 'trial_num', cell]],
                                                 sampling_method='shuffle_trials', num_shuffles=bootstrap_shuffles)
 
         p_dsi_nasal_temporal_shuffle = percentileofscore(shuffle_dsi_nasal_temporal, dsi_nasal_temporal, kind='mean') / 100.
@@ -220,15 +449,22 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
 
         # For orientation data
         shuffle_resultant_ori = \
-            tuning.bootstrap_resultant_orientation(norm_orientation_activity[['orientation', 'trial_num', cell]],
+            tuning.bootstrap_resultant_orientation(norm_orientation_activity_by_trial[['orientation', 'trial_num', cell]],
                                                    sampling_method='shuffle_trials', multiplier=2,
                                                    num_shuffles=bootstrap_shuffles)
         shuffle_responsivity_ori = shuffle_resultant_ori[:, 0]
         p_responsivity_ori_shuffle = percentileofscore(shuffle_responsivity_ori, responsivity_ori, kind='mean') / 100.
 
         # -- Assemble data for saving -- #
-        direction_data = [mean_direction_activity[[direction_label, cell]].to_numpy(),
-                          norm_direction_activity[[direction_label, cell]].to_numpy(),
+        vis_resp_data = [trial_max_activity[cell].to_numpy(), iti_max_activity[cell].to_numpy(),
+                         trial_mean_activity[cell].to_numpy(), iti_mean_activity[cell].to_numpy(),
+                         trial_auc_activity[cell].to_numpy(), iti_auc_activity[cell].to_numpy(),
+                         std_activity[cell], iti_std_activity[cell].to_numpy(),
+                         int(is_gen_responsive[cell]), int(is_vis_responsive[cell]),
+                         int(is_direction_responsive[cell]), int(is_orientation_responsive[cell])]
+
+        direction_data = [mean_direction_activity_by_trial[[direction_label, cell]].to_numpy(),
+                          norm_direction_activity_by_trial[[direction_label, cell]].to_numpy(),
                           np.vstack([unique_dirs, mean_dir[cell].to_numpy()]).T,
                           np.vstack([unique_dirs, norm_mean_dir[cell].to_numpy()]).T,
                           std_dir[cell].to_numpy(), norm_std_dir[cell].to_numpy(),
@@ -244,8 +480,8 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
                           dsi_abs, bootstrap_dsi_abs, p_dsi_abs_bootstrap,
                           shuffle_dsi_abs, p_dsi_abs_shuffle]
 
-        orientation_data = [mean_orientation_activity[['orientation', cell]].to_numpy(),
-                            norm_orientation_activity[['orientation', cell]].to_numpy(),
+        orientation_data = [mean_orientation_activity_by_trial[['orientation', cell]].to_numpy(),
+                            norm_orientation_activity_by_trial[['orientation', cell]].to_numpy(),
                             np.vstack([unique_oris, mean_ori[cell].to_numpy()]).T,
                             np.vstack([unique_oris, norm_mean_ori[cell].to_numpy()]).T,
                             std_ori[cell].to_numpy(), norm_std_ori[cell].to_numpy(),
@@ -257,10 +493,16 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
                             shuffle_responsivity_ori, p_responsivity_ori_shuffle,
                             osi, bootstrap_osi, p_osi_bootstrap, shuffle_osi, p_osi_shuffle]
 
-        cell_data = direction_data + orientation_data
+        cell_data = vis_resp_data + direction_data + orientation_data
         cell_data_list.append(cell_data)
 
     # -- Assemble large dataframe -- #
+    vis_resp_columns = ['max_vis_activity', 'max_baseline_activity',
+                        'mean_vis_activity', 'mean_baseline_activity',
+                        'auc_vis_activity', 'auc_baseline_activity',
+                        'std_vis_activity', 'std_baseline_activity',
+                        'is_gen_responsive', 'is_vis_responsive', 'is_dir_responsive', 'is_ori_responsive']
+
     direction_columns = ['resp_dir',
                          'resp_norm_dir',
                          'mean_dir',
@@ -291,7 +533,7 @@ def calculate_visual_tuning(activity_df, direction_label='direction_wrapped', tu
                            'shuffle_responsivity_ori', 'shuffle_p_responsivity_ori',
                            'osi', 'bootstrap_osi', 'bootstrap_p_osi', 'shuffle_osi', 'shuffle_p_osi']
 
-    data_cols = direction_columns + orientation_columns
+    data_cols = vis_resp_columns + direction_columns + orientation_columns
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
     return data_df
 
@@ -492,9 +734,6 @@ def calculate_kinematic_tuning(df, day, animal, rig):
                                                                     tcs_cons, tc_bins, day, animal, rig)
 
 
-    # Do a extra calculation for the running evoked responses
-
-
     return tcs_dict, tcs_counts_dict, tcs_bins_dict
 
 
@@ -556,18 +795,22 @@ if __name__ == '__main__':
 
         else:
             # --- Process visual tuning --- #
-            kinematics, raw_spikes, raw_fluor = parse_kinematic_data(raw_data[0][-1], rig)
+            kinematics, inferred_spikes, deconvolved_fluor = parse_kinematic_data(raw_data[0][-1], rig)
 
-            # Calculate dFF and normalize other neural data
+            # Calculate normalized fluorescence and spikes
             activity_ds_dict = {}
-            dff = tuning.calculate_dff(raw_fluor, baseline_type='quantile', quantile=0.25)
-            norm_spikes = tuning.normalize_responses(raw_spikes)
-            norm_fluor = tuning.normalize_responses(raw_fluor)
-            norm_dff = tuning.normalize_responses(dff)
-            activity_ds_dict['dff'] = dff
-            activity_ds_dict['norm_spikes'] = norm_spikes
-            activity_ds_dict['norm_fluor'] = norm_fluor
-            activity_ds_dict['norm_dff'] = norm_dff
+            activity_ds_dict['deconvolved_fluor'] = deconvolved_fluor
+            activity_ds_dict['inferred_spikes'] = inferred_spikes
+
+            norm_spikes = tuning.normalize_responses(inferred_spikes)
+            norm_fluor = tuning.normalize_responses(deconvolved_fluor)
+            activity_ds_dict['norm_deconvolved_fluor'] = norm_fluor
+            activity_ds_dict['norm_inferred_spikes'] = norm_spikes
+
+            # dff = tuning.calculate_dff(deconvolved_fluor, baseline_type='quantile', quantile=0.08)
+            # norm_dff = tuning.normalize_responses(dff)
+            # activity_ds_dict['dff'] = dff
+            # activity_ds_dict['norm_dff'] = norm_dff
 
             # Filter trials by head pitch if freely moving
             if rig in ['VTuningWF', 'VTuning']:
@@ -579,18 +822,19 @@ if __name__ == '__main__':
                 viewed_trials = kinematics.groupby('trial_num').filter(
                     lambda x: (x['viewed'].sum() / len(x['viewed'])) > view_fraction).trial_num.unique()
 
-                raw_spikes_viewed = raw_spikes.loc[raw_spikes.trial_num.isin(viewed_trials)].copy()
-                norm_spikes_viewed = norm_spikes.loc[norm_spikes.trial_num.isin(viewed_trials)].copy()
-                norm_dff_viewed = norm_dff.loc[norm_dff.trial_num.isin(viewed_trials)].copy()
-            else:
-                viewed_trials = raw_spikes.trial_num.unique()
-                raw_spikes_viewed = raw_spikes.copy()
-                norm_spikes_viewed = norm_spikes.copy()
-                norm_dff_viewed = norm_dff.copy()
+                viewed_activity_dict = {}
+                for ds_key in activity_ds_dict.keys():
+                    viewed_activity_dict[ds_key + '_viewed'] = activity_ds_dict[ds_key].loc[
+                        activity_ds_dict[ds_key].trial_num.isin(viewed_trials)].copy()
 
-            activity_ds_dict['raw_spikes_viewed'] = raw_spikes_viewed
-            activity_ds_dict['norm_spikes_viewed'] = norm_spikes_viewed
-            activity_ds_dict['norm_dff_viewed'] = norm_dff_viewed
+            else:
+                viewed_trials = inferred_spikes.trial_num.unique()
+
+                viewed_activity_dict = {}
+                for ds_key in activity_ds_dict.keys():
+                    viewed_activity_dict[ds_key + '_viewed'] = activity_ds_dict[ds_key].copy()
+
+            activity_ds_dict.update(viewed_activity_dict)
 
             # Filter trials by running speed
             if rig == 'VTuningWF':
@@ -608,21 +852,35 @@ if __name__ == '__main__':
             still_trials = kinematics.iloc[still_idxs, :].groupby('trial_num').trial_num.unique()
             still_trials = viewed_trials[np.in1d(viewed_trials, still_trials)]
 
-            raw_spikes_viewed_still = raw_spikes_viewed.loc[raw_spikes_viewed.trial_num.isin(still_trials)]
-            norm_spikes_viewed_still = norm_spikes_viewed.loc[norm_spikes_viewed.trial_num.isin(still_trials)]
-            norm_dff_viewed_still = norm_dff_viewed.loc[norm_dff_viewed.trial_num.isin(still_trials)]
+            still_activity_dict = {}
+            for ds_key in viewed_activity_dict.keys():
+                still_activity_dict[ds_key + '_still'] = viewed_activity_dict[ds_key].loc[
+                    viewed_activity_dict[ds_key].trial_num.isin(still_trials)].copy()
 
-            activity_ds_dict['raw_spikes_viewed_still'] = raw_spikes_viewed_still
-            activity_ds_dict['norm_spikes_viewed_still'] = norm_spikes_viewed_still
-            activity_ds_dict['norm_dff_viewed_still'] = norm_dff_viewed_still
+            activity_ds_dict.update(still_activity_dict)
 
             # Run the visual tuning loop and save to file
             print('Calculating visual tuning curves...')
             vis_prop_dict = {}
             for ds_name in processing_parameters.activity_datasets:
-                activity_ds = activity_ds_dict[ds_name]
-                props = calculate_visual_tuning(activity_ds,
+
+                if ds_name not in activity_ds_dict.keys():
+                    raise ValueError(f'Activity dataset {ds_name} not found in the dataset.')
+
+                if 'spikes' in ds_name:
+                    activity_ds_type = 'spikes'
+                elif 'dff' in ds_name:
+                    activity_ds_type = 'dff'
+                elif 'fluor' in ds_name:
+                    activity_ds_type = 'fluor'
+                else:
+                    raise ValueError(f'Unknown activity dataset type: {ds_name}')
+
+                activity_ds = activity_ds_dict[ds_name].copy()
+                props = calculate_visual_tuning(activity_ds, activity_ds_type,
+                                                metric_for_analysis=processing_parameters.analysis_metric,
                                                 bootstrap_shuffles=processing_parameters.bootstrap_repeats)
+
                 # Save visual features to hdf5 file
                 props.to_hdf(out_file, f'{ds_name}_props')
 
@@ -636,7 +894,7 @@ if __name__ == '__main__':
                 tcs_bins_dict[feature].to_hdf(out_file, feature + '_edges')
 
             # calculate locomotion modulated cells
-            running_modulated_cells = get_running_modulated_cells(raw_spikes, running_idxs)
+            running_modulated_cells = get_running_modulated_cells(inferred_spikes, running_idxs)
             running_modulated_cells.to_hdf(out_file, 'running_modulated_cells')
 
             # --- save the cell matches --- #
