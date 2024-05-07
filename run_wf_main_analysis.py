@@ -103,17 +103,15 @@ def make_aggregate_file(search_string):
         return agg_dict
 
 
-def get_vis_tuned_cells(ds: pd.DataFrame, vis_stim: str = 'dir', resp_thresh: float = 0.25, sel_tresh: float = 0.5,
-                        drop_na: bool = True) -> pd.DataFrame:
+def get_vis_tuned_cells(ds: pd.DataFrame, vis_stim: str = 'dir', sel_thresh: float = 0.5) -> pd.DataFrame:
     """
     Filter the input DataFrame to select cells that are visually tuned based on the specified visual stimulus.
 
     Parameters:
         ds (pd.DataFrame): The input DataFrame containing the data.
         vis_stim (str): The visual stimulus type. Valid values are 'dir', 'ori', 'vis', or 'untuned'.
-        resp_thresh (float): The threshold for responsivity. Cells with absolute responsivity values below this threshold will be excluded.
-        sel_tresh (float): The threshold for selectivity. Cells with absolute selectivity values below this threshold will be excluded.
-        drop_na (bool): Whether to drop rows with missing values. If True, rows with missing values will be dropped. If False, rows with missing values will be included.
+        sel_thresh (float): The threshold for selectivity. Cells with absolute selectivity values below this
+                            threshold will be excluded.
 
     Returns:
         pd.DataFrame: The filtered DataFrame containing the visually tuned cells.
@@ -126,25 +124,28 @@ def get_vis_tuned_cells(ds: pd.DataFrame, vis_stim: str = 'dir', resp_thresh: fl
     data = ds.copy()
 
     if vis_stim == 'dir':
-        resp_type = f'responsivity_{vis_stim}'
-        sel_type = 'dsi_abs'
-    elif vis_stim == 'ori':
-        resp_type = f'responsivity_{vis_stim}'
-        sel_type = 'osi'
-    elif (vis_stim == 'vis') or (vis_stim == 'untuned'):
-        resp_type = ['responsivity_dir', 'responsivity_ori']
-        sel_type = ''
-    else:
-        raise Exception('Invalid vis_stim')
+        # Cells cannot be both responsive to all visual stimuli and to directions
+        cells = data[(data['is_vis_responsive'] == 0) & (data['is_dir_responsive'] == 1) &
+                     (data['dsi_abs'] >= sel_thresh) & (data['responsivity_ori'] < sel_thresh)]
+        return cells
 
-    if vis_stim == 'vis':
-        cells = data[(data[resp_type[0]].abs() >= resp_thresh) & (data[resp_type[1]].abs() >= resp_thresh)]
-    elif vis_stim == 'untuned':
-        cells = data[(data[resp_type[0]].abs() < resp_thresh) & (data[resp_type[1]].abs() < resp_thresh)]
+    elif vis_stim == 'ori':
+        # Cells cannot be both responsive to all visual stimuli and to orientations
+        cells = data[(data['is_vis_responsive'] == 0) & (data['is_ori_responsive'] == 1) &
+                     (data['responsivity_ori'] >= sel_thresh) & (data['dsi_abs'] < sel_thresh)]
+        return cells
+
+    elif vis_stim == 'vis':
+        cells = data[(data['is_vis_responsive'] == 1) & (data['is_gen_responsive'] == 0)]
+        return cells
+
+    elif vis_stim == 'gen':
+        cells = data[data['is_gen_responsive'] == 1]
+        return cells
+
     else:
-        cells = data[(data[resp_type].abs() >= resp_thresh) & (data[sel_type].abs() >= sel_tresh)]
-    
-    return cells
+        return Exception('Invalid vis_stim')
+
 
 
 def kine_fraction_tuned(ds: pd.DataFrame, use_test: bool = True, include_responsivity: bool = True,
@@ -239,13 +240,14 @@ def find_tuned_cell_indices(ref_data: pd.DataFrame, comp_data: pd.DataFrame, sti
 
     # Find the cells in the reference dataset that are tuned
     if stim_kind == 'orientation':
-        index_ref = ref_data.loc[ref_data.osi.abs() >= cutoff].index.to_numpy()
-        index_comp = comp_data.loc[comp_data.osi.abs() >= cutoff].index.to_numpy()
+        index_column = 'responsivity_ori'
     elif stim_kind == 'direction':
-        index_ref = ref_data.loc[ref_data.dsi_abs.abs() >= cutoff].index.to_numpy()
-        index_comp = comp_data.loc[comp_data.dsi_abs.abs() >= cutoff].index.to_numpy()
+        index_column = 'dsi_abs'
     else:
         raise Exception('Invalid stim_kind')
+
+    index_ref = ref_data.loc[ref_data[index_column].abs() >= cutoff].index.to_numpy()
+    index_comp = comp_data.loc[comp_data[index_column].abs() >= cutoff].index.to_numpy()
 
     # Determine the indices to return based on the tuning criteria
     if tuning_criteria == 'both':
@@ -422,7 +424,7 @@ def calculate_delta_selectivity(ref_ds: pd.DataFrame, comp_ds: pd.DataFrame, cut
         """
 
     if stim_kind == 'orientation':
-        sel_key = 'osi'
+        sel_key = 'responsivity_ori'
     elif stim_kind == 'direction':
         sel_key = 'dsi_abs'
     else:
@@ -630,7 +632,7 @@ for result, light, rig in itertools.product(results, lightings, rigs):
 
     # Get the cell matches for the current dataset and plot a scatter plot of the fraction of cells matched
     cell_kind = 'all_cells'
-    activity_dataset = 'norm_spikes_viewed_props'
+    activity_dataset = f'{processing_parameters.activity_datasets[0]}_props'
 
     try:
         match_nums = data_dict['cell_matches'].groupby(['mouse', 'day'])[session_types[0]].count().values
@@ -665,16 +667,28 @@ for result, light, rig in itertools.product(results, lightings, rigs):
     free_cell_tunings = data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'][['old_index', 'mouse', 'day']].copy()
 
     # Cells that meet orientation selectivity criteria
-    fixed_ori_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'], vis_stim='ori', resp_thresh=0.5)
-    free_ori_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'], vis_stim='ori', resp_thresh=0.5)
+    fixed_ori_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                          vis_stim='ori', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+    free_ori_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                         vis_stim='ori', sel_thresh=processing_parameters.selectivity_idx_cutoff)
 
     # Cells that meet direction selectivity criteria
-    fixed_dir_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'], vis_stim='dir', resp_thresh=0.5)
-    free_dir_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'], vis_stim='dir', resp_thresh=0.5)
+    fixed_dir_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                          vis_stim='dir', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+    free_dir_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                         vis_stim='dir', sel_thresh=processing_parameters.selectivity_idx_cutoff)
 
     # Cells that meet visual responsivity criteria
-    free_vis_resp = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'], vis_stim='vis', resp_thresh=0.5)
-    fixed_vis_resp = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'], vis_stim='vis', resp_thresh=0.5)
+    fixed_vis_resp = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                         vis_stim='vis', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+    free_vis_resp = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                        vis_stim='vis',sel_thresh=processing_parameters.selectivity_idx_cutoff)
+
+    # Cells that meet general responsivity criteria
+    fixed_gen_resp = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                         vis_stim='gen', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+    free_gen_resp = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                        vis_stim='gen', sel_thresh=processing_parameters.selectivity_idx_cutoff)
 
     # Find cells that are both direction and orientation tuned, and figure out what to do with them.
     _, comm1, comm2 = np.intersect1d(free_dir_tuned.index, free_ori_tuned.index, return_indices=True)
@@ -703,10 +717,12 @@ for result, light, rig in itertools.product(results, lightings, rigs):
     fixed_vis_resp = fixed_vis_resp.reset_index().drop_duplicates(subset=['index'])
 
     # Assign the tunings to the binary tuning dataframes
+    free_cell_tunings['is_gen_resp'] = free_cell_tunings.index.isin(free_gen_resp.index)
     free_cell_tunings['is_vis_resp'] = free_cell_tunings.index.isin(free_vis_resp.index)
     free_cell_tunings['is_dir_tuned'] = free_cell_tunings.index.isin(free_dir_tuned.index)
     free_cell_tunings['is_ori_tuned'] = free_cell_tunings.index.isin(free_ori_tuned.index)
 
+    fixed_cell_tunings['is_gen_resp'] = fixed_cell_tunings.index.isin(fixed_gen_resp.index)
     fixed_cell_tunings['is_vis_resp'] = fixed_cell_tunings.index.isin(fixed_vis_resp.index)
     fixed_cell_tunings['is_dir_tuned'] = fixed_cell_tunings.index.isin(fixed_dir_tuned.index)
     fixed_cell_tunings['is_ori_tuned'] = fixed_cell_tunings.index.isin(fixed_ori_tuned.index)
@@ -1107,7 +1123,7 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                     else:
                         this_rig = key.split('_')[0]
                         tuning_dsi = ds['dsi_abs'].abs().to_numpy()
-                        tuning_osi = ds['osi'].to_numpy()
+                        tuning_osi = ds['responsivity_ori'].to_numpy()
                         umap_dict[f'dsi_{this_rig}'] = np.clip(tuning_dsi, 0, 1)
                         umap_dict[f'osi_{this_rig}'] = np.clip(tuning_osi, 0, 1)
 

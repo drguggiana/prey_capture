@@ -44,27 +44,24 @@ def vis_frac_responsive(ds, sel_tresh=0.5):
     data = ds.copy()
 
     # Get boolean vector of direction tuned cells
-    is_dir_resp = np.sum((data['is_vis_responsive'] == 0) & (data['is_dir_responsive'] == 1) &
-                         (data['dsi_abs'] >= sel_tresh) & (data['osi'] < sel_tresh), axis=0) > 0
+    is_dir_resp = ((data['is_vis_responsive'] == 0) & (data['is_dir_responsive'] == 1) &
+                   (data['dsi_abs'] >= sel_tresh) & (data['osi'] < sel_tresh))
     frac_dir_resp = is_dir_resp.sum() / is_dir_resp.count()
 
     # Get boolean vector of orientation tuned cells
-    is_ori_resp = np.sum((data['is_vis_responsive'] == 0) & (data['is_ori_responsive'] == 1) &
-                         (data['responsivity_ori'] >= sel_tresh) & (data['dsi_abs'] < sel_tresh), axis=0) > 0
+    is_ori_resp = ((data['is_vis_responsive'] == 0) & (data['is_ori_responsive'] == 1) &
+                   (data['responsivity_ori'] >= sel_tresh) & (data['dsi_abs'] < sel_tresh))
     frac_ori_resp = is_ori_resp.sum() / is_ori_resp.count()
 
     # Get boolean vector of visually responsive cells
-    is_vis_resp = np.sum((data['is_gen_responsive'] == 0) & (data['is_vis_responsive'] == 1)) == 1
+    is_vis_resp = ((data['is_gen_responsive'] == 0) & (data['is_vis_responsive'] == 1))
     frac_vis_resp = is_vis_resp.sum() / is_vis_resp.count()
 
     # Get boolean vector of generally responsive cells
     is_gen_resp = data['is_gen_responsive']
     frac_gen_resp = is_gen_resp.sum() / is_gen_resp.count()
 
-    is_vis_resp = np.sum([is_dir_resp, is_ori_resp, is_vis_resp], axis=0) > 0
-
     return is_vis_resp, frac_gen_resp, frac_vis_resp, frac_ori_resp, frac_dir_resp
-
 
 
 def dicts_to_dataframe(dicts, index):
