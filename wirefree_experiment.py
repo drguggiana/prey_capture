@@ -54,8 +54,8 @@ class WirefreeExperiment(DataContainer):
 
         # Neural and kinematic data structures
         self.kinematics = None
-        self.raw_spikes = None
-        self.raw_fluor = None
+        self.inferred_spikes = None
+        self.deconv_fluor = None
 
         # Tuning curve data structures
         self.visual_tcs = None
@@ -122,7 +122,7 @@ class WirefreeExperiment(DataContainer):
 
             self.cell_matches = self._parse_cell_matches(preproc['cell_matches'], self.preproc_info.result)
         
-            self._parse_kinematic_data(preproc['matched_calcium'])
+            self._parse_preprocessing(preproc['matched_calcium'])
             if full_kinem:
                 self.full_kinematics = preproc['full_traces']
 
@@ -130,7 +130,7 @@ class WirefreeExperiment(DataContainer):
             self.trial_set = preproc['trial_set']
             self.arena_corners = preproc['arena_corners']
 
-    def _parse_kinematic_data(self, matched_calcium):
+    def _parse_preprocessing(self, matched_calcium):
 
         if self.metadata.rig in ['VWheel', 'VWheelWF']:
             self.metadata.exp_type = 'fixed'
@@ -217,10 +217,10 @@ class WirefreeExperiment(DataContainer):
             self.kinematics['wheel_acceleration_abs'] = np.abs(self.kinematics['wheel_acceleration'].copy())
             self.kinematics['norm_wheel_speed'] = normalize(self.kinematics['wheel_speed_abs'])
 
-        self.raw_spikes = matched_calcium.loc[:, stimulus_cols + spikes_cols]
-        self.raw_spikes.columns = [key.rsplit('_', 1)[0] if 'spikes' in key else key for key in self.raw_spikes.columns]
-        self.raw_fluor = matched_calcium.loc[:, stimulus_cols + fluor_cols]
-        self.raw_fluor.columns = [key.rsplit('_', 1)[0] if 'fluor' in key else key for key in self.raw_fluor.columns]
+        self.inferred_spikes = matched_calcium.loc[:, stimulus_cols + spikes_cols]
+        self.inferred_spikes.columns = [key.rsplit('_', 1)[0] if 'spikes' in key else key for key in self.inferred_spikes.columns]
+        self.deconv_fluor = matched_calcium.loc[:, stimulus_cols + fluor_cols]
+        self.deconv_fluor.columns = [key.rsplit('_', 1)[0] if 'fluor' in key else key for key in self.deconv_fluor.columns]
 
     def _parse_params(self, df):
         params = df.to_dict('list')

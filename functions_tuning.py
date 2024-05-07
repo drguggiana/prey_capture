@@ -4,6 +4,8 @@ import pycircstat as circ
 from scipy.special import i0
 from scipy.optimize import least_squares, curve_fit
 from sklearn.metrics import r2_score, mean_squared_error
+
+import processing_parameters
 import functions_kinematic as fk
 from functions_misc import find_nearest
 
@@ -282,6 +284,7 @@ def generate_response_vector(responses, function, **kwargs):
     resp = responses.groupby([tuning_kind])[cell_ids].agg(function, **kwargs).fillna(0).reset_index()
     angles = resp[tuning_kind].to_numpy()
     resp = resp[cell_ids]
+    resp.insert(0, tuning_kind, angles)
 
     return resp, angles
 
@@ -390,6 +393,11 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     # DSI calculation from https://doi.org/10.1038/nature19818
     # OSI calculation from https://doi.org/10.1523/JNEUROSCI.0095-13.2013
 
+    # First check if the magnitudes are all > 0
+    if np.all(magnitudes == 0):
+        return np.NaN, np.NaN, np.NaN, np.NaN, np.NaN, np.NaN
+
+    # IF we're bootstrapping, we need to get the unique angles and their mean magnitudes
     if bootstrap:
         unique_angles = np.unique(angles)
         tc = [np.nanmean(magnitudes[angles == angle]) for angle in unique_angles]
@@ -400,16 +408,17 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     half_period_angles_1 = angles[angles <= np.pi]
     half_period_mags_1 = magnitudes[angles <= np.pi]
 
-    res_mag_1, res_angle_1 = resultant_vector(half_period_angles_1, half_period_mags_1, 2)
+    res_mag_1, res_angle_1 = resultant_vector(half_period_angles_1, half_period_mags_1, 1)
     res_angle_1 = fk.wrap(res_angle_1, bound=np.pi)     # Need this correction because pycircstat does mod2pi by default
     closest_idx1 = np.argmin(np.abs(angles - res_angle_1))
     resp1 = magnitudes[closest_idx1]
+    angle1 = angles[closest_idx1]
 
     # Get resultant on second half of the data
-    half_period_angles_2 = fk.wrap(angles[angles > np.pi], bound=np.pi)
+    half_period_angles_2 = fk.wrap(angles[angles > np.pi], bound=np.deg2rad(180.1))
     half_period_mags_2 = magnitudes[angles > np.pi]
 
-    res_mag_2, res_angle_2 = resultant_vector(half_period_angles_2, half_period_mags_2, 2)
+    res_mag_2, res_angle_2 = resultant_vector(half_period_angles_2, half_period_mags_2, 1)
     res_angle_2 = fk.wrap(res_angle_2, bound=np.pi)
     res_angle_2 += np.pi
     closest_idx2 = np.argmin(np.abs(angles - res_angle_2))
@@ -428,9 +437,17 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
 
     # for dsi
     closest_idx_to_null = np.argmin(np.abs(angles - fk.wrap(pref + np.pi, bound=2*np.pi)))
-    resp_null = magnitudes[closest_idx_to_null]
-    dsi_nasal_temporal = (resp_pref - resp_null) / (resp_pref + resp_null)
-    dsi_abs = 1 - (resp_null/resp_pref)
+    resp_null = magnitudes[closest_idx_to_null-1:closest_idx_to_null+2].mean()
+
+    if resp_pref + resp_null == 0:
+        dsi_nasal_temporal = 0
+    else:
+        dsi_nasal_temporal = (resp_pref - resp_null) / (resp_pref + resp_null)
+
+    if resp_pref == 0:
+        dsi_abs = 0
+    else:
+        dsi_abs = 1 - (resp_null/resp_pref)
 
     # for osi
     closest_idx_to_null_1 = np.argmin(np.abs(angles - fk.wrap(pref + np.pi/2, bound=2*np.pi)))
@@ -438,7 +455,11 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     resp_null_1 = magnitudes[closest_idx_to_null_1]
     resp_null_2 = magnitudes[closest_idx_to_null_2]
     resp_null_osi = np.nanmean([resp_null_1, resp_null_2])
-    osi = (resp_pref - resp_null_osi) / (resp_pref + resp_null_osi)
+
+    if resp_pref + resp_null_osi == 0:
+        osi = 0
+    else:
+        osi = (resp_pref - resp_null_osi) / (resp_pref + resp_null_osi)
     
     return dsi_nasal_temporal, dsi_abs, osi, resultant_length, pref, null
 
@@ -595,22 +616,59 @@ def calculate_dff(ds, baseline_type='iti_mean', **kwargs):
     cells = [el for el in ds.columns if "cell" in el]
     ds = ds.replace([np.inf, -np.inf], 0).fillna(0)
     dff = ds.copy()
-    mask = dff[cells] < 0
-    dff.loc[:, cells].mask(mask, 0.0, inplace=True)
+    # mask = dff[cells] < 0
+    # ds.loc[:, cells].mask(mask, 0.0, inplace=True)
 
     if baseline_type == 'iti_mean':
-        baselines = ds[ds.direction == -1000][cells].mean(axis=0).copy()
+        baselines = ds[ds.trial_num == 0][cells].mean(axis=0).copy()
 
     elif baseline_type == 'quantile':
-        baselines = ds[cells].quantile(kwargs.get('quantile', 0.20), numeric_only=True, axis=0).copy()
+        qaunt = kwargs.get('quantile', 0.20)
+        baselines = ds[cells].quantile(qaunt, numeric_only=True, axis=0).copy()
 
     else:
         raise NameError('Invalid baseline type')
     
-    # Where the quantile is zero, replace with the mean baseline of all nonzeros cells
-    baselines[baselines == 0] = baselines[baselines != 0].mean()
+    # Where the quantile is zero, replace with the mean baseline of all nonzero cells
+    baselines[baselines == 0] = baselines[baselines > 0].mean()
     
     dff[cells] -= baselines
     dff[cells] /= baselines
 
     return dff
+
+
+def parse_trial_frames(df, pre_trial=0, post_trial=0):
+    trial_idx_frames = df[df.trial_num >= 1.0].groupby(['trial_num']).apply(
+        lambda x: [x.index[0] - int(pre_trial * processing_parameters.wf_frame_rate),
+                   x.index[0], x.index[-1],
+                   x.index[-1] + int(post_trial * processing_parameters.wf_frame_rate) + 1]
+                ).to_numpy()
+    trial_idx_frames = np.vstack(trial_idx_frames)
+
+    if trial_idx_frames[0, 0] < df.index[0]:
+        trial_idx_frames[0, 0] = df.index[0]
+
+    if trial_idx_frames[-1, -1] > df.index[-1]:
+        trial_idx_frames[-1, -1] = df.index[-1]
+
+    if trial_idx_frames[-1, -2] == trial_idx_frames[-1, -1]:
+        trial_idx_frames[-1, -2:] = int(df.index[-1]) - 1
+
+    # Get the shifts from the zero point (important for plotting)
+    max_zero_idx_shift = np.max(trial_idx_frames[:, 1] - trial_idx_frames[:, 0])
+
+    traces = []
+    for i, frame in enumerate(trial_idx_frames):
+        df_slice = df.iloc[frame[0]:frame[-1], :].copy()
+        df_slice['frame_num'] = df_slice.loc[frame[1], 'trial_num']
+        # df_slice['direction'] = df_slice.loc[frame[1] + 1, 'direction']
+        # df_slice['direction_wrapped'] = df_slice.loc[frame[1] + 1, 'direction_wrapped']
+        # df_slice['orientation'] = df_slice.loc[frame[1] + 1, 'orientation']
+        # zero_idx_shift = np.abs((frame[1] - frame[0]) - max_zero_idx_shift)
+        # df_slice['zero_idx_shift'] = zero_idx_shift
+
+        traces.append(df_slice)
+
+    traces = pd.concat(traces, axis=0).reset_index(drop=True)
+    return traces, trial_idx_frames

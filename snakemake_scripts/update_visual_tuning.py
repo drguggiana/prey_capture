@@ -9,7 +9,7 @@ import functions_bondjango as bd
 import functions_data_handling as fdh
 import functions_misc as fm
 import functions_tuning as tuning
-from snakemake_scripts.wf_tc_calculate import parse_kinematic_data, calculate_visual_tuning
+from snakemake_scripts.wf_tc_calculate import parse_kinematic_data, calculate_visual_tuning, predict_running_gmm_hmm
 
 if __name__ == '__main__':
     try:
@@ -65,18 +65,22 @@ if __name__ == '__main__':
     if len(raw_data) != 0:
 
         # --- Process visual tuning --- #
-        kinematics, raw_spikes, raw_fluor = parse_kinematic_data(raw_data[0], rig)
+        kinematics, inferred_spikes, deconvolved_fluor = parse_kinematic_data(raw_data[0], rig)
 
-        # Calculate dFF and normalize other neural data
+        # Calculate normalized fluorescence and spikes
         activity_ds_dict = {}
-        dff = tuning.calculate_dff(raw_fluor)
-        norm_spikes = tuning.normalize_responses(raw_spikes)
-        norm_fluor = tuning.normalize_responses(raw_fluor)
-        norm_dff = tuning.normalize_responses(dff)
-        activity_ds_dict['dff'] = dff
-        activity_ds_dict['norm_spikes'] = norm_spikes
-        activity_ds_dict['norm_fluor'] = norm_fluor
-        activity_ds_dict['norm_dff'] = norm_dff
+        activity_ds_dict['deconvolved_fluor'] = deconvolved_fluor
+        activity_ds_dict['inferred_spikes'] = inferred_spikes
+
+        norm_spikes = tuning.normalize_responses(inferred_spikes)
+        norm_fluor = tuning.normalize_responses(deconvolved_fluor)
+        activity_ds_dict['norm_deconvolved_fluor'] = norm_fluor
+        activity_ds_dict['norm_inferred_spikes'] = norm_spikes
+
+        # dff = tuning.calculate_dff(deconvolved_fluor, baseline_type='quantile', quantile=0.08)
+        # norm_dff = tuning.normalize_responses(dff)
+        # activity_ds_dict['dff'] = dff
+        # activity_ds_dict['norm_dff'] = norm_dff
 
         # Filter trials by head pitch if freely moving
         if rig in ['VTuningWF', 'VTuning']:
@@ -88,48 +92,64 @@ if __name__ == '__main__':
             viewed_trials = kinematics.groupby('trial_num').filter(
                 lambda x: (x['viewed'].sum() / len(x['viewed'])) > view_fraction).trial_num.unique()
 
-            raw_spikes_viewed = raw_spikes.loc[raw_spikes.trial_num.isin(viewed_trials)].copy()
-            norm_spikes_viewed = norm_spikes.loc[norm_spikes.trial_num.isin(viewed_trials)].copy()
-            norm_dff_viewed = norm_dff.loc[norm_dff.trial_num.isin(viewed_trials)].copy()
+            viewed_activity_dict = {}
+            for ds_key in activity_ds_dict.keys():
+                viewed_activity_dict[ds_key + '_viewed'] = activity_ds_dict[ds_key].loc[
+                    activity_ds_dict[ds_key].trial_num.isin(viewed_trials)].copy()
 
         else:
-            viewed_trials = raw_spikes.trial_num.unique()
-            raw_spikes_viewed = raw_spikes.copy()
-            norm_spikes_viewed = norm_spikes.copy()
-            norm_dff_viewed = norm_dff.copy()
+            viewed_trials = inferred_spikes.trial_num.unique()
 
-        activity_ds_dict['raw_spikes_viewed'] = raw_spikes_viewed
-        activity_ds_dict['norm_spikes_viewed'] = norm_spikes_viewed
-        activity_ds_dict['norm_dff_viewed'] = norm_dff_viewed
+            viewed_activity_dict = {}
+            for ds_key in activity_ds_dict.keys():
+                viewed_activity_dict[ds_key + '_viewed'] = activity_ds_dict[ds_key].copy()
+
+        activity_ds_dict.update(viewed_activity_dict)
 
         # Filter trials by running speed
         if rig == 'VTuningWF':
             speed_column = 'mouse_speed'
         else:
-            speed_column = 'wheel_speed'
+            speed_column = 'wheel_speed_abs'
 
-        speed_cutoff = np.percentile(np.abs(kinematics[speed_column]), 80)
-        kinematics['is_running'] = np.abs(kinematics[speed_column]) >= speed_cutoff
-        kinematics[f'{speed_column}_abs'] = np.abs(kinematics[speed_column])
+        # Use GMM - HMM to predict running state
+        running_prediction = predict_running_gmm_hmm(kinematics[speed_column].to_numpy().reshape(-1, 1),
+                                                     n_components=2)
+        running_idxs = np.argwhere(running_prediction > 0).flatten()
+        still_idxs = np.argwhere(running_prediction == 0).flatten()
+        kinematics['is_running'] = running_prediction > 0
 
-        still_trials = kinematics.groupby('trial_num').filter(
-            lambda x: x[f'{speed_column}_abs'].mean() < speed_cutoff).trial_num.unique()
+        still_trials = kinematics.iloc[still_idxs, :].groupby('trial_num').trial_num.unique()
         still_trials = viewed_trials[np.in1d(viewed_trials, still_trials)]
 
-        raw_spikes_viewed_still = raw_spikes_viewed.loc[raw_spikes_viewed.trial_num.isin(still_trials)]
-        norm_spikes_viewed_still = norm_spikes_viewed.loc[norm_spikes_viewed.trial_num.isin(still_trials)]
-        norm_dff_viewed_still = norm_dff_viewed.loc[norm_dff_viewed.trial_num.isin(still_trials)]
+        still_activity_dict = {}
+        for ds_key in viewed_activity_dict.keys():
+            still_activity_dict[ds_key + '_still'] = viewed_activity_dict[ds_key].loc[
+                viewed_activity_dict[ds_key].trial_num.isin(still_trials)].copy()
 
-        activity_ds_dict['raw_spikes_viewed_still'] = raw_spikes_viewed_still
-        activity_ds_dict['norm_spikes_viewed_still'] = norm_spikes_viewed_still
-        activity_ds_dict['norm_dff_viewed_still'] = norm_dff_viewed_still
+        activity_ds_dict.update(still_activity_dict)
 
         # Run the visual tuning loop and save to file
         print('Calculating visual tuning curves...')
-
+        vis_prop_dict = {}
         for ds_name in processing_parameters.activity_datasets:
-            activity_ds = activity_ds_dict[ds_name]
-            props = calculate_visual_tuning(activity_ds, bootstrap_shuffles=processing_parameters.bootstrap_repeats)
+
+            if ds_name not in activity_ds_dict.keys():
+                raise ValueError(f'Activity dataset {ds_name} not found in the dataset.')
+
+            if 'spikes' in ds_name:
+                activity_ds_type = 'spikes'
+            elif 'dff' in ds_name:
+                activity_ds_type = 'dff'
+            elif 'fluor' in ds_name:
+                activity_ds_type = 'fluor'
+            else:
+                raise ValueError(f'Unknown activity dataset type: {ds_name}')
+
+            activity_ds = activity_ds_dict[ds_name].copy()
+            props = calculate_visual_tuning(activity_ds, activity_ds_type,
+                                            metric_for_analysis=processing_parameters.analysis_metric,
+                                            bootstrap_shuffles=processing_parameters.bootstrap_repeats)
 
             # Update visual features to hdf5 files
             with pd.HDFStore(tc_file, mode='r+') as f:
@@ -139,6 +159,8 @@ if __name__ == '__main__':
                 # update the file
                 if feature_key in f.keys():
                     f.remove(feature)
+                    props.to_hdf(tc_file, feature)
+                else:
                     props.to_hdf(tc_file, feature)
 
         print(f'Updated visual tuning in {os.path.basename(tc_file)}')

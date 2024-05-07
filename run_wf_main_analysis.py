@@ -519,8 +519,7 @@ def create_umap_plot(plot_data: np.ndarray, predictor_column: str) -> hv.Scatter
                    yaxis=None, tools=['hover'])
 
     if any([predictor_column.startswith('dsi'), predictor_column.startswith('osi')]):
-        umap_plot.opts(title=f"{predictor_column[:3].upper()} "
-                             f"{processing_parameters.wf_label_dictionary_wo_units[predictor_column.split('_')[-1]]}")
+        umap_plot.opts(title=f"{predictor_column[:3].upper()}")
     else:
         umap_plot.opts(title=processing_parameters.wf_label_dictionary_wo_units[predictor_column])
 
@@ -905,8 +904,36 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                                                      width=1.25, height=5, save=True)
         plt.close()
 
-    # --- Plot the fraction of multimodal tuned cells--- #
-    # TODO
+    # --- Plot the fraction of running modulated cells--- #
+    fixed_running_mod = data_dict[f'{session_types[0]}_{cell_kind}_running_modulated_cells']
+    frac_run_mod_fixed = fixed_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
+                                                                       'sig_vis_run_modulated']].sum() / \
+                         fixed_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
+                                                                       'sig_vis_run_modulated']].count()
+    rename_dict = dict(zip(list(frac_run_mod_fixed.columns), [col[4:] for col in frac_run_mod_fixed.columns]))
+    frac_run_mod_fixed = frac_run_mod_fixed.rename(columns=rename_dict)
+
+    for col in frac_run_mod_fixed.columns:
+        save_path = os.path.join(figure_save_path, f"sig_frac_{col}_{session_shorthand[0]}.png")
+        violinplot_fixed_run_mod_col = fp.violin_swarm(frac_run_mod_fixed.loc[:, [col]].copy(), save_path,
+                                                    cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
+                                                    width=1.5, height=5, save=True)
+        plt.close()
+
+    free_running_mod = data_dict[f'{session_types[1]}_{cell_kind}_running_modulated_cells']
+    frac_run_mod_free = free_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
+                                                                       'sig_vis_run_modulated']].sum() / \
+                         free_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
+                                                                       'sig_vis_run_modulated']].count()
+    rename_dict = dict(zip(list(frac_run_mod_free.columns), [col[4:] for col in frac_run_mod_free.columns]))
+    frac_run_mod_free = frac_run_mod_free.rename(columns=rename_dict)
+
+    for col in frac_run_mod_free.columns:
+        save_path = os.path.join(figure_save_path, f"sig_frac_{col}_{session_shorthand[1]}.png")
+        violinplot_free_run_mod_col = fp.violin_swarm(frac_run_mod_free.loc[:, [col]].copy(), save_path,
+                                                    cmap=free_violin_cmap, font_size='paper', backend='seaborn',
+                                                    width=1.5, height=5, save=True)
+        plt.close()
 
     # --- Plot the delta preferred orientation/direction, and delta DSI/OSI --- #
 
@@ -1110,7 +1137,7 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                 umap_plot = create_umap_plot(plot_data, predictor_column)
 
                 save_name = os.path.join(figure_save_path, f"{cell_kind}_UMAP_{predictor_column}.png")
-                umap_plot = fp.save_figure(umap_plot, save_path=save_name, fig_width=6, dpi=800, fontsize='paper',
+                umap_plot = fp.save_figure(umap_plot, save_path=save_name, fig_width=3.5, dpi=800, fontsize='paper',
                                            target='save', display_factor=0.1)
 
         else:
