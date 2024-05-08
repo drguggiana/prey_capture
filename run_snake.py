@@ -118,7 +118,7 @@ for idx, target_entries in enumerate(full_queries):
         out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
 
     # run snakemake
-    preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', #'1',
+    preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
                               '-s', paths.snakemake_scripts,
                               '-d', paths.snakemake_working,
                               # '--use-conda',

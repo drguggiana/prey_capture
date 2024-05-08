@@ -136,6 +136,9 @@ if __name__ == '__main__':
         id_flags = rigs
         rig = 'multi'
 
+    # Set the dataset to use
+    used_tc_dataset = processing_parameters.activity_datasets[0]
+
     # Sort the input paths by id_flag so they are in the same order
     input_paths = [path for id in id_flags for path in input_paths if id in path]
 
@@ -200,7 +203,7 @@ if __name__ == '__main__':
                 # get matches and save
                 # match_col = np.where([id_flag in el for el in matches.columns])[0][0]
                 match_idxs = matches.loc[:, id_flag].to_numpy(dtype=int)
-                num_cells = data['norm_spikes_viewed_props'].shape[0]
+                num_cells = data[f'{used_tc_dataset}_props'].shape[0]
 
                 all_cells_summary_stats['num_matches'] = len(match_idxs)
                 all_cells_summary_stats['match_frac'] = len(match_idxs) / num_cells
@@ -210,7 +213,7 @@ if __name__ == '__main__':
 
                 kine_features = [el for el in data.keys() if not any([x in el for x in ['props', 'counts', 'edges',
                                                                                         'running_modulated']])]
-                vis_features = [el for el in data.keys() if 'props' in el]
+                vis_features = [el for el in data.keys() if used_tc_dataset in el]
 
                 # Save the running modulated cells
                 run_mod = data['running_modulated_cells']
