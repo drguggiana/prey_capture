@@ -1,7 +1,8 @@
 import os
+import yaml
+
 import pandas as pd
 import numpy as np
-import yaml
 
 import paths
 import processing_parameters
@@ -33,21 +34,22 @@ if __name__ == '__main__':
         parsed_search = fdh.parse_search_string(processing_parameters.search_string)
 
         # get the paths to the files
-        preproc_data = [el for el in data_all if '_preproc' in el['slug'] and
-                        parsed_search['mouse'].lower() in el['slug']]
+        preproc_data = [el for el in data_all if ('_preproc' in el['slug']) and
+                        (parsed_search['mouse'].lower() in el['slug']) and
+                        (parsed_search['rig'] in el['rig'])]
         preproc_file = preproc_data[0]['analysis_path']
 
-        tc_data = [el for el in data_all if '_tcday' in el['slug'] and
-                   parsed_search['mouse'].lower() in el['slug']]
+        tc_data = [el for el in data_all if ('_tcday' in el['slug']) and
+                        (parsed_search['mouse'].lower() in el['slug']) and
+                        (parsed_search['rig'] in el['rig'])]
         tc_file = tc_data[0]['analysis_path']
 
         # get the parts for the file naming
-        rig = tc_data[0]['rig']
+        rig = parsed_search['rig']
         day = tc_data[0]['slug'][:10]
         result = tc_data[0]['result']
         lighting = tc_data[0]['lighting']
-        mouse = os.path.basename(tc_file).split('_')[7:10]
-        mouse = '_'.join([mouse[0].upper()] + mouse[1:])
+        mouse = parsed_search['mouse']
 
         dummy_out_file = tc_file.replace('_tcday.hdf5', '_update_dummy.txt')
 

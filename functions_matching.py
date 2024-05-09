@@ -1073,10 +1073,15 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
         # find indices for each trial number > 0. If there are some that aren't consecutive, fix them
         # Seems to be the case the sometimes the transition is split across two frames
         for trial in matched_bonsai.trial_num.unique()[1:]:
+            finished = False
             indexes = matched_bonsai.index[matched_bonsai.trial_num == trial]
-            if np.any(np.diff(indexes) != 1):
-                where_bad = np.argwhere(np.diff(indexes) > 1).squeeze() + 1
-                matched_bonsai.loc[indexes[where_bad], 'trial_num'] = 0
+            while not finished:
+                if np.any(np.diff(indexes) != 1):
+                    where_bad = np.argwhere(np.diff(indexes) > 1).squeeze() + 1
+                    matched_bonsai.loc[indexes[where_bad], 'trial_num'] = 0
+                    indexes = matched_bonsai.index[matched_bonsai.trial_num == trial]
+                else:
+                    finished = True
 
         # now that the trials are reassigned, add the trial data
         matched_bonsai = assign_trial_parameters(matched_bonsai, trials)
