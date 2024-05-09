@@ -416,6 +416,7 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
 
     # Get resultant on second half of the data
     half_period_angles_2 = fk.wrap(angles[angles >= np.pi], bound=np.deg2rad(180.1))
+    half_period_angles_2[0] = 0.0
     half_period_mags_2 = magnitudes[angles >= np.pi]
 
     res_mag_2, res_angle_2 = resultant_vector(half_period_angles_2, half_period_mags_2, 1)
@@ -423,6 +424,7 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     res_angle_2 += np.pi
     closest_idx2 = np.argmin(np.abs(angles - res_angle_2))
     resp2 = magnitudes[closest_idx2]
+    angle2 = angles[closest_idx2]
 
     if resp1 > resp2:
         pref = res_angle_1
@@ -643,7 +645,7 @@ def parse_trial_frames(df, pre_trial=0, post_trial=0):
     trial_idx_frames = df[df.trial_num >= 1.0].groupby(['trial_num']).apply(
         lambda x: [x.index[0] - int(pre_trial * processing_parameters.wf_frame_rate),
                    x.index[0], x.index[-1],
-                   x.index[-1] + int(post_trial * processing_parameters.wf_frame_rate) + 1]
+                   x.index[-1] + int(post_trial * processing_parameters.wf_frame_rate)]
                 ).to_numpy()
     trial_idx_frames = np.vstack(trial_idx_frames)
 
@@ -673,3 +675,23 @@ def parse_trial_frames(df, pre_trial=0, post_trial=0):
 
     traces = pd.concat(traces, axis=0).reset_index(drop=True)
     return traces, trial_idx_frames
+
+
+def calculate_dsi_osi_fit(angles, magnitudes, pref):
+    # DSI with directions
+    dir_pref_idx = np.argwhere(angles == pref).squeeze()
+    dir_null_idx = np.argmin(np.abs(angles - fk.wrap(pref + 180, bound=360.))).squeeze()
+    mag_dir_pref = magnitudes[dir_pref_idx]
+    mag_dir_null = magnitudes[dir_null_idx]
+    dsi = 1 - (mag_dir_null / mag_dir_pref)
+
+    # OSI from direction data
+    mean_mag_ori_pref = (mag_dir_pref + mag_dir_null) / 2
+    null_idxs_ori_1 = np.argmin(np.abs(angles - fk.wrap(pref + 90, bound=360.))).squeeze()
+    null_idxs_ori_2 = np.argmin(np.abs(angles - fk.wrap(pref - 90, bound=360.))).squeeze()
+    mag_ori_1 = magnitudes[null_idxs_ori_1]
+    mag_ori_2 = magnitudes[null_idxs_ori_2]
+    mean_mag_ori_null = (mag_ori_1 + mag_ori_2) / 2
+    osi = 1 - (mean_mag_ori_null / mean_mag_ori_pref)
+
+    return dsi, osi

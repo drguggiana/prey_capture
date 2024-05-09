@@ -37,7 +37,7 @@ def drop_partial_or_long_trials(df, min_trial_length=4.5, max_trial_length=5.5):
 
     # Drop trials that are longer than max_trial_length (errors in trial number indexing)
     long_trials = trial_lengths[trial_lengths > max_trial_length].index
-    df = df.drop(df[df.trial_num.isin(long_trials)].index)
+    df = df.drop(df[df.trial_num.isin(long_trials)].index).reset_index(drop=True)
 
     return df
 
@@ -159,13 +159,13 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
     std_activity = activity_df.loc[:, cells].apply(np.std)
 
     # -- 1.1 Get the std or cell response, and mean, max and AUC of response during trials
-    trial_max_activity = (activity_df.loc[activity_df.trial_num > 0]
+    trial_max_activity = (activity_df.loc[activity_df.trial_num > 0, :]
                           .groupby(['trial_num', direction_label, 'orientation'])[cells]
                           .agg(np.max).copy().reset_index())
-    trial_mean_activity = (activity_df.loc[activity_df.trial_num > 0]
+    trial_mean_activity = (activity_df.loc[activity_df.trial_num > 0, :]
                            .groupby(['trial_num', direction_label, 'orientation'])[cells]
                            .agg(np.mean).copy().reset_index())
-    trial_auc_activity = (activity_df.loc[activity_df.trial_num > 0]
+    trial_auc_activity = (activity_df.loc[activity_df.trial_num > 0, :]
                           .groupby(['trial_num', direction_label, 'orientation'])[cells]
                           .agg(np.trapz).copy().reset_index())
 
@@ -349,7 +349,10 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
                                          ori_fit_curve[:, 0], ori_fit_curve[:, 1],
                                          type=processing_parameters.gof_type)
 
-        # -- 3.1 Bootstrap fit and responsivity using all trials
+        # -- 3.1 Calculate the direction and orientation selectivity indices using the peak response found by the fit
+        fit_dsi, fit_osi = tuning.calculate_dsi_osi_fit(unique_dirs, norm_mean_dir[cell].to_numpy(), real_pref_dir)
+
+        # -- 3.2 Bootstrap fit and responsivity using all trials
         # Split the data with an 80-20 train-test split. Fit the tuning curve on the training data and calculate
         # goodness of fit on the test data.
         bootstrap_dir_gof, bootstrap_pref_dir, bootstrap_real_pref_dir = \
@@ -366,16 +369,16 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
                                           num_shuffles=bootstrap_shuffles, mean=mean_guess_ori)
         p_ori_gof = percentileofscore(bootstrap_ori_gof[~np.isnan(bootstrap_ori_gof)], ori_gof, kind='mean') / 100.
 
-        # --- 4. Get resultant vector, variance, DSI and OSI using the tuning curves (normalized means) --- #
+        # --- 4. Get resultant vector, variance, DSI and OSI using the resultant vectors --- #
 
         # Use the direction dataset first
         theta_dirs = np.deg2rad(unique_dirs)
         dir_magnitudes = norm_mean_dir[cell].copy().to_numpy()
 
-        dsi_nasal_temporal, dsi_abs, osi, resultant_dir_length, resultant_dir, null_dir = \
+        resultant_dsi_nasal_temporal, resultant_dsi_abs, resultant_osi, resultant_dir_length, resultant_dir, resultant_null_dir = \
             tuning.calculate_dsi_osi_resultant(theta_dirs, dir_magnitudes)
         resultant_dir = fk.wrap(np.rad2deg(resultant_dir), bound=360.)
-        null_dir = fk.wrap(np.rad2deg(null_dir), bound=360.)
+        resultant_null_dir = fk.wrap(np.rad2deg(resultant_null_dir), bound=360.)
         responsivity_dir = resultant_dir_length
 
         # For the orientation dataset
@@ -405,9 +408,9 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
             bootstrap_null_dir = fk.wrap(bootstrap_null_dir, bound=360.)
 
             bootstrap_responsivity_dir = bootstrap_resultant_dir[:, 0]
-            p_dsi_nasal_temporal_bootstrap = percentileofscore(bootstrap_dsi_nasal_temporal, dsi_nasal_temporal, kind='mean') / 100.
-            p_dsi_abs_bootstrap = percentileofscore(bootstrap_dsi_abs, dsi_abs, kind='mean') / 100.
-            p_osi_bootstrap = percentileofscore(bootstrap_osi, osi, kind='mean') / 100.
+            p_dsi_nasal_temporal_bootstrap = percentileofscore(bootstrap_dsi_nasal_temporal, resultant_dsi_nasal_temporal, kind='mean') / 100.
+            p_dsi_abs_bootstrap = percentileofscore(bootstrap_dsi_abs, resultant_dsi_abs, kind='mean') / 100.
+            p_osi_bootstrap = percentileofscore(bootstrap_osi, resultant_osi, kind='mean') / 100.
             p_responsivity_dir_bootstrap = percentileofscore(bootstrap_responsivity_dir, responsivity_dir, kind='mean') / 100.
 
             # For orientation data
@@ -441,10 +444,10 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
             = tuning.boostrap_dsi_osi_resultant(norm_direction_activity_by_trial[[direction_label, 'trial_num', cell]],
                                                 sampling_method='shuffle_trials', num_shuffles=bootstrap_shuffles)
 
-        p_dsi_nasal_temporal_shuffle = percentileofscore(shuffle_dsi_nasal_temporal, dsi_nasal_temporal, kind='mean') / 100.
+        p_dsi_nasal_temporal_shuffle = percentileofscore(shuffle_dsi_nasal_temporal, resultant_dsi_nasal_temporal, kind='mean') / 100.
         shuffle_responsivity_dir = shuffle_resultant_dir[:, 0]
-        p_dsi_abs_shuffle = percentileofscore(shuffle_dsi_abs, dsi_abs, kind='mean') / 100.
-        p_osi_shuffle = percentileofscore(shuffle_osi, osi, kind='mean') / 100.
+        p_dsi_abs_shuffle = percentileofscore(shuffle_dsi_abs, resultant_dsi_abs, kind='mean') / 100.
+        p_osi_shuffle = percentileofscore(shuffle_osi, resultant_osi, kind='mean') / 100.
         p_responsivity_dir_shuffle = percentileofscore(shuffle_responsivity_dir, responsivity_dir, kind='mean') / 100.
 
         # For orientation data
@@ -470,14 +473,14 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
                           std_dir[cell].to_numpy(), norm_std_dir[cell].to_numpy(),
                           sem_dir[cell].to_numpy(), norm_sem_dir[cell].to_numpy(),
                           dir_fit, dir_fit_curve, dir_gof, bootstrap_dir_gof, p_dir_gof,
-                          pref_dir, bootstrap_pref_dir, real_pref_dir, bootstrap_real_pref_dir,
+                          pref_dir, bootstrap_pref_dir, real_pref_dir, bootstrap_real_pref_dir, fit_dsi,
                           (resultant_dir_length, resultant_dir), bootstrap_resultant_dir, shuffle_resultant_dir,
                           responsivity_dir, bootstrap_responsivity_dir, p_responsivity_dir_bootstrap,
                           shuffle_responsivity_dir, p_responsivity_dir_shuffle,
-                          null_dir, bootstrap_null_dir, shuffle_null_dir,
-                          dsi_nasal_temporal, bootstrap_dsi_nasal_temporal, p_dsi_nasal_temporal_bootstrap,
+                          resultant_null_dir, bootstrap_null_dir, shuffle_null_dir,
+                          resultant_dsi_nasal_temporal, bootstrap_dsi_nasal_temporal, p_dsi_nasal_temporal_bootstrap,
                           shuffle_dsi_nasal_temporal, p_dsi_nasal_temporal_shuffle,
-                          dsi_abs, bootstrap_dsi_abs, p_dsi_abs_bootstrap,
+                          resultant_dsi_abs, bootstrap_dsi_abs, p_dsi_abs_bootstrap,
                           shuffle_dsi_abs, p_dsi_abs_shuffle]
 
         orientation_data = [mean_orientation_activity_by_trial[['orientation', cell]].to_numpy(),
@@ -487,11 +490,11 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
                             std_ori[cell].to_numpy(), norm_std_ori[cell].to_numpy(),
                             sem_ori[cell].to_numpy(), norm_sem_ori[cell].to_numpy(),
                             ori_fit, ori_fit_curve, ori_gof, bootstrap_ori_gof, p_ori_gof,
-                            pref_ori, null_ori, bootstrap_pref_ori, real_pref_ori, bootstrap_real_pref_ori,
+                            pref_ori, null_ori, bootstrap_pref_ori, real_pref_ori, bootstrap_real_pref_ori, fit_osi,
                             (resultant_ori_length, resultant_ori), bootstrap_resultant_ori, shuffle_resultant_ori,
                             responsivity_ori, bootstrap_responsivity_ori, p_responsivity_ori_bootstrap,
                             shuffle_responsivity_ori, p_responsivity_ori_shuffle,
-                            osi, bootstrap_osi, p_osi_bootstrap, shuffle_osi, p_osi_shuffle]
+                            resultant_osi, bootstrap_osi, p_osi_bootstrap, shuffle_osi, p_osi_shuffle]
 
         cell_data = vis_resp_data + direction_data + orientation_data
         cell_data_list.append(cell_data)
@@ -510,14 +513,14 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
                          'std_dir', 'std_norm_dir',
                          'sem_dir', 'sem_norm_dir',
                          'fit_dir', 'fit_curve_dir', 'gof_dir', 'bootstrap_gof_dir', 'p_gof_dir',
-                         'pref_dir', 'bootstrap_pref_dir', 'real_pref_dir', 'bootstrap_real_pref_dir',
+                         'pref_dir', 'bootstrap_pref_dir', 'real_pref_dir', 'bootstrap_real_pref_dir', 'fit_dsi',
                          'resultant_dir', 'bootstrap_resultant_dir', 'shuffle_resultant_dir',
                          'responsivity_dir', 'bootstrap_responsivity_dir', 'bootstrap_p_responsivity_dir',
                          'shuffle_responsivity_dir', 'shuffle_p_responsivity_dir',
-                         'null_dir', 'bootstrap_null_dir', 'shuffle_null_dir',
-                         'dsi_nasal_temporal', 'bootstrap_dsi_nasal_temporal', 'bootstrap_p_dsi_nasal_temporal',
+                         'resultant_null_dir', 'bootstrap_null_dir', 'shuffle_null_dir',
+                         'resultant_dsi_nasal_temporal', 'bootstrap_dsi_nasal_temporal', 'bootstrap_p_dsi_nasal_temporal',
                          'shuffle_dsi_nasal_temporal', 'shuffle_p_dsi_nasal_temporal',
-                         'dsi_abs', 'bootstrap_dsi_abs', 'bootstrap_p_dsi_abs',
+                         'resultant_dsi_abs', 'bootstrap_dsi_abs', 'bootstrap_p_dsi_abs',
                          'shuffle_dsi_abs', 'shuffle_p_dsi_abs']
 
     orientation_columns = ['resp_ori',
@@ -528,10 +531,11 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
                            'sem_ori', 'sem_norm_ori',
                            'fit_ori', 'fit_curve_ori', 'gof_ori', 'bootstrap_gof_ori', 'p_gof_ori',
                            'pref_ori', 'null_ori', 'bootstrap_pref_ori', 'real_pref_ori', 'bootstrap_real_pref_ori',
+                           'fit_osi',
                            'resultant_ori', 'bootstrap_resultant_ori', 'shuffle_resultant_ori',
                            'responsivity_ori', 'bootstrap_responsivity_ori', 'bootstrap_p_responsivity_ori',
                            'shuffle_responsivity_ori', 'shuffle_p_responsivity_ori',
-                           'osi', 'bootstrap_osi', 'bootstrap_p_osi', 'shuffle_osi', 'shuffle_p_osi']
+                           'resultant_osi', 'bootstrap_osi', 'bootstrap_p_osi', 'shuffle_osi', 'shuffle_p_osi']
 
     data_cols = vis_resp_columns + direction_columns + orientation_columns
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
@@ -930,4 +934,3 @@ if __name__ == '__main__':
             print(entry_data)
 
     print("Done calculating tuning curves!")
-

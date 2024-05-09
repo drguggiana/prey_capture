@@ -535,7 +535,7 @@ fp.set_theme()
 in2cm = 1./2.54
 
 # define the experimental conditions
-results = ['multi', 'repeat', 'control', 'fullfield']    # 'multi', 'repeat', 'control', 'fullfield'
+results = ['multi', 'repeat', 'control']    # 'multi', 'repeat', 'control', 'fullfield'
 lightings = ['normal', 'dark']
 rigs = ['', 'VWheelWF', 'VTuningWF']
 analysis_type = 'agg_all'
@@ -738,9 +738,14 @@ for result, light, rig in itertools.product(results, lightings, rigs):
     count_fixed_vis_resp = fixed_vis_resp.groupby(['mouse', 'day']).old_index.size()
     count_fixed_vis_resp = count_fixed_vis_resp.reset_index().rename(columns={'old_index': 'visual'})
 
-    count_vis_resp_fixed = pd.concat([count_fixed_dir_tuned.drop(['mouse', 'day'], axis=1),
-                                     count_fixed_ori_tuned.drop(['mouse', 'day'], axis=1),
-                                     count_fixed_vis_resp], axis=1)
+    count_fixed_gen_resp = fixed_gen_resp.groupby(['mouse', 'day']).old_index.size()
+    count_fixed_gen_resp = count_fixed_gen_resp.reset_index().rename(columns={'old_index': 'general'})
+
+    count_vis_resp_fixed = pd.concat([count_fixed_gen_resp,
+                                      count_fixed_vis_resp.drop(['mouse', 'day'], axis=1),
+                                      count_fixed_ori_tuned.drop(['mouse', 'day'], axis=1),
+                                      count_fixed_dir_tuned.drop(['mouse', 'day'], axis=1),
+                                      ], axis=1)
 
     with pd.HDFStore(data_save_path, 'a') as store:
         if f'count_vis_resp_{session_shorthand[0]}' in store.keys():
@@ -773,9 +778,14 @@ for result, light, rig in itertools.product(results, lightings, rigs):
     count_free_vis_resp = free_vis_resp.groupby(['mouse', 'day']).old_index.size()
     count_free_vis_resp = count_free_vis_resp.reset_index().rename(columns={'old_index': 'visual'})
 
-    count_vis_resp_free = pd.concat([count_free_dir_tuned.drop(['mouse', 'day'], axis=1),
+    count_free_gen_resp = free_gen_resp.groupby(['mouse', 'day']).old_index.size()
+    count_free_gen_resp = count_free_gen_resp.reset_index().rename(columns={'old_index': 'general'})
+
+    count_vis_resp_fixed = pd.concat([count_free_gen_resp,
+                                      count_free_vis_resp.drop(['mouse', 'day'], axis=1),
                                       count_free_ori_tuned.drop(['mouse', 'day'], axis=1),
-                                      count_free_vis_resp], axis=1)
+                                      count_free_dir_tuned.drop(['mouse', 'day'], axis=1),
+                                      ], axis=1)
 
     with pd.HDFStore(data_save_path, 'a') as store:
         if f'count_vis_resp_{session_shorthand[1]}' in store.keys():
