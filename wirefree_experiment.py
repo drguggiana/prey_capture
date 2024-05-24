@@ -60,6 +60,7 @@ class WirefreeExperiment(DataContainer):
         # Tuning curve data structures
         self.visual_tcs = None
         self.self_motion_tcs = None
+        self.running_modulated = None
 
 
     def save_hdf(self, file, attributes):
@@ -81,9 +82,11 @@ class WirefreeExperiment(DataContainer):
         
         self.visual_tcs = DataContainer()
         self.self_motion_tcs = DataContainer()
+        self.running_modulated = DataContainer()
 
         vis_tc_dict = {}
         self_motion_tc_dict = {}
+        run_mod_dict = {}
 
         with pd.HDFStore(tc_file, 'r') as tcf:
 
@@ -95,14 +98,18 @@ class WirefreeExperiment(DataContainer):
             for key in keys_to_keep:
                 if any([x in key for x in processing_parameters.activity_datasets]):
                     vis_tc_dict[key[1:]] = tcf[key]
+
+                elif 'running_modulated' in key:
+                    run_mod_dict[key[1:]] = tcf[key]
                 else:
-                    if ('counts' in key) or ('edges' in key):
+                    if ('counts' in key) or ('edges' in key) or ('props' in key):
                         pass
                     else:
                         self_motion_tc_dict[key[1:]] = tcf[key]
 
         self.visual_tcs.load_from_dict(vis_tc_dict)
         self.self_motion_tcs.load_from_dict(self_motion_tc_dict)
+        self.running_modulated.load_from_dict(run_mod_dict)
 
     def _load_preprocessing(self, full_kinem=False):
         """
