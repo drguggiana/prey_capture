@@ -79,11 +79,6 @@ if __name__ == '__main__':
         activity_ds_dict['norm_deconvolved_fluor'] = norm_fluor
         activity_ds_dict['norm_inferred_spikes'] = norm_spikes
 
-        # dff = tuning.calculate_dff(deconvolved_fluor, baseline_type='quantile', quantile=0.08)
-        # norm_dff = tuning.normalize_responses(dff)
-        # activity_ds_dict['dff'] = dff
-        # activity_ds_dict['norm_dff'] = norm_dff
-
         # Filter trials by head pitch if freely moving
         if rig in ['VTuningWF', 'VTuning']:
             pitch_lower_cutoff = processing_parameters.head_pitch_cutoff[0]
@@ -149,6 +144,9 @@ if __name__ == '__main__':
                 raise ValueError(f'Unknown activity dataset type: {ds_name}')
 
             activity_ds = activity_ds_dict[ds_name].copy()
+
+            trial_params = activity_ds[['trial_num', 'direction_wrapped', 'orientation']].groupby('trial_num').first().reset_index()
+
             props = calculate_visual_tuning(activity_ds, activity_ds_type,
                                             metric_for_analysis=processing_parameters.analysis_metric,
                                             bootstrap_shuffles=processing_parameters.bootstrap_repeats)
@@ -164,6 +162,7 @@ if __name__ == '__main__':
                     props.to_hdf(tc_file, feature)
                 else:
                     props.to_hdf(tc_file, feature)
+                    trial_params.to_hdf(tc_file, f'{ds_name}_trial_params')
 
         print(f'Updated visual tuning in {os.path.basename(tc_file)}')
 

@@ -62,6 +62,9 @@ class WirefreeExperiment(DataContainer):
         self.self_motion_tcs = None
         self.running_modulated = None
 
+        # Other useful data
+        self.cells_to_match = None
+
 
     def save_hdf(self, file, attributes):
         for attribute in attributes:

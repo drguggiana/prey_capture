@@ -642,11 +642,13 @@ def calculate_dff(ds, baseline_type='iti_mean', **kwargs):
 
 
 def parse_trial_frames(df, pre_trial=0, post_trial=0):
+
     trial_idx_frames = df[df.trial_num >= 1.0].groupby(['trial_num']).apply(
         lambda x: [x.index[0] - int(pre_trial * processing_parameters.wf_frame_rate),
                    x.index[0], x.index[-1],
                    x.index[-1] + int(post_trial * processing_parameters.wf_frame_rate)]
                 ).to_numpy()
+
     trial_idx_frames = np.vstack(trial_idx_frames)
 
     if trial_idx_frames[0, 0] < df.index[0]:
@@ -658,19 +660,10 @@ def parse_trial_frames(df, pre_trial=0, post_trial=0):
     if trial_idx_frames[-1, -2] == trial_idx_frames[-1, -1]:
         trial_idx_frames[-1, -2:] = int(df.index[-1]) - 1
 
-    # Get the shifts from the zero point (important for plotting)
-    max_zero_idx_shift = np.max(trial_idx_frames[:, 1] - trial_idx_frames[:, 0])
-
     traces = []
     for i, frame in enumerate(trial_idx_frames):
         df_slice = df.iloc[frame[0]:frame[-1], :].copy()
-        df_slice['frame_num'] = df_slice.loc[frame[1], 'trial_num']
-        # df_slice['direction'] = df_slice.loc[frame[1] + 1, 'direction']
-        # df_slice['direction_wrapped'] = df_slice.loc[frame[1] + 1, 'direction_wrapped']
-        # df_slice['orientation'] = df_slice.loc[frame[1] + 1, 'orientation']
-        # zero_idx_shift = np.abs((frame[1] - frame[0]) - max_zero_idx_shift)
-        # df_slice['zero_idx_shift'] = zero_idx_shift
-
+        df_slice['frame_num'] = df_slice.trial_num.max()
         traces.append(df_slice)
 
     traces = pd.concat(traces, axis=0).reset_index(drop=True)

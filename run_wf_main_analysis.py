@@ -21,6 +21,7 @@ import functions_data_handling as fdh
 import functions_kinematic as fk
 import functions_misc as misc
 import functions_plotting as fp
+import functions_tuning as ftuning
 import paths
 import processing_parameters
 
@@ -103,6 +104,47 @@ def make_aggregate_file(search_string):
         return agg_dict
 
 
+def check_for_fit_si(data_dict, activity_ds):
+    update_keys = [key for key in data_dict.keys() if activity_ds in key]
+
+    for key in update_keys:
+
+        if 'fit_dsi' not in data_dict[key].columns:
+            print('calculating DSI and OSI from fit...')
+
+            fit_dsi_list = []
+            fit_osi_list = []
+
+            for i, row in data_dict[key].iterrows():
+                tcs = row['mean_norm_dir']
+                angles = tcs[:, 0]
+                magnitudes = tcs[:, 1]
+                pref = row['real_pref_dir']
+                fit_dsi, fit_osi = ftuning.calculate_dsi_osi_fit(angles, magnitudes, pref)
+                fit_dsi_list.append(fit_dsi)
+                fit_osi_list.append(fit_osi)
+
+            data_dict[key]['fit_dsi'] = fit_dsi_list
+            data_dict[key]['fit_osi'] = fit_osi_list
+
+        else:
+            pass
+
+    return data_dict
+
+
+def flip_gen_resp(data_dict, activity_ds):
+    print('Flipping general responsiveness...')
+
+    update_keys = [key for key in data_dict.keys() if activity_ds in key]
+
+    for key in update_keys:
+        gen_resp = data_dict[key]['is_gen_responsive'].astype(bool)
+        data_dict[key]['is_gen_responsive'] = ~gen_resp
+
+    return data_dict
+
+
 def get_vis_tuned_cells(ds: pd.DataFrame, vis_stim: str = 'dir', sel_thresh: float = 0.5) -> pd.DataFrame:
     """
     Filter the input DataFrame to select cells that are visually tuned based on the specified visual stimulus.
@@ -123,20 +165,44 @@ def get_vis_tuned_cells(ds: pd.DataFrame, vis_stim: str = 'dir', sel_thresh: flo
 
     data = ds.copy()
 
-    if vis_stim == 'dir':
-        # Cells cannot be both responsive to all visual stimuli and to directions
-        cells = data[(data['is_vis_responsive'] == 0) & (data['is_dir_responsive'] == 1) &
-                     (data['dsi_abs'] >= sel_thresh) & (data['responsivity_ori'] < sel_thresh)]
+    if vis_stim == 'dir-gen':
+        cells = data[(data['is_dir_responsive'] == 1)
+                     & (data['fit_dsi'] >= sel_thresh)
+                     & (data['is_gen_responsive'] == 0)
+                     ]
+        return cells
+
+    elif vis_stim == 'dir':
+        cells = data[(data['is_dir_responsive'] == 1)
+                     & (data['fit_dsi'] >= sel_thresh)
+                     & (data['is_gen_responsive'] == 1)
+                     ]
+        return cells
+
+    elif vis_stim == 'ori-gen':
+        cells = data[(data['is_ori_responsive'] == 1)
+                     & (data['fit_osi'] >= sel_thresh)
+                     & (data['is_gen_responsive'] == 0)
+                     ]
         return cells
 
     elif vis_stim == 'ori':
-        # Cells cannot be both responsive to all visual stimuli and to orientations
-        cells = data[(data['is_vis_responsive'] == 0) & (data['is_ori_responsive'] == 1) &
-                     (data['responsivity_ori'] >= sel_thresh) & (data['dsi_abs'] < sel_thresh)]
+        cells = data[(data['is_ori_responsive'] == 1)
+                     & (data['fit_osi'] >= sel_thresh)
+                     & (data['is_gen_responsive'] == 1)
+                     ]
+        return cells
+
+    elif vis_stim == 'vis-gen':
+        cells = data[(data['is_vis_responsive'] == 1)
+                     & (data['is_gen_responsive'] == 0)
+                     ]
         return cells
 
     elif vis_stim == 'vis':
-        cells = data[(data['is_vis_responsive'] == 1) & (data['is_gen_responsive'] == 0)]
+        cells = data[(data['is_vis_responsive'] == 1)
+                     & (data['is_gen_responsive'] == 1)
+                     ]
         return cells
 
     elif vis_stim == 'gen':
@@ -146,6 +212,97 @@ def get_vis_tuned_cells(ds: pd.DataFrame, vis_stim: str = 'dir', sel_thresh: flo
     else:
         return Exception('Invalid vis_stim')
 
+
+def find_overlap_tuning(dir_tuned, ori_tuned):
+    # Find cells that are both direction and orientation tuned, and figure out what to do with them.
+    _, comm1, comm2 = np.intersect1d(dir_tuned.index, ori_tuned.index, return_indices=True)
+    both_tuned = dir_tuned.iloc[comm1].copy()
+
+    # Remove cells tuned to both from each category
+    dir_tuned = dir_tuned.drop(dir_tuned.index[comm1])
+    ori_tuned = ori_tuned.drop(ori_tuned.index[comm2])
+
+    return dir_tuned, ori_tuned, both_tuned
+
+
+def update_vis_tuning(old_vis_resp, full_ds, dir_tuned, ori_tuned, both_tuned):
+    resp_cells = np.unique(np.concatenate([dir_tuned.index, ori_tuned.index, both_tuned.index]))
+    not_in_resp_cells = np.setdiff1d(resp_cells, old_vis_resp.index, assume_unique=False)
+    new_vis_resp = pd.concat([old_vis_resp, full_ds.iloc[not_in_resp_cells, :]])
+    new_vis_resp = new_vis_resp.reset_index().drop_duplicates(subset=['index'])
+    return new_vis_resp
+
+
+def generate_count_tuned_df(gen_resp, vis_resp, vis_no_gen_resp, ori_tuned, ori_no_gen_tuned, dir_tuned, dir_no_gen_tuned):
+    count_gen_resp = gen_resp.groupby(['mouse', 'day']).old_index.size()
+    count_gen_resp = count_gen_resp.reset_index().rename(columns={'old_index': 'general'})
+
+    count_vis_resp = vis_resp.groupby(['mouse', 'day']).old_index.size()
+    count_vis_resp = count_vis_resp.reset_index().rename(columns={'old_index': 'visual'})
+
+    count_vis_no_gen_resp = vis_no_gen_resp.groupby(['mouse', 'day']).old_index.size()
+    count_vis_no_gen_resp = count_vis_no_gen_resp.reset_index().rename(columns={'old_index': 'visual_no_gen'})
+
+    count_ori_tuned = ori_tuned.groupby(['mouse', 'day']).old_index.size()
+    count_ori_tuned = count_ori_tuned.reset_index().rename(columns={'old_index': 'orientation'})
+
+    count_ori_no_gen_tuned = ori_no_gen_tuned.groupby(['mouse', 'day']).old_index.size()
+    count_ori_no_gen_tuned = count_ori_no_gen_tuned.reset_index().rename(columns={'old_index': 'orientation_no_gen'})
+
+    count_dir_tuned = dir_tuned.groupby(['mouse', 'day']).old_index.size()
+    count_dir_tuned = count_dir_tuned.reset_index().rename(columns={'old_index': 'direction'})
+
+    count_dir_no_gen_tuned = dir_no_gen_tuned.groupby(['mouse', 'day']).old_index.size()
+    count_dir_no_gen_tuned = count_dir_no_gen_tuned.reset_index().rename(columns={'old_index': 'direction_no_gen'})
+
+    count_resp = pd.concat([count_gen_resp,
+                                 count_vis_resp.drop(['mouse', 'day'], axis=1),
+                                 count_vis_no_gen_resp.drop(['mouse', 'day'], axis=1),
+                                 count_ori_tuned.drop(['mouse', 'day'], axis=1),
+                                 count_ori_no_gen_tuned.drop(['mouse', 'day'], axis=1),
+                                 count_dir_tuned.drop(['mouse', 'day'], axis=1),
+                                 count_dir_no_gen_tuned.drop(['mouse', 'day'], axis=1),
+                                ], axis=1)
+
+    return count_resp
+
+
+def generate_frac_tuned_df(cell_count, gen_resp, vis_resp, vis_no_gen_resp, ori_tuned, ori_no_gen_tuned, dir_tuned,
+                           dir_no_gen_tuned):
+
+    frac_gen_resp = gen_resp.groupby(['mouse', 'day']).old_index.size() / cell_count
+    frac_gen_resp = frac_gen_resp.reset_index().rename(columns={0: 'general'})
+
+    frac_vis_resp = vis_resp.groupby(['mouse', 'day']).old_index.size() / cell_count
+    frac_vis_resp = frac_vis_resp.reset_index().rename(columns={0: 'visual'})
+
+    frac_vis_no_gen_resp = vis_no_gen_resp.groupby(['mouse', 'day']).old_index.size() / cell_count
+    frac_vis_no_gen_resp = frac_vis_no_gen_resp.reset_index().rename(columns={0: 'visual_no_gen'})
+
+    frac_ori_tuned = ori_tuned.groupby(['mouse', 'day']).old_index.size() / cell_count
+    frac_ori_tuned = frac_ori_tuned.reset_index().rename(columns={0: 'orientation'})
+
+    frac_ori_no_gen_tuned = ori_no_gen_tuned.groupby(['mouse', 'day']).old_index.size() / cell_count
+    frac_ori_no_gen_tuned = frac_ori_no_gen_tuned.reset_index().rename(columns={0: 'orientation_no_gen'})
+
+    frac_dir_tuned = dir_tuned.groupby(['mouse', 'day']).old_index.size() / cell_count
+    frac_dir_tuned = frac_dir_tuned.reset_index().rename(columns={0: 'direction'})
+
+    frac_dir_no_gen_tuned = dir_no_gen_tuned.groupby(['mouse', 'day']).old_index.size() / cell_count
+    frac_dir_no_gen_tuned = frac_dir_no_gen_tuned.reset_index().rename(columns={0: 'direction_no_gen'})
+
+    frac_resp = pd.concat([frac_gen_resp,
+                                frac_vis_resp.drop(['mouse', 'day'], axis=1),
+                                frac_vis_no_gen_resp.drop(['mouse', 'day'], axis=1),
+                                frac_ori_tuned.drop(['mouse', 'day'], axis=1),
+                                frac_ori_no_gen_tuned.drop(['mouse', 'day'], axis=1),
+                                frac_dir_tuned.drop(['mouse', 'day'], axis=1),
+                                frac_dir_no_gen_tuned.drop(['mouse', 'day'], axis=1)
+                                ], axis=1)
+
+    frac_resp.fillna(0, inplace=True)
+
+    return frac_resp
 
 
 def kine_fraction_tuned(ds: pd.DataFrame, use_test: bool = True, include_responsivity: bool = True,
@@ -240,9 +397,9 @@ def find_tuned_cell_indices(ref_data: pd.DataFrame, comp_data: pd.DataFrame, sti
 
     # Find the cells in the reference dataset that are tuned
     if stim_kind == 'orientation':
-        index_column = 'responsivity_ori'
+        index_column = 'fit_osi'
     elif stim_kind == 'direction':
-        index_column = 'dsi_abs'
+        index_column = 'fit_dsi'
     else:
         raise Exception('Invalid stim_kind')
 
@@ -354,10 +511,6 @@ def pref_angle_shifts(ds1: pd.DataFrame, ds2: pd.DataFrame, ci_width_cutoff: int
             # The cell is not tuned
             sig_shift = 0
 
-        # wrap to negative domain for plotting
-        # pref_1 = fk.wrap_negative(pref_1, bound=360. / (2 * multiplier))
-        # pref_2 = fk.wrap_negative(pref_2, bound=360. / (2 * multiplier))
-
         shifts.append([idxRow, pref_1, ci_width_1, pref_2, ci_width_2, delta_pref, sig_shift, cell_1.mouse, cell_1.day])
 
     shifts = pd.DataFrame(data=shifts,
@@ -398,7 +551,7 @@ def calculate_pref_angle_shifts(ref_ds: pd.DataFrame, comp_ds: pd.DataFrame, sti
 
     # Calculate the shifts in tuning
     shifts = pref_angle_shifts(ref_ds.iloc[indices, :].copy(), comp_ds.iloc[indices, :].copy(),
-                           ci_width_cutoff=ci_width, stim_kind=stim_kind, method='resultant')
+                           ci_width_cutoff=ci_width, stim_kind=stim_kind, method='fit')
 
     # Calculate the residuals and the root mean square error of the residuals
     residuals = shifts['pref_2'].to_numpy() - shifts['pref_1'].to_numpy()
@@ -424,9 +577,9 @@ def calculate_delta_selectivity(ref_ds: pd.DataFrame, comp_ds: pd.DataFrame, cut
         """
 
     if stim_kind == 'orientation':
-        sel_key = 'responsivity_ori'
+        sel_key = 'fit_osi'
     elif stim_kind == 'direction':
-        sel_key = 'dsi_abs'
+        sel_key = 'fit_dsi'
     else:
         raise Exception('Invalid stim_kind')
 
@@ -535,7 +688,7 @@ fp.set_theme()
 in2cm = 1./2.54
 
 # define the experimental conditions
-results = ['multi', 'repeat', 'control']    # 'multi', 'repeat', 'control', 'fullfield'
+results = ['multi', 'control', 'repeat']    # 'multi', 'control', 'repeat', 'fullfield'
 lightings = ['normal', 'dark']
 rigs = ['', 'VWheelWF', 'VTuningWF']
 analysis_type = 'agg_all'
@@ -583,11 +736,6 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                 continue
 
     save_suffix = f"{parsed_search['result']}_{parsed_search['lighting']}_{parsed_search['rig']}"
-    figure_save_path = os.path.join(paths.wf_figures_path, save_suffix)
-    data_save_path = os.path.join(paths.wf_figures_path, save_suffix, 'stats.hdf5')
-
-    if not os.path.exists(figure_save_path):
-        os.makedirs(figure_save_path)
 
     # Set color themes depending on experiment type
     if parsed_search['result'] == 'repeat':
@@ -630,599 +778,539 @@ for result, light, rig in itertools.product(results, lightings, rigs):
         print(f"Could not find the file {curated_cell_matches_path}. Continuing with CaImAn matches...")
         curated_matches = None
 
-    # Get the cell matches for the current dataset and plot a scatter plot of the fraction of cells matched
+    # Load the correct dataset
     cell_kind = 'all_cells'
-    activity_dataset = f'{processing_parameters.activity_datasets[0]}_props'
 
-    try:
-        match_nums = data_dict['cell_matches'].groupby(['mouse', 'day'])[session_types[0]].count().values
-    except KeyError:
-        match_nums = data_dict['cell_matches'].groupby(['mouse', 'day'])[session_shorthand[0]].count().values
-    num0 = data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'].groupby(['mouse', 'day']).size().values
-    num1 = data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'].groupby(['mouse', 'day']).size().values
+    for activity_ds in processing_parameters.activity_datasets:
+        print(f'Working with {activity_ds} data...')
+        activity_dataset = f'{activity_ds}_props'
 
-    match_frac0 = match_nums/num0
-    match_frac1 = match_nums/num1
+        if 'still' in activity_dataset:
+            session_shorthand = [f + '_still' for f in session_shorthand]
 
-    line = hv.Curve((np.linspace(0, 1, 101), np.linspace(0, 1, 101))).opts(color='gray')
-    scatter = hv.Scatter((match_frac0, match_frac1))
-    scatter.opts(xlim=(0, 1.05), xlabel=f'Frac. Match {session_shorthand[0].title()}',
-                 ylim=(0, 1.05), ylabel=f'Frac. Match {session_shorthand[1].title()}',
-                 color=scatter_color_theme, width=500, height=500)
-    frac_cell_match = hv.Overlay([line, scatter])
-
-    save_path = os.path.join(figure_save_path, "frac_cells_matched.png")
-    frac_cell_match = fp.save_figure(frac_cell_match, save_path=save_path, fig_width=8, dpi=800, fontsize='paper',
-                                     target='save', display_factor=0.1)
-
-    with pd.HDFStore(data_save_path, 'a') as store:
-        if 'frac_cell_match' in store.keys():
-            del store['frac_cell_match']
-        store['frac_cell_match'] = pd.DataFrame(data={f'match_frac_{session_shorthand[0]}': match_frac0,
-                                                      f'match_frac_{session_shorthand[1]}': match_frac1})
-
-    # --- Get the visual responsivity of the cells --- #
-    # Create dataframes to store binary tuning information
-    fixed_cell_tunings = data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'][['old_index', 'mouse', 'day']].copy()
-    free_cell_tunings = data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'][['old_index', 'mouse', 'day']].copy()
-
-    # Cells that meet orientation selectivity criteria
-    fixed_ori_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
-                                          vis_stim='ori', sel_thresh=processing_parameters.selectivity_idx_cutoff)
-    free_ori_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
-                                         vis_stim='ori', sel_thresh=processing_parameters.selectivity_idx_cutoff)
-
-    # Cells that meet direction selectivity criteria
-    fixed_dir_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
-                                          vis_stim='dir', sel_thresh=processing_parameters.selectivity_idx_cutoff)
-    free_dir_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
-                                         vis_stim='dir', sel_thresh=processing_parameters.selectivity_idx_cutoff)
-
-    # Cells that meet visual responsivity criteria
-    fixed_vis_resp = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
-                                         vis_stim='vis', sel_thresh=processing_parameters.selectivity_idx_cutoff)
-    free_vis_resp = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
-                                        vis_stim='vis',sel_thresh=processing_parameters.selectivity_idx_cutoff)
-
-    # Cells that meet general responsivity criteria
-    fixed_gen_resp = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
-                                         vis_stim='gen', sel_thresh=processing_parameters.selectivity_idx_cutoff)
-    free_gen_resp = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
-                                        vis_stim='gen', sel_thresh=processing_parameters.selectivity_idx_cutoff)
-
-    # Find cells that are both direction and orientation tuned, and figure out what to do with them.
-    _, comm1, comm2 = np.intersect1d(free_dir_tuned.index, free_ori_tuned.index, return_indices=True)
-    free_both_tuned = free_dir_tuned.iloc[comm1].copy()
-
-    # Remove cells tuned to both from each category
-    free_dir_tuned = free_dir_tuned.drop(free_dir_tuned.index[comm1])
-    free_ori_tuned = free_ori_tuned.drop(free_ori_tuned.index[comm2])
-
-    _, comm1, comm2 = np.intersect1d(fixed_dir_tuned.index, fixed_ori_tuned.index, return_indices=True)
-    fixed_both_tuned = fixed_dir_tuned.iloc[comm1].copy()
-    fixed_dir_tuned = fixed_dir_tuned.drop(fixed_dir_tuned.index[comm1])
-    fixed_ori_tuned = fixed_ori_tuned.drop(fixed_ori_tuned.index[comm2])
-
-    # Double check cells that are visually responsive, make sure that all are contained in the vis_resp
-    free_resp_cells = np.unique(np.concatenate([free_dir_tuned.index, free_ori_tuned.index, free_both_tuned.index]))
-    not_in_free_resp_cells = np.setdiff1d(free_vis_resp.index, free_resp_cells, assume_unique=True)
-    free_vis_resp = pd.concat([free_vis_resp,
-                               data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'].iloc[not_in_free_resp_cells, :]])
-    free_vis_resp = free_vis_resp.reset_index().drop_duplicates(subset=['index'])
-
-    fixed_resp_cells = np.unique(np.concatenate([fixed_dir_tuned.index, fixed_ori_tuned.index, fixed_both_tuned.index]))
-    not_in_fixed_resp_cells = np.setdiff1d(fixed_vis_resp.index, fixed_resp_cells, assume_unique=True)
-    fixed_vis_resp = pd.concat([fixed_vis_resp,
-                                data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'].iloc[not_in_fixed_resp_cells, :]])
-    fixed_vis_resp = fixed_vis_resp.reset_index().drop_duplicates(subset=['index'])
-
-    # Assign the tunings to the binary tuning dataframes
-    free_cell_tunings['is_gen_resp'] = free_cell_tunings.index.isin(free_gen_resp.index)
-    free_cell_tunings['is_vis_resp'] = free_cell_tunings.index.isin(free_vis_resp.index)
-    free_cell_tunings['is_dir_tuned'] = free_cell_tunings.index.isin(free_dir_tuned.index)
-    free_cell_tunings['is_ori_tuned'] = free_cell_tunings.index.isin(free_ori_tuned.index)
-
-    fixed_cell_tunings['is_gen_resp'] = fixed_cell_tunings.index.isin(fixed_gen_resp.index)
-    fixed_cell_tunings['is_vis_resp'] = fixed_cell_tunings.index.isin(fixed_vis_resp.index)
-    fixed_cell_tunings['is_dir_tuned'] = fixed_cell_tunings.index.isin(fixed_dir_tuned.index)
-    fixed_cell_tunings['is_ori_tuned'] = fixed_cell_tunings.index.isin(fixed_ori_tuned.index)
-
-    # --- Get count of cells that are orientation. direction, and visually tuned --- #
-    # For fixed session
-    count_fixed_dir_tuned = fixed_dir_tuned.groupby(['mouse', 'day']).old_index.size()
-    count_fixed_dir_tuned = count_fixed_dir_tuned.reset_index().rename(columns={'old_index': 'direction'})
-
-    count_fixed_ori_tuned = fixed_ori_tuned.groupby(['mouse', 'day']).old_index.size()
-    count_fixed_ori_tuned = count_fixed_ori_tuned.reset_index().rename(columns={'old_index': 'orientation'})
-
-    count_fixed_vis_resp = fixed_vis_resp.groupby(['mouse', 'day']).old_index.size()
-    count_fixed_vis_resp = count_fixed_vis_resp.reset_index().rename(columns={'old_index': 'visual'})
-
-    count_fixed_gen_resp = fixed_gen_resp.groupby(['mouse', 'day']).old_index.size()
-    count_fixed_gen_resp = count_fixed_gen_resp.reset_index().rename(columns={'old_index': 'general'})
-
-    count_vis_resp_fixed = pd.concat([count_fixed_gen_resp,
-                                      count_fixed_vis_resp.drop(['mouse', 'day'], axis=1),
-                                      count_fixed_ori_tuned.drop(['mouse', 'day'], axis=1),
-                                      count_fixed_dir_tuned.drop(['mouse', 'day'], axis=1),
-                                      ], axis=1)
-
-    with pd.HDFStore(data_save_path, 'a') as store:
-        if f'count_vis_resp_{session_shorthand[0]}' in store.keys():
-            del store[f'count_vis_resp_{session_shorthand[0]}']
-        store[f'count_vis_resp_{session_shorthand[0]}'] = count_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
-
-    count_vis_resp_fixed = count_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
-
-    save_path = os.path.join(figure_save_path, f"count_vis_tuned_{session_shorthand[0]}.png")
-    violinplot_fixed_vis_count = fp.violin_swarm(count_vis_resp_fixed.copy(), save_path,
-                                           cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
-                                           width=4.5, height=5, save=True, ylim=(0, 150))
-    plt.close()
-
-    # Now plot them all individually
-    for col in count_vis_resp_fixed.columns:
-        save_path = os.path.join(figure_save_path, f"count_vis_tuned_{col}_{session_shorthand[0]}.png")
-        violinplot_fixed_vis_col = fp.violin_swarm(count_vis_resp_fixed.loc[:, [col]].copy(), save_path,
-                                                   cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
-                                                   width=1.5, height=5, save=True, ylim=(0, 150))
-        plt.close()
-
-    # For free session
-    count_free_dir_tuned = free_dir_tuned.groupby(['mouse', 'day']).old_index.size()
-    count_free_dir_tuned = count_free_dir_tuned.reset_index().rename(columns={'old_index': 'direction'})
-
-    count_free_ori_tuned = free_ori_tuned.groupby(['mouse', 'day']).old_index.size()
-    count_free_ori_tuned = count_free_ori_tuned.reset_index().rename(columns={'old_index': 'orientation'})
-
-    count_free_vis_resp = free_vis_resp.groupby(['mouse', 'day']).old_index.size()
-    count_free_vis_resp = count_free_vis_resp.reset_index().rename(columns={'old_index': 'visual'})
-
-    count_free_gen_resp = free_gen_resp.groupby(['mouse', 'day']).old_index.size()
-    count_free_gen_resp = count_free_gen_resp.reset_index().rename(columns={'old_index': 'general'})
-
-    count_vis_resp_fixed = pd.concat([count_free_gen_resp,
-                                      count_free_vis_resp.drop(['mouse', 'day'], axis=1),
-                                      count_free_ori_tuned.drop(['mouse', 'day'], axis=1),
-                                      count_free_dir_tuned.drop(['mouse', 'day'], axis=1),
-                                      ], axis=1)
-
-    with pd.HDFStore(data_save_path, 'a') as store:
-        if f'count_vis_resp_{session_shorthand[1]}' in store.keys():
-            del store[f'count_vis_resp_{session_shorthand[1]}']
-        store[f'count_vis_resp_{session_shorthand[1]}'] = count_vis_resp_free.drop(['mouse', 'day'], axis=1)
-
-    count_vis_resp_free = count_vis_resp_free.drop(['mouse', 'day'], axis=1)
-
-    save_path = os.path.join(figure_save_path, f"count_vis_tuned_{session_shorthand[1]}.png")
-    violinplot_free_vis_count = fp.violin_swarm(count_vis_resp_free.copy(), save_path,
-                                                 cmap=free_violin_cmap, font_size='paper', backend='seaborn',
-                                                 width=4.5, height=5, save=True, ylim=(0, 150))
-    plt.close()
-
-    # Now plot them all individually
-    for col in count_vis_resp_fixed.columns:
-        save_path = os.path.join(figure_save_path, f"count_vis_tuned_{col}_{session_shorthand[1]}.png")
-        violinplot_free_vis_col = fp.violin_swarm(count_vis_resp_free.loc[:, [col]].copy(), save_path,
-                                                   cmap=free_violin_cmap, font_size='paper', backend='seaborn',
-                                                   width=1.5, height=5, save=True, ylim=(0, 150))
-        plt.close()
-
-    # --- Get fraction of cells that are orientation. direction, and visually tuned --- #
-    # For fixed session
-    fixed_cell_per_day = fixed_cell_tunings.groupby(['mouse', 'day']).size()
-
-    frac_fixed_dir_tuned = fixed_dir_tuned.groupby(['mouse', 'day']).size() / fixed_cell_per_day
-    frac_fixed_dir_tuned = frac_fixed_dir_tuned.reset_index().rename(columns={0: 'direction'})
-
-    frac_fixed_ori_tuned = fixed_ori_tuned.groupby(['mouse', 'day']).size() / fixed_cell_per_day
-    frac_fixed_ori_tuned = frac_fixed_ori_tuned.reset_index().rename(columns={0: 'orientation'})
-
-    frac_fixed_vis_resp = fixed_vis_resp.groupby(['mouse', 'day']).size() / fixed_cell_per_day
-    frac_fixed_vis_resp = frac_fixed_vis_resp.reset_index().rename(columns={0: 'visual'})
-
-    frac_vis_resp_fixed = pd.concat([frac_fixed_dir_tuned.drop(['mouse', 'day'], axis=1),
-                                     frac_fixed_ori_tuned.drop(['mouse', 'day'], axis=1),
-                                     frac_fixed_vis_resp], axis=1)
-
-    with pd.HDFStore(data_save_path, 'a') as store:
-        if f'frac_vis_resp_{session_shorthand[0]}' in store.keys():
-            del store[f'frac_vis_resp_{session_shorthand[0]}']
-        store[f'frac_vis_resp_{session_shorthand[0]}'] = frac_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
-
-    frac_vis_resp_fixed = frac_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
-
-    save_path = os.path.join(figure_save_path, f"frac_vis_tuned_{session_shorthand[0]}.png")
-    violinplot_fixed_vis = fp.violin_swarm(frac_vis_resp_fixed.copy(), save_path,
-                                           cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
-                                           width=4.5, height=5, save=True)
-    plt.close()
-
-    # Now plot them all individually
-    for col in frac_vis_resp_fixed.columns:
-        save_path = os.path.join(figure_save_path, f"frac_vis_tuned_{col}_{session_shorthand[0]}.png")
-        violinplot_fixed_vis_col = fp.violin_swarm(frac_vis_resp_fixed.loc[:, [col]].copy(), save_path,
-                                                   cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
-                                                   width=1.5, height=5, save=True)
-        plt.close()
-
-    # For freely moving session
-    free_cell_per_day = free_cell_tunings.groupby(['mouse', 'day']).size()
-    frac_free_dir_tuned = free_dir_tuned.groupby(['mouse', 'day']).size() / free_cell_per_day
-    frac_free_dir_tuned = frac_free_dir_tuned.reset_index().rename(columns={0: 'direction'})
-
-    frac_free_ori_tuned = free_ori_tuned.groupby(['mouse', 'day']).size() / free_cell_per_day
-    frac_free_ori_tuned = frac_free_ori_tuned.reset_index().rename(columns={0: 'orientation'})
-
-    frac_free_vis_resp = free_vis_resp.groupby(['mouse', 'day']).size() / free_cell_per_day
-    frac_free_vis_resp = frac_free_vis_resp.reset_index().rename(columns={0: 'visual'})
-
-    frac_vis_resp_free = pd.concat([frac_free_dir_tuned.drop(['mouse', 'day'], axis=1),
-                                    frac_free_ori_tuned.drop(['mouse', 'day'], axis=1),
-                                    frac_free_vis_resp], axis=1)
-
-    with pd.HDFStore(data_save_path, 'a') as store:
-        store[f'frac_vis_resp_{session_shorthand[1]}'] = frac_vis_resp_free
-
-    frac_vis_resp_free = frac_vis_resp_free.drop(['mouse', 'day'], axis=1)
-
-    save_path = os.path.join(figure_save_path, f"frac_vis_tuned_{session_shorthand[1]}.png")
-    violinplot_free_vis = fp.violin_swarm(frac_vis_resp_free, save_path,
-                                          cmap=free_violin_cmap, font_size='paper', backend='seaborn',
-                                          width=4.5, height=5, save=True)
-    plt.close()
-
-    # Now plot them all individually
-    for col in frac_vis_resp_free.columns:
-        save_path = os.path.join(figure_save_path, f"frac_vis_tuned_{col}_{session_shorthand[1]}.png")
-        violinplot_free_vis_col = fp.violin_swarm(frac_vis_resp_free.loc[:, [col]].copy(), save_path,
-                                              cmap=free_violin_cmap, font_size='paper', backend='seaborn',
-                                              width=1.5, height=5, save=True)
-        plt.close()
-
-    # --- Plot swarm plots with fraction of kinematic tuned cells for each variable --- #
-
-    # Within-animal fraction kinematic - fixed or session 0
-    save_path = os.path.join(figure_save_path, f"sig_frac_kinem_{session_shorthand[0]}.png")
-    frac_kine_resp_fixed = get_sig_tuned_kinem_cells(data_dict, session_types[0], cell_kind,
-                                                     processing_parameters.variable_list_fixed,
-                                                     use_test=True, include_responsivity=True, include_consistency=False)
-
-    with pd.HDFStore(data_save_path, 'a') as store:
-        if f'frac_kinem_resp_{session_shorthand[0]}' in store.keys():
-            del store[f'frac_kinem_resp_{session_shorthand[0]}']
-        store[f'frac_kinem_resp_{session_shorthand[0]}'] = frac_kine_resp_fixed
-
-    violinplot_fixed_kinem = fp.violin_swarm(frac_kine_resp_fixed, save_path,
-                                            cmap=fixed_violin_cmap, backend='seaborn', font_size='paper',
-                                            width=3, height=5, save=True)
-    plt.close()
-
-    # Now plot them all individually
-    for col in frac_kine_resp_fixed.columns:
-        save_path = os.path.join(figure_save_path, f"sig_frac_{col}_{session_shorthand[0]}.png")
-        violinplot_fixed_kinem_col = fp.violin_swarm(frac_kine_resp_fixed.loc[:, [col]].copy(), save_path,
-                                                     cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
-                                                     width=1.25, height=5, save=True)
-        plt.close()
-
-    # Within-animal fraction kinematic - freely moving or session 1
-    save_path = os.path.join(figure_save_path, f"sig_frac_kinem_{session_shorthand[1]}.png")
-    frac_kine_resp_free = get_sig_tuned_kinem_cells(data_dict, session_types[1], cell_kind,
-                                                    processing_parameters.variable_list_free,
-                                                    use_test=True, include_responsivity=True, include_consistency=False)
-
-    with pd.HDFStore(data_save_path, 'a') as store:
-        if f'frac_kinem_resp_{session_shorthand[1]}' in store.keys():
-            del store[f'frac_kinem_resp_{session_shorthand[1]}']
-        store[f'frac_kinem_resp_{session_shorthand[1]}'] = frac_kine_resp_free
-
-    violinplot_free_kinem = fp.violin_swarm(frac_kine_resp_free, save_path, 
-                                            cmap=free_violin_cmap, backend='seaborn', font_size='paper',
-                                            width=15, height=5, save=True)
-    plt.close()
-
-    # Now plot them all individually
-    for col in frac_kine_resp_free.columns:
-        save_path = os.path.join(figure_save_path, f"sig_frac_{col}_{session_shorthand[1]}.png")
-        violinplot_free_kinem_col = fp.violin_swarm(frac_kine_resp_free.loc[:, [col]].copy(), save_path,
-                                                     cmap=free_violin_cmap, font_size='paper', backend='seaborn',
-                                                     width=1.25, height=5, save=True)
-        plt.close()
-
-    # --- Plot the fraction of running modulated cells--- #
-    fixed_running_mod = data_dict[f'{session_types[0]}_{cell_kind}_running_modulated_cells']
-    frac_run_mod_fixed = fixed_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
-                                                                       'sig_vis_run_modulated']].sum() / \
-                         fixed_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
-                                                                       'sig_vis_run_modulated']].count()
-    rename_dict = dict(zip(list(frac_run_mod_fixed.columns), [col[4:] for col in frac_run_mod_fixed.columns]))
-    frac_run_mod_fixed = frac_run_mod_fixed.rename(columns=rename_dict)
-
-    for col in frac_run_mod_fixed.columns:
-        save_path = os.path.join(figure_save_path, f"sig_frac_{col}_{session_shorthand[0]}.png")
-        violinplot_fixed_run_mod_col = fp.violin_swarm(frac_run_mod_fixed.loc[:, [col]].copy(), save_path,
-                                                    cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
-                                                    width=1.5, height=5, save=True)
-        plt.close()
-
-    free_running_mod = data_dict[f'{session_types[1]}_{cell_kind}_running_modulated_cells']
-    frac_run_mod_free = free_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
-                                                                       'sig_vis_run_modulated']].sum() / \
-                         free_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
-                                                                       'sig_vis_run_modulated']].count()
-    rename_dict = dict(zip(list(frac_run_mod_free.columns), [col[4:] for col in frac_run_mod_free.columns]))
-    frac_run_mod_free = frac_run_mod_free.rename(columns=rename_dict)
-
-    for col in frac_run_mod_free.columns:
-        save_path = os.path.join(figure_save_path, f"sig_frac_{col}_{session_shorthand[1]}.png")
-        violinplot_free_run_mod_col = fp.violin_swarm(frac_run_mod_free.loc[:, [col]].copy(), save_path,
-                                                    cmap=free_violin_cmap, font_size='paper', backend='seaborn',
-                                                    width=1.5, height=5, save=True)
-        plt.close()
-
-    # --- Plot the delta preferred orientation/direction, and delta DSI/OSI --- #
-
-    # Get the hand-curated matches and filter the data by these
-    if curated_matches is not None:
-        curated_matches[['day', 'mouse']].drop_duplicates().to_numpy()
-        fixed_matches = data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}']
-        free_matches = data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}']
-
-        curated_ref_df_list = []
-        curated_comp_df_list = []
-        for day, mouse in curated_matches[['day', 'mouse']].drop_duplicates().to_numpy():
-            curated_idxs = curated_matches.loc[(curated_matches.mouse == mouse) & (curated_matches.day == day)][
-                'index'].to_numpy()
-
-            ref_df = fixed_matches.loc[(fixed_matches.mouse == mouse) & (fixed_matches.day == day)].copy()
-            comp_df = free_matches.loc[(free_matches.mouse == mouse) & (free_matches.day == day)].copy()
-
-            curated_ref_df = ref_df.loc[ref_df.old_index.isin(curated_idxs)]
-            curated_comp_df = comp_df.loc[comp_df.old_index.isin(curated_idxs)]
-
-            curated_ref_df_list.append(curated_ref_df.copy())
-            curated_comp_df_list.append(curated_comp_df.copy())
-
-        curated_ref_df = pd.concat(curated_ref_df_list).reset_index(drop=True)
-        curated_comp_df = pd.concat(curated_comp_df_list).reset_index(drop=True)
-
-        ref_ds = curated_ref_df
-        comp_ds = curated_comp_df
-
-    else:
-        ref_ds = data_dict[f'{session_types[0]}_matched_{activity_dataset}']
-        comp_ds = data_dict[f'{session_types[1]}_matched_{activity_dataset}']
-
-    # Drop NaN values
-    ref_ds_ori = ref_ds.drop(ref_ds[ref_ds.osi.isna()].index).copy()
-    ref_ds_dir = ref_ds.drop(ref_ds[ref_ds.dsi_abs.isna()].index).copy()
-
-    comp_ds_ori = comp_ds.drop(comp_ds[comp_ds.osi.isna()].index).copy()
-    comp_ds_dir = comp_ds.drop(comp_ds[comp_ds.dsi_abs.isna()].index).copy()
-
-    # Get the shift in preferred orientation and direction
-    ori_cutoff_high = 0.5
-    dir_cutoff_high = 0.5
-    lower_cutoff = 0.3
-
-    po_shifts, ori_residuals, rmse_residual_ori = calculate_pref_angle_shifts(ref_ds.copy(), comp_ds.copy(),
-                                                                              stim_kind='orientation',
-                                                                              upper_cutoff=ori_cutoff_high)
-
-    pd_shifts, dir_residuals, rmse_residual_dir = calculate_pref_angle_shifts(ref_ds.copy(), comp_ds.copy(),
-                                                                              stim_kind='direction',
-                                                                              upper_cutoff=dir_cutoff_high)
-
-    with pd.HDFStore(data_save_path, 'a') as store:
-        store['po_shifts'] = po_shifts
-        store['pd_shifts'] = pd_shifts
-        store['po_residuals'] = pd.DataFrame.from_dict({'orientation': ori_residuals})
-        store['pd_residuals'] = pd.DataFrame.from_dict({'direction': dir_residuals})
-        store['angle_residual_rmse'] = pd.DataFrame.from_dict({'orientation': [rmse_residual_ori],
-                                                                'direction': [rmse_residual_dir]})
-
-    # Plot the shift in preferred orientation
-    scatter_PO = plot_delta_pref(po_shifts, session_types, type='orientation', wrap_neg=False)
-    scatter_PO.opts(hv.opts.Scatter(color=scatter_color_theme, size=4, show_legend=False))
-
-    save_path = os.path.join(figure_save_path, "delta_PO.png")
-    scatter_PO = fp.save_figure(scatter_PO, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
-                                target='save', display_factor=0.1)
-
-    # Plot the shift in preferred direction
-    scatter_PD = plot_delta_pref(pd_shifts, session_types, type='direction', wrap_neg=False)
-    scatter_PD.opts(hv.opts.Scatter(color=scatter_color_theme, size=4, show_legend=False))
-
-    save_path = os.path.join(figure_save_path, "delta_PD.png")
-    scatter_PD = fp.save_figure(scatter_PD, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
-                                target='save', display_factor=0.1)
-
-    # Get the shifts in OSI/DSI
-    osi_shifts, osi_residuals, rmse_residual_osi = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
-                                                                               cutoff=ori_cutoff_high,
-                                                                               stim_kind='orientation')
-    all_osi_shifts, _, _ = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
-                                                       cutoff=0, stim_kind='orientation')
-
-    dsi_shifts, dsi_residuals, rmse_residual_dsi = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
-                                                                               cutoff=dir_cutoff_high,
-                                                                               stim_kind='direction')
-    all_dsi_shifts, _, _ = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
-                                                       cutoff=0, stim_kind='direction')
-
-    with pd.HDFStore(data_save_path, 'a') as store:
-        store['osi_shifts'] = osi_shifts
-        store['dsi_shifts'] = dsi_shifts
-        store['osi_residuals'] = pd.DataFrame.from_dict({'osi': osi_residuals})
-        store['dsi_residuals'] = pd.DataFrame.from_dict({'dsi': dsi_residuals})
-        store['selectivity_residual_rmse'] = pd.DataFrame.from_dict({'osi': [rmse_residual_osi],
-                                                                     'dsi': [rmse_residual_dsi]})
-
-    # Plot the shift in OSI
-    scatter_OSI = plot_delta_pref(osi_shifts, session_types, type='orientation')
-    scatter_OSI.opts(hv.opts.Scatter(color=scatter_color_theme))
-
-    scatter_OSI_all = plot_delta_pref(all_osi_shifts, session_types, type='orientation')
-    scatter_OSI_all.opts(hv.opts.Scatter(color='gray', alpha=0.5))
-
-    scatter_OSI = hv.Overlay([scatter_OSI_all, scatter_OSI]).opts(show_legend=False)
-
-    scatter_OSI.opts(xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} OSI',
-                     ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} OSI')
-    scatter_OSI.opts(
-        hv.opts.Scatter(xlim=(0, 1.05), ylim=(0, 1.05),
-                        xticks=(0, 0.5, 1), yticks=(0, 0.5, 1),
-                        size=4))
-
-    save_path = os.path.join(figure_save_path, "delta_OSI.png")
-    scatter_OSI = fp.save_figure(scatter_OSI, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
-                                target='save', display_factor=0.1)
-
-    # Plot the shift in DSI
-    scatter_DSI = plot_delta_pref(dsi_shifts, session_types, type='direction')
-    scatter_DSI.opts(hv.opts.Scatter(color=scatter_color_theme))
-
-    scatter_DSI_all = plot_delta_pref(all_dsi_shifts, session_types, type='direction')
-    scatter_DSI_all.opts(hv.opts.Scatter(color='gray', alpha=0.5))
-
-    scatter_DSI = hv.Overlay([scatter_DSI_all, scatter_DSI]).opts(show_legend=False)
-
-    scatter_DSI.opts(xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} DSI',
-                     ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} DSI')
-    scatter_DSI.opts(
-        hv.opts.Scatter(xlim=(0, 1.05), ylim=(0, 1.05),
-                        xticks=(0, 0.5, 1), yticks=(0, 0.5, 1),
-                        size=4))
-
-    save_path = os.path.join(figure_save_path, "delta_DSI.png")
-    scatter_DSI = fp.save_figure(scatter_DSI, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
-                                target='save', display_factor=0.1)
-
-    # --- UMAP --- #
-    # Run UMAP on all cell permutations
-    reducer = UMAP(min_dist=0.1, n_neighbors=50)
-
-    if (parsed_search['result'] == 'repeat') and (parsed_search['rig'] == 'VWheelWF'):
-        kinem_label_list = processing_parameters.variable_list_fixed
-    elif (parsed_search['result'] == 'repeat') and (parsed_search['rig'] == 'VTuningWF'):
-        kinem_label_list = processing_parameters.variable_list_free
-    else:
-        kinem_label_list = processing_parameters.variable_list_free + processing_parameters.variable_list_fixed
-
-    label_list = kinem_label_list + [activity_dataset]
-
-    cell_kinds = ['all_cells', 'matched', 'unmatched']  # options: 'all_cells', 'matched', 'unmatched'
-
-    for cell_kind in cell_kinds:
-        labels = [f"_{cell_kind}_{label}" for label in label_list]
-
-        # If the cells are matched, we always have the same number of cells
-        if cell_kind == "matched":
-            umap_dict = {}
-            for label in labels:
-                data_keys = [key for key in data_dict.keys() if label in key]
-
-                for key in data_keys:
-                    ds = data_dict[key]
-                    base_label = '_'.join(label.split('_')[1 + len(cell_kind.split('_')):])
-
-                    if base_label in kinem_label_list:
-                        tuning = ds['Qual_index']
-                        umap_dict[base_label] = tuning
-                    else:
-                        this_rig = key.split('_')[0]
-                        tuning_dsi = ds['dsi_abs'].abs().to_numpy()
-                        tuning_osi = ds['responsivity_ori'].to_numpy()
-                        umap_dict[f'dsi_{this_rig}'] = np.clip(tuning_dsi, 0, 1)
-                        umap_dict[f'osi_{this_rig}'] = np.clip(tuning_osi, 0, 1)
-
-            raw_tunings = pd.DataFrame.from_dict(umap_dict)
-            raw_tunings = raw_tunings.fillna(0)
-
-            tunings = preproc.StandardScaler().fit_transform(raw_tunings.to_numpy())
-
-            # perform umap on the fit cell tuning
-            embedded_data = reducer.fit_transform(tunings)
-
-            perc = 99
-            predictor_columns = umap_dict.keys()
-            plot_list = []
-
-            for i, predictor_column in enumerate(predictor_columns):
-                label_idx = [idx for idx, el in enumerate(predictor_columns) if predictor_column == el]
-                raw_labels = tunings[:, label_idx]
-
-                raw_labels = np.abs(raw_labels)
-
-                raw_labels[raw_labels > np.percentile(raw_labels, perc)] = np.percentile(raw_labels, perc)
-                raw_labels[raw_labels < np.percentile(raw_labels, 100 - perc)] = np.percentile(raw_labels, 100 - perc)
-
-                plot_data = np.concatenate([embedded_data, raw_labels.reshape((-1, 1))], axis=1)
-
-                umap_plot = create_umap_plot(plot_data, predictor_column)
-
-                save_name = os.path.join(figure_save_path, f"{cell_kind}_UMAP_{predictor_column}.png")
-                umap_plot = fp.save_figure(umap_plot, save_path=save_name, fig_width=3.5, dpi=800, fontsize='paper',
-                                           target='save', display_factor=0.1)
+            figure_save_path = os.path.join(paths.wf_figures_path, 'still', save_suffix)
+            if not os.path.exists(figure_save_path):
+                os.makedirs(figure_save_path)
 
         else:
-            # Here there may be uneven numbers of cells between sessions
-            umap_dict_1 = {}
-            umap_dict_2 = {}
+            figure_save_path = os.path.join(paths.wf_figures_path, 'full', save_suffix)
+            if not os.path.exists(figure_save_path):
+                os.makedirs(figure_save_path)
 
-            for label in labels:
-                data_keys = [key for key in data_dict.keys() if label in key]
+        data_save_path = os.path.join(figure_save_path, 'stats.hdf5')
 
-                for key in data_keys:
-                    ds = data_dict[key]
-                    this_rig = key.split('_')[0]
-                    base_label = '_'.join(label.split('_')[1 + len(cell_kind.split('_')):])
+        # Run a check for the fit_dsi and fit_osi columns
+        data_dict = check_for_fit_si(data_dict, activity_dataset)
 
-                    if base_label in kinem_label_list:
-                        tuning = ds['Qual_index']
+        # TO DO: ROMOVE WHEN FIXED
+        # Reverse the general responsive designation, since there was a systematic mistake in the data
+        data_dict = flip_gen_resp(data_dict, activity_dataset)
 
-                        if this_rig in ['VWheelWF', 'VTuningWF']:
-                            if base_label in processing_parameters.variable_list_free:
-                                umap_dict_1[base_label] = tuning
-                            else:
-                                umap_dict_2[base_label] = tuning
+        # Get the cell matches for the current dataset and plot a scatter plot of the fraction of cells matched
+        if 'still' not in activity_dataset:
+            try:
+                match_nums = data_dict['cell_matches'].groupby(['mouse', 'day'])[session_types[0]].count().values
+            except KeyError:
+                match_nums = data_dict['cell_matches'].groupby(['mouse', 'day'])[session_shorthand[0]].count().values
+
+            num0 = data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'].groupby(['mouse', 'day']).size().values
+            num1 = data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'].groupby(['mouse', 'day']).size().values
+
+            match_frac0 = match_nums/num0
+            match_frac1 = match_nums/num1
+
+            line = hv.Curve((np.linspace(0, 1, 101), np.linspace(0, 1, 101))).opts(color='gray')
+            scatter = hv.Scatter((match_frac0, match_frac1))
+            scatter.opts(xlim=(0, 1.05), xlabel=f'Frac. Match {session_shorthand[0].title()}',
+                         ylim=(0, 1.05), ylabel=f'Frac. Match {session_shorthand[1].title()}',
+                         color=scatter_color_theme, width=500, height=500)
+            frac_cell_match = hv.Overlay([line, scatter])
+
+            save_path = os.path.join(figure_save_path, "frac_cells_matched.png")
+            frac_cell_match = fp.save_figure(frac_cell_match, save_path=save_path, fig_width=8, dpi=800, fontsize='paper',
+                                             target='save', display_factor=0.1)
+
+            with pd.HDFStore(data_save_path, 'a') as store:
+                if 'frac_cell_match' in store.keys():
+                    del store['frac_cell_match']
+
+                store['frac_cell_match'] = pd.DataFrame(data={f'match_frac_{session_shorthand[0]}': match_frac0,
+                                                              f'match_frac_{session_shorthand[1]}': match_frac1})
+
+        # --- Get the visual responsivity of the cells --- #
+        # Create dataframes to store binary tuning information
+        fixed_cell_tunings = data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'][['old_index', 'mouse', 'day']].copy()
+        free_cell_tunings = data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'][['old_index', 'mouse', 'day']].copy()
+
+        # Cells that meet general responsivity criteria
+        fixed_gen_resp = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                             vis_stim='gen', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+        free_gen_resp = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                            vis_stim='gen', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+
+        # Cells that meet visual responsivity criteria
+        fixed_vis_resp = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                             vis_stim='vis', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+        free_vis_resp = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                            vis_stim='vis', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+
+        # Cells that meet visual responsivity criteria but without being general responsive
+        fixed_vis_no_gen_resp = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                                    vis_stim='vis-gen',
+                                                    sel_thresh=processing_parameters.selectivity_idx_cutoff)
+        free_vis_no_gen_resp = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                                   vis_stim='vis-gen',
+                                                   sel_thresh=processing_parameters.selectivity_idx_cutoff)
+
+        # Cells that meet orientation selectivity criteria
+        fixed_ori_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                              vis_stim='ori', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+        free_ori_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                             vis_stim='ori', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+
+        # Cells that meet orientation selectivity criteria without being general responsive
+        fixed_ori_no_gen_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                                     vis_stim='ori-gen',
+                                                     sel_thresh=processing_parameters.selectivity_idx_cutoff)
+        free_ori_no_gen_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                                    vis_stim='ori-gen',
+                                                    sel_thresh=processing_parameters.selectivity_idx_cutoff)
+
+        # Cells that meet direction selectivity criteria
+        fixed_dir_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                              vis_stim='dir', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+        free_dir_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                             vis_stim='dir', sel_thresh=processing_parameters.selectivity_idx_cutoff)
+
+        # Cells that meet direction selectivity criteria without being general responsive
+        fixed_dir_no_gen_tuned = get_vis_tuned_cells(data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                                     vis_stim='dir-gen',
+                                                     sel_thresh=processing_parameters.selectivity_idx_cutoff)
+        free_dir_no_gen_tuned = get_vis_tuned_cells(data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                                    vis_stim='dir-gen',
+                                                    sel_thresh=processing_parameters.selectivity_idx_cutoff)
+
+        # Find cells that are both direction and orientation tuned, and figure out what to do with them.
+        fixed_dir_tuned, fixed_ori_tuned, fixed_both_tuned = find_overlap_tuning(fixed_dir_tuned, fixed_ori_tuned)
+        free_dir_tuned, free_ori_tuned, free_both_tuned = find_overlap_tuning(free_dir_tuned, free_ori_tuned)
+
+        fixed_dir_no_gen_tuned, fixed_ori_no_gen_tuned, fixed_both_no_gen_tuned = \
+            find_overlap_tuning(fixed_dir_no_gen_tuned, fixed_ori_no_gen_tuned)
+        free_dir_no_gen_tuned, free_ori_no_gen_tuned, free_both_no_gen_tuned = \
+            find_overlap_tuning(free_dir_no_gen_tuned, free_ori_no_gen_tuned)
+
+        # Double check cells that are visually responsive, make sure that all are contained in the vis_resp
+        fixed_vis_resp = update_vis_tuning(fixed_vis_resp,
+                                           data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                           fixed_dir_tuned, fixed_ori_tuned, fixed_both_tuned)
+
+        free_vis_resp = update_vis_tuning(free_vis_resp,
+                                          data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                          free_dir_tuned, free_ori_tuned, free_both_tuned)
+
+        fixed_vis_no_gen_resp = update_vis_tuning(fixed_vis_no_gen_resp,
+                                                  data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}'],
+                                                  fixed_dir_no_gen_tuned, fixed_ori_no_gen_tuned, fixed_both_no_gen_tuned)
+
+        free_vis_no_gen_resp = update_vis_tuning(free_vis_no_gen_resp,
+                                                 data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}'],
+                                                 free_dir_no_gen_tuned, free_ori_no_gen_tuned, free_both_no_gen_tuned)
+
+        # Assign the tunings to the binary tuning dataframes
+        fixed_cell_tunings['is_gen_resp'] = fixed_cell_tunings.index.isin(fixed_gen_resp.index)
+        fixed_cell_tunings['is_vis_resp'] = fixed_cell_tunings.index.isin(fixed_vis_resp.index)
+        fixed_cell_tunings['is_vis_no_gen_resp'] = fixed_cell_tunings.index.isin(fixed_vis_no_gen_resp.index)
+        fixed_cell_tunings['is_dir_tuned'] = fixed_cell_tunings.index.isin(fixed_dir_tuned.index)
+        fixed_cell_tunings['is_dir_no_gen_tuned'] = fixed_cell_tunings.index.isin(fixed_dir_no_gen_tuned.index)
+        fixed_cell_tunings['is_ori_tuned'] = fixed_cell_tunings.index.isin(fixed_ori_tuned.index)
+        fixed_cell_tunings['is_ori_no_gen_tuned'] = fixed_cell_tunings.index.isin(fixed_ori_no_gen_tuned.index)
+
+        free_cell_tunings['is_gen_resp'] = free_cell_tunings.index.isin(free_gen_resp.index)
+        free_cell_tunings['is_vis_resp'] = free_cell_tunings.index.isin(free_vis_resp.index)
+        free_cell_tunings['is_vis_no_gen_resp'] = free_cell_tunings.index.isin(free_vis_no_gen_resp.index)
+        free_cell_tunings['is_dir_tuned'] = free_cell_tunings.index.isin(free_dir_tuned.index)
+        free_cell_tunings['is_dir_no_gen_tuned'] = free_cell_tunings.index.isin(free_dir_no_gen_tuned.index)
+        free_cell_tunings['is_ori_tuned'] = free_cell_tunings.index.isin(free_ori_tuned.index)
+        free_cell_tunings['is_ori_no_gen_tuned'] = free_cell_tunings.index.isin(free_ori_no_gen_tuned.index)
+
+        # --- Get count of cells that are orientation. direction, and visually tuned --- #
+        # For fixed session
+        count_vis_resp_fixed = generate_count_tuned_df(fixed_gen_resp, fixed_vis_resp, fixed_vis_no_gen_resp,
+                                                       fixed_ori_tuned, fixed_ori_no_gen_tuned,
+                                                       fixed_dir_tuned, fixed_dir_no_gen_tuned)
+
+        with pd.HDFStore(data_save_path, 'a') as store:
+            if f'count_vis_resp_{session_shorthand[0]}' in store.keys():
+                del store[f'count_vis_resp_{session_shorthand[0]}']
+            store[f'count_vis_resp_{session_shorthand[0]}'] = count_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
+
+        count_vis_resp_fixed = count_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
+
+        save_path = os.path.join(figure_save_path, f"count_vis_tuned_{session_shorthand[0]}.png")
+        violinplot_fixed_vis_count = fp.violin_swarm(count_vis_resp_fixed.copy(), save_path,
+                                                     cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
+                                                     width=4.5, height=5, save=True, ylim=(0, 150))
+        plt.close()
+
+        # Now plot them all individually
+        for col in count_vis_resp_fixed.columns:
+            save_path = os.path.join(figure_save_path, f"count_vis_tuned_{col}_{session_shorthand[0]}.png")
+            violinplot_fixed_vis_col = fp.violin_swarm(count_vis_resp_fixed.loc[:, [col]].copy(), save_path,
+                                                       cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
+                                                       width=1, height=4, save=True, ylim=(0, 150))
+            plt.close()
+
+        # For free session
+        count_vis_resp_free = generate_count_tuned_df(free_gen_resp, free_vis_resp, free_vis_no_gen_resp,
+                                                      free_ori_tuned, free_ori_no_gen_tuned,
+                                                      free_dir_tuned, free_dir_no_gen_tuned)
+
+        with pd.HDFStore(data_save_path, 'a') as store:
+            if f'count_vis_resp_{session_shorthand[1]}' in store.keys():
+                del store[f'count_vis_resp_{session_shorthand[1]}']
+            store[f'count_vis_resp_{session_shorthand[1]}'] = count_vis_resp_free.drop(['mouse', 'day'], axis=1)
+
+        count_vis_resp_free = count_vis_resp_free.drop(['mouse', 'day'], axis=1)
+
+        save_path = os.path.join(figure_save_path, f"count_vis_tuned_{session_shorthand[1]}.png")
+        violinplot_free_vis_count = fp.violin_swarm(count_vis_resp_free.copy(), save_path,
+                                                    cmap=free_violin_cmap, font_size='paper', backend='seaborn',
+                                                    width=4.5, height=5, save=True, ylim=(0, 150))
+        plt.close()
+
+        # Now plot them all individually
+        for col in count_vis_resp_fixed.columns:
+            save_path = os.path.join(figure_save_path, f"count_vis_tuned_{col}_{session_shorthand[1]}.png")
+            violinplot_free_vis_col = fp.violin_swarm(count_vis_resp_free.loc[:, [col]].copy(), save_path,
+                                                      cmap=free_violin_cmap, font_size='paper', backend='seaborn',
+                                                      width=1, height=4, save=True, ylim=(0, 150))
+            plt.close()
+
+        # --- Get fraction of cells that are orientation. direction, and visually tuned --- #
+        # For fixed session
+        fixed_cell_per_day = fixed_cell_tunings.groupby(['mouse', 'day']).size()
+
+        frac_vis_resp_fixed = generate_frac_tuned_df(fixed_cell_per_day, fixed_gen_resp,
+                                                     fixed_vis_resp, fixed_vis_no_gen_resp,
+                                                     fixed_ori_tuned, fixed_ori_no_gen_tuned,
+                                                     fixed_dir_tuned, fixed_dir_no_gen_tuned)
+
+        with pd.HDFStore(data_save_path, 'a') as store:
+            if f'frac_vis_resp_{session_shorthand[0]}' in store.keys():
+                del store[f'frac_vis_resp_{session_shorthand[0]}']
+            store[f'frac_vis_resp_{session_shorthand[0]}'] = frac_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
+
+        frac_vis_resp_fixed = frac_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
+
+        save_path = os.path.join(figure_save_path, f"frac_vis_tuned_{session_shorthand[0]}.png")
+        violinplot_fixed_vis = fp.violin_swarm(frac_vis_resp_fixed.copy(), save_path,
+                                               cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
+                                               width=4.5, height=5, save=True)
+        plt.close()
+
+        # Now plot them all individually
+        for col in frac_vis_resp_fixed.columns:
+            save_path = os.path.join(figure_save_path, f"frac_vis_tuned_{col}_{session_shorthand[0]}.png")
+            violinplot_fixed_vis_col = fp.violin_swarm(frac_vis_resp_fixed.loc[:, [col]].copy(), save_path,
+                                                       cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
+                                                       width=1, height=4, save=True)
+            plt.close()
+
+        # For freely moving session
+        free_cell_per_day = free_cell_tunings.groupby(['mouse', 'day']).size()
+
+        frac_vis_resp_free = generate_frac_tuned_df(free_cell_per_day, free_gen_resp,
+                                                    free_vis_resp, free_vis_no_gen_resp,
+                                                    free_ori_tuned, free_ori_no_gen_tuned,
+                                                    free_dir_tuned, free_dir_no_gen_tuned)
+
+        with pd.HDFStore(data_save_path, 'a') as store:
+            store[f'frac_vis_resp_{session_shorthand[1]}'] = frac_vis_resp_free
+
+        frac_vis_resp_free = frac_vis_resp_free.drop(['mouse', 'day'], axis=1)
+
+        save_path = os.path.join(figure_save_path, f"frac_vis_tuned_{session_shorthand[1]}.png")
+        violinplot_free_vis = fp.violin_swarm(frac_vis_resp_free, save_path,
+                                              cmap=free_violin_cmap, font_size='paper', backend='seaborn',
+                                              width=4.5, height=5, save=True)
+        plt.close()
+
+        # Now plot them all individually
+        for col in frac_vis_resp_free.columns:
+            save_path = os.path.join(figure_save_path, f"frac_vis_tuned_{col}_{session_shorthand[1]}.png")
+            violinplot_free_vis_col = fp.violin_swarm(frac_vis_resp_free.loc[:, [col]].copy(), save_path,
+                                                      cmap=free_violin_cmap, font_size='paper', backend='seaborn',
+                                                      width=1, height=4, save=True)
+            plt.close()
+
+        # --- Plot swarm plots with fraction of kinematic tuned cells for each variable --- #
+
+        # Within-animal fraction kinematic - fixed or session 0
+        save_path = os.path.join(figure_save_path, f"sig_frac_kinem_{session_shorthand[0]}.png")
+        frac_kine_resp_fixed = get_sig_tuned_kinem_cells(data_dict, session_types[0], cell_kind,
+                                                         processing_parameters.variable_list_fixed,
+                                                         use_test=True, include_responsivity=True, include_consistency=False)
+
+        with pd.HDFStore(data_save_path, 'a') as store:
+            if f'frac_kinem_resp_{session_shorthand[0]}' in store.keys():
+                del store[f'frac_kinem_resp_{session_shorthand[0]}']
+            store[f'frac_kinem_resp_{session_shorthand[0]}'] = frac_kine_resp_fixed
+
+        violinplot_fixed_kinem = fp.violin_swarm(frac_kine_resp_fixed, save_path,
+                                                 cmap=fixed_violin_cmap, backend='seaborn', font_size='paper',
+                                                 width=3, height=5, save=True)
+        plt.close()
+
+        # Now plot them all individually
+        for col in frac_kine_resp_fixed.columns:
+            save_path = os.path.join(figure_save_path, f"sig_frac_{col}_{session_shorthand[0]}.png")
+            violinplot_fixed_kinem_col = fp.violin_swarm(frac_kine_resp_fixed.loc[:, [col]].copy(), save_path,
+                                                         cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
+                                                         width=1.25, height=5, save=True)
+            plt.close()
+
+        # Within-animal fraction kinematic - freely moving or session 1
+        save_path = os.path.join(figure_save_path, f"sig_frac_kinem_{session_shorthand[1]}.png")
+        frac_kine_resp_free = get_sig_tuned_kinem_cells(data_dict, session_types[1], cell_kind,
+                                                        processing_parameters.variable_list_free,
+                                                        use_test=True, include_responsivity=True, include_consistency=False)
+
+        with pd.HDFStore(data_save_path, 'a') as store:
+            if f'frac_kinem_resp_{session_shorthand[1]}' in store.keys():
+                del store[f'frac_kinem_resp_{session_shorthand[1]}']
+            store[f'frac_kinem_resp_{session_shorthand[1]}'] = frac_kine_resp_free
+
+        violinplot_free_kinem = fp.violin_swarm(frac_kine_resp_free, save_path,
+                                                cmap=free_violin_cmap, backend='seaborn', font_size='paper',
+                                                width=15, height=5, save=True)
+        plt.close()
+
+        # Now plot them all individually
+        for col in frac_kine_resp_free.columns:
+            save_path = os.path.join(figure_save_path, f"sig_frac_{col}_{session_shorthand[1]}.png")
+            violinplot_free_kinem_col = fp.violin_swarm(frac_kine_resp_free.loc[:, [col]].copy(), save_path,
+                                                        cmap=free_violin_cmap, font_size='paper', backend='seaborn',
+                                                        width=1.25, height=5, save=True)
+            plt.close()
+
+        # --- Plot the fraction of running modulated cells--- #
+        fixed_running_mod = data_dict[f'{session_types[0]}_{cell_kind}_running_modulated_cells']
+        frac_run_mod_fixed = fixed_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
+                                                                          'sig_vis_run_modulated']].sum() / \
+                             fixed_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
+                                                                          'sig_vis_run_modulated']].count()
+        rename_dict = dict(zip(list(frac_run_mod_fixed.columns), [col[4:] for col in frac_run_mod_fixed.columns]))
+        frac_run_mod_fixed = frac_run_mod_fixed.rename(columns=rename_dict)
+
+        for col in frac_run_mod_fixed.columns:
+            save_path = os.path.join(figure_save_path, f"sig_frac_{col}_{session_shorthand[0]}.png")
+            violinplot_fixed_run_mod_col = fp.violin_swarm(frac_run_mod_fixed.loc[:, [col]].copy(), save_path,
+                                                           cmap=fixed_violin_cmap, font_size='paper', backend='seaborn',
+                                                           width=1.5, height=5, save=True)
+            plt.close()
+
+        free_running_mod = data_dict[f'{session_types[1]}_{cell_kind}_running_modulated_cells']
+        frac_run_mod_free = free_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
+                                                                        'sig_vis_run_modulated']].sum() / \
+                            free_running_mod.groupby(['mouse', 'day'])[['sig_run_modulated',
+                                                                        'sig_vis_run_modulated']].count()
+        rename_dict = dict(zip(list(frac_run_mod_free.columns), [col[4:] for col in frac_run_mod_free.columns]))
+        frac_run_mod_free = frac_run_mod_free.rename(columns=rename_dict)
+
+        for col in frac_run_mod_free.columns:
+            save_path = os.path.join(figure_save_path, f"sig_frac_{col}_{session_shorthand[1]}.png")
+            violinplot_free_run_mod_col = fp.violin_swarm(frac_run_mod_free.loc[:, [col]].copy(), save_path,
+                                                          cmap=free_violin_cmap, font_size='paper', backend='seaborn',
+                                                          width=1.5, height=5, save=True)
+            plt.close()
+
+        # --- Plot the delta preferred orientation/direction, and delta DSI/OSI --- #
+
+        # Get the hand-curated matches and filter the data by these
+        if curated_matches is not None:
+            curated_matches[['day', 'mouse']].drop_duplicates().to_numpy()
+            fixed_matches = data_dict[f'{session_types[0]}_{cell_kind}_{activity_dataset}']
+            free_matches = data_dict[f'{session_types[1]}_{cell_kind}_{activity_dataset}']
+
+            curated_ref_df_list = []
+            curated_comp_df_list = []
+            for day, mouse in curated_matches[['day', 'mouse']].drop_duplicates().to_numpy():
+                curated_idxs = curated_matches.loc[(curated_matches.mouse == mouse) & (curated_matches.day == day)][
+                    'index'].to_numpy()
+
+                ref_df = fixed_matches.loc[(fixed_matches.mouse == mouse) & (fixed_matches.day == day)].copy()
+                comp_df = free_matches.loc[(free_matches.mouse == mouse) & (free_matches.day == day)].copy()
+
+                curated_ref_df = ref_df.loc[ref_df.old_index.isin(curated_idxs)]
+                curated_comp_df = comp_df.loc[comp_df.old_index.isin(curated_idxs)]
+
+                curated_ref_df_list.append(curated_ref_df.copy())
+                curated_comp_df_list.append(curated_comp_df.copy())
+
+            curated_ref_df = pd.concat(curated_ref_df_list).reset_index(drop=True)
+            curated_comp_df = pd.concat(curated_comp_df_list).reset_index(drop=True)
+
+            ref_ds = curated_ref_df
+            comp_ds = curated_comp_df
+
+        else:
+            ref_ds = data_dict[f'{session_types[0]}_matched_{activity_dataset}']
+            comp_ds = data_dict[f'{session_types[1]}_matched_{activity_dataset}']
+
+        # Drop NaN values
+        ref_ds_ori = ref_ds.drop(ref_ds[ref_ds.osi.isna()].index).copy()
+        ref_ds_dir = ref_ds.drop(ref_ds[ref_ds.dsi_abs.isna()].index).copy()
+
+        comp_ds_ori = comp_ds.drop(comp_ds[comp_ds.osi.isna()].index).copy()
+        comp_ds_dir = comp_ds.drop(comp_ds[comp_ds.dsi_abs.isna()].index).copy()
+
+        # Get the shift in preferred orientation and direction
+        ori_cutoff_high = 0.5
+        dir_cutoff_high = 0.5
+        lower_cutoff = 0.3
+
+        po_shifts, ori_residuals, rmse_residual_ori = calculate_pref_angle_shifts(ref_ds.copy(), comp_ds.copy(),
+                                                                                  stim_kind='orientation',
+                                                                                  upper_cutoff=ori_cutoff_high)
+
+        pd_shifts, dir_residuals, rmse_residual_dir = calculate_pref_angle_shifts(ref_ds.copy(), comp_ds.copy(),
+                                                                                  stim_kind='direction',
+                                                                                  upper_cutoff=dir_cutoff_high)
+
+        with pd.HDFStore(data_save_path, 'a') as store:
+            store['po_shifts'] = po_shifts
+            store['pd_shifts'] = pd_shifts
+            store['po_residuals'] = pd.DataFrame.from_dict({'orientation': ori_residuals})
+            store['pd_residuals'] = pd.DataFrame.from_dict({'direction': dir_residuals})
+            store['angle_residual_rmse'] = pd.DataFrame.from_dict({'orientation': [rmse_residual_ori],
+                                                                   'direction': [rmse_residual_dir]})
+
+        # Plot the shift in preferred orientation
+        scatter_PO = plot_delta_pref(po_shifts, session_types, type='orientation', wrap_neg=False)
+        scatter_PO.opts(hv.opts.Scatter(color=scatter_color_theme, size=4, show_legend=False))
+
+        save_path = os.path.join(figure_save_path, "delta_PO.png")
+        scatter_PO = fp.save_figure(scatter_PO, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
+                                    target='save', display_factor=0.1)
+
+        # Plot the shift in preferred direction
+        scatter_PD = plot_delta_pref(pd_shifts, session_types, type='direction', wrap_neg=False)
+        scatter_PD.opts(hv.opts.Scatter(color=scatter_color_theme, size=4, show_legend=False))
+
+        save_path = os.path.join(figure_save_path, "delta_PD.png")
+        scatter_PD = fp.save_figure(scatter_PD, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
+                                    target='save', display_factor=0.1)
+
+        # Get the shifts in OSI/DSI
+        osi_shifts, osi_residuals, rmse_residual_osi = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
+                                                                                   cutoff=ori_cutoff_high,
+                                                                                   stim_kind='orientation')
+        all_osi_shifts, _, _ = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
+                                                           cutoff=0, stim_kind='orientation')
+
+        dsi_shifts, dsi_residuals, rmse_residual_dsi = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
+                                                                                   cutoff=dir_cutoff_high,
+                                                                                   stim_kind='direction')
+        all_dsi_shifts, _, _ = calculate_delta_selectivity(ref_ds.copy(), comp_ds.copy(),
+                                                           cutoff=0, stim_kind='direction')
+
+        with pd.HDFStore(data_save_path, 'a') as store:
+            store['osi_shifts'] = osi_shifts
+            store['dsi_shifts'] = dsi_shifts
+            store['osi_residuals'] = pd.DataFrame.from_dict({'osi': osi_residuals})
+            store['dsi_residuals'] = pd.DataFrame.from_dict({'dsi': dsi_residuals})
+            store['selectivity_residual_rmse'] = pd.DataFrame.from_dict({'osi': [rmse_residual_osi],
+                                                                         'dsi': [rmse_residual_dsi]})
+
+        # Plot the shift in OSI
+        scatter_OSI = plot_delta_pref(osi_shifts, session_types, type='orientation')
+        scatter_OSI.opts(hv.opts.Scatter(color=scatter_color_theme))
+
+        scatter_OSI_all = plot_delta_pref(all_osi_shifts, session_types, type='orientation')
+        scatter_OSI_all.opts(hv.opts.Scatter(color='gray', alpha=0.5))
+
+        scatter_OSI = hv.Overlay([scatter_OSI_all, scatter_OSI]).opts(show_legend=False)
+
+        scatter_OSI.opts(xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} OSI',
+                         ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} OSI')
+        scatter_OSI.opts(
+            hv.opts.Scatter(xlim=(0, 1.05), ylim=(0, 1.05),
+                            xticks=(0, 0.5, 1), yticks=(0, 0.5, 1),
+                            size=4))
+
+        save_path = os.path.join(figure_save_path, "delta_OSI.png")
+        scatter_OSI = fp.save_figure(scatter_OSI, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
+                                     target='save', display_factor=0.1)
+
+        # Plot the shift in DSI
+        scatter_DSI = plot_delta_pref(dsi_shifts, session_types, type='direction')
+        scatter_DSI.opts(hv.opts.Scatter(color=scatter_color_theme))
+
+        scatter_DSI_all = plot_delta_pref(all_dsi_shifts, session_types, type='direction')
+        scatter_DSI_all.opts(hv.opts.Scatter(color='gray', alpha=0.5))
+
+        scatter_DSI = hv.Overlay([scatter_DSI_all, scatter_DSI]).opts(show_legend=False)
+
+        scatter_DSI.opts(xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} DSI',
+                         ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} DSI')
+        scatter_DSI.opts(
+            hv.opts.Scatter(xlim=(0, 1.05), ylim=(0, 1.05),
+                            xticks=(0, 0.5, 1), yticks=(0, 0.5, 1),
+                            size=4))
+
+        save_path = os.path.join(figure_save_path, "delta_DSI.png")
+        scatter_DSI = fp.save_figure(scatter_DSI, save_path=save_path, fig_width=6, dpi=800, fontsize='paper',
+                                     target='save', display_factor=0.1)
+
+        # --- UMAP --- #
+        # Run UMAP on all cell permutations
+        reducer = UMAP(min_dist=0.1, n_neighbors=50)
+
+        if (parsed_search['result'] == 'repeat') and (parsed_search['rig'] == 'VWheelWF'):
+            kinem_label_list = processing_parameters.variable_list_fixed
+        elif (parsed_search['result'] == 'repeat') and (parsed_search['rig'] == 'VTuningWF'):
+            kinem_label_list = processing_parameters.variable_list_free
+        else:
+            kinem_label_list = processing_parameters.variable_list_free + processing_parameters.variable_list_fixed
+
+        label_list = kinem_label_list + [activity_dataset]
+
+        cell_kinds = ['all_cells', 'matched', 'unmatched']  # options: 'all_cells', 'matched', 'unmatched'
+
+        for cell_kind in cell_kinds:
+            labels = [f"_{cell_kind}_{label}" for label in label_list]
+
+            # If the cells are matched, we always have the same number of cells
+            if cell_kind == "matched":
+                umap_dict = {}
+                for label in labels:
+                    data_keys = [key for key in data_dict.keys() if label in key]
+
+                    for key in data_keys:
+                        ds = data_dict[key]
+                        base_label = '_'.join(label.split('_')[1 + len(cell_kind.split('_')):])
+
+                        if base_label in kinem_label_list:
+                            tuning = ds['Qual_index']
+                            umap_dict[base_label] = tuning
                         else:
-                            if this_rig in ['free0', 'fixed0']:
-                                umap_dict_1[base_label] = tuning
-                            else:
-                                umap_dict_2[base_label] = tuning
-                    else:
-                        tuning_dsi = ds['dsi_abs'].abs().to_numpy()
-                        tuning_osi = ds['osi'].to_numpy()
+                            this_rig = key.split('_')[0]
+                            tuning_dsi = ds['fit_dsi'].abs().to_numpy()
+                            tuning_osi = ds['fit_osi'].to_numpy()
+                            umap_dict[f'dsi_{this_rig}'] = np.clip(tuning_dsi, 0, 1)
+                            umap_dict[f'osi_{this_rig}'] = np.clip(tuning_osi, 0, 1)
 
-                        if this_rig in ['VTuningWF', 'free0', 'fixed0']:
-                            umap_dict_1[f'dsi_{this_rig}'] = np.clip(tuning_dsi, 0, 1)
-                            umap_dict_1[f'osi_{this_rig}'] = np.clip(tuning_osi, 0, 1)
-                        else:
-                            umap_dict_2[f'dsi_{this_rig}'] = np.clip(tuning_dsi, 0, 1)
-                            umap_dict_2[f'osi_{this_rig}'] = np.clip(tuning_osi, 0, 1)
+                raw_tunings = pd.DataFrame.from_dict(umap_dict)
+                raw_tunings = raw_tunings.fillna(0)
 
-            raw_tunings_1 = pd.DataFrame.from_dict(umap_dict_1)
-            raw_tunings_1 = raw_tunings_1.fillna(0)
-            raw_tunings_2 = pd.DataFrame.from_dict(umap_dict_2)
-            raw_tunings_2 = raw_tunings_2.fillna(0)
+                tunings = preproc.StandardScaler().fit_transform(raw_tunings.to_numpy())
 
-            tunings_1 = preproc.StandardScaler().fit_transform(raw_tunings_1.to_numpy())
-            tunings_2 = preproc.StandardScaler().fit_transform(raw_tunings_2.to_numpy())
+                # perform umap on the fit cell tuning
+                embedded_data = reducer.fit_transform(tunings)
 
-            # perform umap on the fit cell tuning
-            embedded_data_1 = reducer.fit_transform(tunings_1)
-            embedded_data_2 = reducer.fit_transform(tunings_2)
-
-            perc = 99
-            plot_list = []
-
-            for umap_dict, embedded_data, tunings in zip([umap_dict_1, umap_dict_2],
-                                              [embedded_data_1, embedded_data_2],
-                                              [tunings_1, tunings_2]):
-
+                perc = 99
                 predictor_columns = umap_dict.keys()
+                plot_list = []
 
                 for i, predictor_column in enumerate(predictor_columns):
                     label_idx = [idx for idx, el in enumerate(predictor_columns) if predictor_column == el]
@@ -1240,6 +1328,81 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                     save_name = os.path.join(figure_save_path, f"{cell_kind}_UMAP_{predictor_column}.png")
                     umap_plot = fp.save_figure(umap_plot, save_path=save_name, fig_width=3.5, dpi=800, fontsize='paper',
                                                target='save', display_factor=0.1)
+
+            else:
+                # Here there may be uneven numbers of cells between sessions
+                umap_dict_1 = {}
+                umap_dict_2 = {}
+
+                for label in labels:
+                    data_keys = [key for key in data_dict.keys() if label in key]
+
+                    for key in data_keys:
+                        ds = data_dict[key]
+                        this_rig = key.split('_')[0]
+                        base_label = '_'.join(label.split('_')[1 + len(cell_kind.split('_')):])
+
+                        if base_label in kinem_label_list:
+                            tuning = ds['Qual_index']
+
+                            if this_rig in ['VWheelWF', 'VTuningWF']:
+                                if base_label in processing_parameters.variable_list_free:
+                                    umap_dict_1[base_label] = tuning
+                                else:
+                                    umap_dict_2[base_label] = tuning
+                            else:
+                                if this_rig in ['free0', 'fixed0']:
+                                    umap_dict_1[base_label] = tuning
+                                else:
+                                    umap_dict_2[base_label] = tuning
+                        else:
+                            tuning_dsi = ds['fit_dsi'].abs().to_numpy()
+                            tuning_osi = ds['fit_osi'].to_numpy()
+
+                            if this_rig in ['VTuningWF', 'free0', 'fixed0']:
+                                umap_dict_1[f'dsi_{this_rig}'] = np.clip(tuning_dsi, 0, 1)
+                                umap_dict_1[f'osi_{this_rig}'] = np.clip(tuning_osi, 0, 1)
+                            else:
+                                umap_dict_2[f'dsi_{this_rig}'] = np.clip(tuning_dsi, 0, 1)
+                                umap_dict_2[f'osi_{this_rig}'] = np.clip(tuning_osi, 0, 1)
+
+                raw_tunings_1 = pd.DataFrame.from_dict(umap_dict_1)
+                raw_tunings_1 = raw_tunings_1.fillna(0)
+                raw_tunings_2 = pd.DataFrame.from_dict(umap_dict_2)
+                raw_tunings_2 = raw_tunings_2.fillna(0)
+
+                tunings_1 = preproc.StandardScaler().fit_transform(raw_tunings_1.to_numpy())
+                tunings_2 = preproc.StandardScaler().fit_transform(raw_tunings_2.to_numpy())
+
+                # perform umap on the fit cell tuning
+                embedded_data_1 = reducer.fit_transform(tunings_1)
+                embedded_data_2 = reducer.fit_transform(tunings_2)
+
+                perc = 99
+                plot_list = []
+
+                for umap_dict, embedded_data, tunings in zip([umap_dict_1, umap_dict_2],
+                                                  [embedded_data_1, embedded_data_2],
+                                                  [tunings_1, tunings_2]):
+
+                    predictor_columns = umap_dict.keys()
+
+                    for i, predictor_column in enumerate(predictor_columns):
+                        label_idx = [idx for idx, el in enumerate(predictor_columns) if predictor_column == el]
+                        raw_labels = tunings[:, label_idx]
+
+                        raw_labels = np.abs(raw_labels)
+
+                        raw_labels[raw_labels > np.percentile(raw_labels, perc)] = np.percentile(raw_labels, perc)
+                        raw_labels[raw_labels < np.percentile(raw_labels, 100 - perc)] = np.percentile(raw_labels, 100 - perc)
+
+                        plot_data = np.concatenate([embedded_data, raw_labels.reshape((-1, 1))], axis=1)
+
+                        umap_plot = create_umap_plot(plot_data, predictor_column)
+
+                        save_name = os.path.join(figure_save_path, f"{cell_kind}_UMAP_{predictor_column}.png")
+                        umap_plot = fp.save_figure(umap_plot, save_path=save_name, fig_width=3.5, dpi=800, fontsize='paper',
+                                                   target='save', display_factor=0.1)
 
 
 # def process_predictor_columns(umap_dict: Dict[str, np.ndarray], tunings: np.ndarray, embedded_data: np.ndarray,

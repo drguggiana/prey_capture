@@ -92,11 +92,56 @@ def calculate_response_diff(trial_activity, iti_activity, cells):
     DataFrame: The dataframe containing the difference of activity during the trial to the activity during the ITI.
     """
 
-    ratio_activity = trial_activity[cells] - iti_activity[cells]
-    ratio_activity.fillna(0, inplace=True)
-    mask = np.isinf(ratio_activity)
-    ratio_activity[mask] = trial_activity[mask]
-    return ratio_activity
+    diff_activity = trial_activity[cells] - iti_activity[cells]
+    diff_activity.fillna(0, inplace=True)
+    mask = np.isinf(diff_activity)
+    diff_activity[mask] = trial_activity[mask]
+    return diff_activity
+
+
+def calculate_vis_ori_dir_responsivity(trial_activity, iti_mean_activity, iti_std_activity, num_std=6):
+    
+    """
+    Calculate the visual, direction, and orientation responsivity of cells based on trial activity.
+
+    Args:
+        trial_activity (DataFrame): DataFrame containing trial activity data.
+        iti_mean_activity (DataFrame): DataFrame containing ITI mean activity data.
+        iti_std_activity (DataFrame): DataFrame containing ITI standard deviation activity data.
+        num_std (int, optional): Number of standard deviations above the ITI mean to consider a cell visually responsive. Defaults to 6.
+
+    Returns:
+        tuple: A tuple containing three boolean arrays indicating the visual, direction, and orientation responsivity of cells.
+    """
+
+    cells = [col for col in trial_activity.columns if 'cell' in col]
+
+    # Determine if cell is visually responsive
+    #    A cell is responsive if during a trial its max response during that trial is greater than 6 stds above the
+    #    ITI mean. To be considered visually responsive, a cell must respond during at least 50% of the trials
+
+    vis_trial_resps = ((trial_activity[cells] - iti_mean_activity[cells]) >=
+                       (iti_mean_activity[cells] + num_std * iti_std_activity[cells]))
+    vis_trial_resps.insert(0, 'trial_num', trial_activity['trial_num'])
+    vis_trial_resps.insert(1, 'direction_wrapped', trial_activity['direction_wrapped'])
+    vis_trial_resps.insert(2, 'orientation', trial_activity['orientation'])
+    is_vis_responsive = vis_trial_resps[cells].apply(lambda x: x.sum() >= np.ceil(x.count() / 2))
+
+    # Determine if a cell is direction responsive
+    #    To be considered direction responsive, a cell must respond to at least 50% of the trials for at least one
+    #    direction stimulus
+    is_direction_responsive = (vis_trial_resps.groupby(['direction_wrapped'])[cells].agg(list)
+                               .applymap(lambda x: np.sum(x) >= np.ceil(len(x) / 2)))
+    is_direction_responsive = is_direction_responsive[cells].apply(lambda x: x.sum() > 0)
+
+    # Determine if a cell is orientation responsive
+    #    To be considered direction responsive, a cell must respond to at least 50% of the trials for at least one
+    #    orientation stimulus
+    is_orientation_responsive = (vis_trial_resps.groupby(['orientation'])[cells].agg(list)
+                                 .applymap(lambda x: np.sum(x) >= np.ceil(len(x) / 2)))
+    is_orientation_responsive = is_orientation_responsive[cells].apply(lambda x: x.sum() > 0)
+
+    return is_vis_responsive, is_direction_responsive, is_orientation_responsive
 
 
 def calculate_visual_tuning(activity_df, activity_type, direction_label='direction_wrapped',
@@ -134,7 +179,10 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
 
     # Drop trials that are poorly indexed or incomplete
     activity_df = drop_partial_or_long_trials(activity_df)
-    num_trials = len(activity_df.trial_num.unique())
+    trial_nums = activity_df.loc[activity_df.trial_num > 0].trial_num.unique()
+    num_trials = len(trial_nums)
+    directions = activity_df.loc[np.isin(activity_df.trial_num, trial_nums)].groupby('trial_num')[direction_label].first()
+    orientations = activity_df.loc[np.isin(activity_df.trial_num, trial_nums)].groupby('trial_num')['orientation'].first()
 
     # Get the trial counts per angle and decide if we can do equal trial number bootstrapping
     angle_counts = activity_df.loc[activity_df.trial_num > 0].groupby(direction_label).apply(lambda x: x.trial_num.nunique())
@@ -198,55 +246,33 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
     iti_auc_activity.insert(1, direction_label, trial_max_activity[direction_label])
     iti_auc_activity.insert(2, 'orientation', trial_max_activity['orientation'])
 
-    # -- 1.3 Responsivity Evaluations
-
-    # 1.3.1 Determine if the cell is generally responsive.
+    # -- 1.3 Determine if the cell is visually responsive.
     #    This is done by comparing the AUC activity during each 5 sec ITI to the AUC activity during the trial. If a
-    #    cell fails a Mann-Whitney U test where the test checks if activity during the trials is greater than that
-    #    during the ITI (i.e. alternative='greater'), then the cell is considered generally responsive.
+    #    cell passes a Mann-Whitney U test where the test checks if activity during the trials is greater than that
+    #    during the ITI (i.e. alternative='greater'), then the cell is considered visually responsive.
     trial_frames_long_iti, _ = tuning.parse_trial_frames(activity_df, pre_trial=5.0)
     long_iti_auc_activity = (trial_frames_long_iti.groupby('frame_num')
                              .apply(lambda x: x.loc[x.trial_num == 0, cells]
-                             .apply(np.trapz))
+                                    .apply(np.trapz))
                              .reset_index(names='trial_num'))
-    long_iti_auc_activity.insert(1, direction_label, trial_max_activity[direction_label])
+    long_iti_auc_activity.insert(1, 'direction_wrapped', trial_max_activity['direction_wrapped'])
     long_iti_auc_activity.insert(2, 'orientation', trial_max_activity['orientation'])
 
-    stat, pval = mannwhitneyu(trial_auc_activity[cells], long_iti_auc_activity[cells],
-                              alternative='greater', axis=0)
-    gen_responsive = pd.DataFrame(index=cells, data={'statistic': stat, 'pvalue': pval})
-    is_gen_responsive = gen_responsive.pvalue >= 0.05
+    stats, pvals = mannwhitneyu(trial_auc_activity[cells], long_iti_auc_activity[cells],
+                                alternative='greater', axis=0)
+    vis_drive_test = pd.DataFrame(index=cells, data={'vis_resp_statistic': stats, 'vis_resp_pval': pvals})
 
-    # 1.3.2 Determine if cell is visually responsive
-    #    A cell is responsive if during a trial its max response during that trial is greater than 6 stds above the
-    #    ITI mean. To be considered visually responsive, a cell must respond during at least 50% of the trials
-    vis_trial_resps = ((trial_max_activity[cells] - iti_mean_activity[cells]) >=
-                       (iti_mean_activity[cells] + 6 * iti_std_activity[cells]))
-    vis_trial_resps.insert(0, 'trial_num', trial_max_activity['trial_num'])
-    vis_trial_resps.insert(1, direction_label, trial_max_activity[direction_label])
-    vis_trial_resps.insert(2, 'orientation', trial_max_activity['orientation'])
-    is_vis_responsive = vis_trial_resps[cells].apply(lambda x: x.sum() >= np.ceil(x.count() / 2))
-
-    # 1.3.3 Determine if a cell is direction responsive
-    #    To be considered direction responsive, a cell must respond to at least 50% of the trials for at least one
-    #    direction stimulus
-    is_direction_responsive = (vis_trial_resps.groupby([direction_label])[cells].agg(list).applymap(
-                                lambda x: np.sum(x) >= np.ceil(len(x) / 2)))
-    is_direction_responsive = is_direction_responsive[cells].apply(lambda x: x.sum() > 0)
-
-    # 1.3.4 Determine if a cell is orientation responsive
-    #    To be considered direction responsive, a cell must respond to at least 50% of the trials for at least one
-    #    orientation stimulus
-    is_orientation_responsive = (vis_trial_resps.groupby(['orientation'])[cells].agg(list).applymap(
-                                 lambda x: np.sum(x) >= np.ceil(len(x) / 2)))
-    is_orientation_responsive = is_orientation_responsive[cells].apply(lambda x: x.sum() > 0)
+    vis_drive_test['is_vis_resp'] = vis_drive_test.vis_resp_pval < processing_parameters.responsivity_p_cutoff
+    vis_drive_test['not_vis_resp'] = vis_drive_test.vis_resp_pval > 1 - processing_parameters.responsivity_p_cutoff
+    vis_drive_test['mod_vis_resp'] = np.logical_and(vis_drive_test.vis_resp_pval >= processing_parameters.responsivity_p_cutoff,
+                                                    vis_drive_test.vis_resp_pval <= 1 - processing_parameters.responsivity_p_cutoff)
 
     # --- 2. Generate Response Vectors --- #
 
     # -- 2.1 Calculate the ratios and differences of activity between trials and ITIs
     #    We can choose one of these metrics as the basis for all further analyses
 
-    # Get the ratio of activity during the trial to the activity during the ITI
+    # Get the ratio of activity during the trial to  activity during the ITI
     ratio_mean_activity = calculate_response_ratios(trial_mean_activity, iti_mean_activity, cells)
     ratio_mean_activity = pd.concat(
         [trial_mean_activity[['trial_num', direction_label, 'orientation']], ratio_mean_activity], axis=1)
@@ -289,8 +315,8 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
         raise ValueError('metric_for_analysis must be one of ratio_mean, ratio_max, ratio_auc, diff_mean, diff_max, diff_auc')
 
     # -- 2.3 Get the mean direction and orientation response per trial and drop the inter-trial interval from df
-    mean_direction_activity_by_trial = (used_activity_ds.groupby([direction_label, 'trial_num'])[cells].agg(np.mean)
-                                        .copy().reset_index())
+    mean_direction_activity_by_trial = (used_activity_ds.groupby([direction_label, 'trial_num'])[cells]
+                                        .agg(np.mean).copy().reset_index())
     mean_direction_activity_by_trial = (mean_direction_activity_by_trial
                                         .drop(mean_direction_activity_by_trial[mean_direction_activity_by_trial.trial_num == 0].index)
                                         .sort_values([direction_label, 'trial_num']))
@@ -301,8 +327,8 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
     mean_direction_activity_by_trial = pd.concat([mean_direction_activity_by_trial, dup], ignore_index=True)
 
     # Get the mean orientation response per trial and drop the inter-trial interval from df
-    mean_orientation_activity_by_trial = (used_activity_ds.groupby(['orientation', 'trial_num'])[cells].agg(np.mean)
-                                          .copy().reset_index())
+    mean_orientation_activity_by_trial = (used_activity_ds.groupby(['orientation', 'trial_num'])[cells]
+                                          .agg(np.mean).copy().reset_index())
     mean_orientation_activity_by_trial = (mean_orientation_activity_by_trial
                                           .drop(mean_orientation_activity_by_trial[mean_orientation_activity_by_trial.trial_num == 0].index)
                                           .sort_values(['orientation', 'trial_num']))
@@ -462,9 +488,7 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
         vis_resp_data = [trial_max_activity[cell].to_numpy(), iti_max_activity[cell].to_numpy(),
                          trial_mean_activity[cell].to_numpy(), iti_mean_activity[cell].to_numpy(),
                          trial_auc_activity[cell].to_numpy(), iti_auc_activity[cell].to_numpy(),
-                         std_activity[cell], iti_std_activity[cell].to_numpy(),
-                         int(is_gen_responsive[cell]), int(is_vis_responsive[cell]),
-                         int(is_direction_responsive[cell]), int(is_orientation_responsive[cell])]
+                         std_activity[cell], iti_std_activity[cell].to_numpy(),]
 
         direction_data = [mean_direction_activity_by_trial[[direction_label, cell]].to_numpy(),
                           norm_direction_activity_by_trial[[direction_label, cell]].to_numpy(),
@@ -499,12 +523,11 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
         cell_data = vis_resp_data + direction_data + orientation_data
         cell_data_list.append(cell_data)
 
-    # -- Assemble large dataframe -- #
+    # -- Assemble large dataframe for single cells data-- #
     vis_resp_columns = ['max_vis_activity', 'max_baseline_activity',
                         'mean_vis_activity', 'mean_baseline_activity',
                         'auc_vis_activity', 'auc_baseline_activity',
-                        'std_vis_activity', 'std_baseline_activity',
-                        'is_gen_responsive', 'is_vis_responsive', 'is_dir_responsive', 'is_ori_responsive']
+                        'std_vis_activity', 'std_baseline_activity',]
 
     direction_columns = ['resp_dir',
                          'resp_norm_dir',
@@ -539,6 +562,10 @@ def calculate_visual_tuning(activity_df, activity_type, direction_label='directi
 
     data_cols = vis_resp_columns + direction_columns + orientation_columns
     data_df = pd.DataFrame(index=cells, columns=data_cols, data=cell_data_list)
+
+    # Append the responsivity dataframe to it
+    data_df = pd.concat([vis_drive_test, data_df], axis=1)
+
     return data_df
 
 
@@ -881,12 +908,17 @@ if __name__ == '__main__':
                     raise ValueError(f'Unknown activity dataset type: {ds_name}')
 
                 activity_ds = activity_ds_dict[ds_name].copy()
+
+                trial_params = activity_ds[['trial_num', 'direction_wrapped', 'orientation']].groupby(
+                    'trial_num').first().reset_index()
+
                 props = calculate_visual_tuning(activity_ds, activity_ds_type,
                                                 metric_for_analysis=processing_parameters.analysis_metric,
                                                 bootstrap_shuffles=processing_parameters.bootstrap_repeats)
 
                 # Save visual features to hdf5 file
                 props.to_hdf(out_file, f'{ds_name}_props')
+                trial_params.to_hdf(out_file, f'{ds_name}_trial_params')
 
             # --- Process kinematic tuning --- #
             tcs_dict, tcs_counts_dict, tcs_bins_dict = calculate_kinematic_tuning(dataframe, day, animal, rig)

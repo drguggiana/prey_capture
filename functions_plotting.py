@@ -1350,3 +1350,58 @@ def save_figure(fig, save_path=None, fig_width=5, dpi=600, fontsize='paper', tar
         bokeh_show(hv.render(fig))
 
     return fig
+
+
+def plot_dff_spikes_trials(exp, save_dir, save=True, plot_spikes=True, plot_trials=True, plot_running=False, **kwargs):
+
+    basename_modifier = kwargs.pop('basename_modifier', '')
+    fig_width = kwargs.pop('fig_width', 7)
+    dpi = kwargs.pop('dpi', 800)
+    fontsize = kwargs.pop('fontsize', 'poster')
+    
+    dff_plots = []
+    cells_to_plot = kwargs.pop('cells_to_plot', exp.cells_to_match)
+    for i, cell in enumerate(cells_to_plot):
+        basename = f"dff_{i}{basename_modifier}"
+
+        # Plot the dff
+        out_fig = hv.Curve(exp.norm_deconv_fluor[['time_vector', cell]]).opts(color='black', 
+                                                                              height=kwargs.pop('height', 75), 
+                                                                              width=kwargs.pop('width', 1000), 
+                                                                              **kwargs)
+
+        if plot_spikes:
+            spikes_plot = hv.Curve(exp.norm_inferred_spikes[['time_vector', cell]]).opts(color='green', alpha=0.5)
+            out_fig = hv.Overlay([spikes_plot, out_fig])
+            basename += '_spikes'
+
+        if plot_trials:
+            trials_on = exp.norm_deconv_fluor['trial_num'] > 0
+            time = exp.norm_deconv_fluor['time_vector']
+            trials_plot = hv.Area((time, trials_on)).opts(color='gray', alpha=0.25)
+            out_fig = hv.Overlay([trials_plot, out_fig]).opts(hv.opts.Area(yaxis=None, xaxis=None, xlabel=None, ylabel=None, show_legend=False))
+            basename += '_trials'
+
+        if plot_running:
+            try:
+                running_plot = hv.Curve(exp.norm_dff[['time_vector', 'running_speed']]).opts(color='red', alpha=0.5)
+            except KeyError:
+                running_plot = hv.Curve(exp.norm_dff[['time_vector', 'wheel_speed_abs']]).opts(color='red', alpha=0.5)
+
+            out_fig = hv.Overlay([out_fig, running_plot])
+            basename += '_running'
+
+        # Final options for the figure
+        out_fig = out_fig.opts(hv.opts.Curve(yaxis=None, xaxis=None, xlabel=None, ylabel=None, show_legend=False))
+        
+        # Save the figure
+        save_path = os.path.join(save_dir, f'{basename}.png')
+
+        if save:
+            out_fig = save_figure(out_fig, save_path=save_path, fig_width=fig_width, dpi=dpi, fontsize=fontsize, target='save', display_factor=0.3)
+        else:
+            out_fig = save_figure(out_fig, save_path=save_path, fig_width=fig_width, dpi=dpi, fontsize=fontsize, target='screen', display_factor=0.3)
+
+        dff_plots.append(out_fig)
+
+    return dff_plots

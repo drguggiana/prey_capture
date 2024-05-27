@@ -45,12 +45,12 @@ def vis_frac_responsive(ds, sel_tresh=0.5):
 
     # Get boolean vector of direction tuned cells
     is_dir_resp = ((data['is_vis_responsive'] == 0) & (data['is_dir_responsive'] == 1) &
-                   (data['dsi_abs'] >= sel_tresh) & (data['osi'] < sel_tresh))
+                   (data['fit_dsi'] >= sel_tresh) & (data['fit_osi'] < sel_tresh))
     frac_dir_resp = is_dir_resp.sum() / is_dir_resp.count()
 
     # Get boolean vector of orientation tuned cells
     is_ori_resp = ((data['is_vis_responsive'] == 0) & (data['is_ori_responsive'] == 1) &
-                   (data['responsivity_ori'] >= sel_tresh) & (data['dsi_abs'] < sel_tresh))
+                   (data['fit_osi'] >= sel_tresh) & (data['fit_dsi'] < sel_tresh))
     frac_ori_resp = is_ori_resp.sum() / is_ori_resp.count()
 
     # Get boolean vector of visually responsive cells
