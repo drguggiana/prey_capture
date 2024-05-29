@@ -431,8 +431,8 @@ if __name__ == '__main__':
                 # If we have repeat sessions, we can't try fixed as a reference, so just look at delta between sessions
                 else:
                     for tuning_type in visual_shifts[id_flags[0]].keys():
-                        session1 = visual_shifts[id_flags[0]][tuning_type]
-                        session2 = visual_shifts[id_flags[1]][tuning_type]
+                        session1 = visual_shifts[id_flags[0]][tuning_type].reset_index()
+                        session2 = visual_shifts[id_flags[1]][tuning_type].reset_index()
                         diff_dir = session2.loc[:, ['pref_dir']].subtract(session1.loc[:, ['pref_dir']]).to_numpy().flatten()
                         diff_ori = session2.loc[:, ['pref_ori']].subtract(session1.loc[:, ['pref_ori']]).to_numpy().flatten()
 
