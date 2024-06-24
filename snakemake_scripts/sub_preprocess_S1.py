@@ -473,7 +473,7 @@ def extract_motive(file_path_motive, rig, trials=None):
             Tracking happens in Motive and then gets passed to Unity. 
             Motive is a right-handed coordinate system with X as the forward vector and Y as the upward (anti-gravity) vector.
             Unity is a left-handed coordinate system with Z as the forward vector and Y as the upward (anti-gravity) vector.
-            This means that when the mouse moves forward in Motive, forward motion moves along +X, but along -X (NOT Z!) in Unity.
+            This means that when the mouse moves forward in Motive, forward motion moves along -X (NOT Z!) in Unity.
             This transform is handled by a Unity plugin, so we don't need to think about it for position, but we do for rotations. 
 
             We also track the body and other objects using DeepLabCut, which does pose estimation on 2D, top down images. 

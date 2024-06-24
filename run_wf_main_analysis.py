@@ -529,7 +529,7 @@ def calculate_pref_angle_shifts(ref_ds: pd.DataFrame, comp_ds: pd.DataFrame, sti
                                 'day': ref_ds.loc[indices, 'day'].values})
 
     # Calculate the residuals and the root mean square error of the residuals
-    residuals = shifts['pref_2'].to_numpy() - shifts['pref_1'].to_numpy()
+    residuals = np.linalg.norm(shifts[['pref_1', 'pref_2']].values - shifts[['pref_1', 'pref_1']].values, axis=1)
 
     # This is a circular measure, so wrap the residuals
     residuals = fk.wrap(residuals, bound=ci_width)
@@ -566,7 +566,7 @@ def calculate_delta_selectivity(ref_ds: pd.DataFrame, comp_ds: pd.DataFrame, cut
     # Calculate the shifts in selectivity
     ref_sel = ref_ds.iloc[indices, ref_ds.columns.get_loc(sel_key)].copy().clip(-1, 1)
     comp_sel = comp_ds.iloc[indices, comp_ds.columns.get_loc(sel_key)].copy().clip(-1, 1)
-    residuals = comp_sel.abs() - ref_sel.abs()
+    residuals = np.linalg.norm(np.array([ref_sel, comp_sel]).T - np.array([ref_sel, ref_sel]).T, axis=1)
     shifts = pd.DataFrame(data={'pref_1': ref_sel, 'pref_2': comp_sel, 'delta_sel': residuals})
 
     # Calculate the residuals and the root mean square error of the residuals
@@ -662,12 +662,14 @@ fp.set_theme()
 in2cm = 1./2.54
 
 # define the experimental conditions
-results = ['multi', 'control', 'repeat', 'fullfield']    # 'multi', 'control', 'repeat', 'fullfield'
+results = ['multi', 'control', 'repeat',]    # 'multi', 'control', 'repeat', 'fullfield'
 lightings = ['normal', 'dark']    # 'normal', 'dark'
 rigs = ['', 'VWheelWF', 'VTuningWF']    # '', 'VWheelWF', 'VTuningWF'
 analysis_type = 'agg_all'
 
 recalculate_vis_tuning = False
+
+save_base = r'H:\thesis\figures\WF_Figures'
 
 for result, light, rig in itertools.product(results, lightings, rigs):
 
@@ -729,6 +731,9 @@ for result, light, rig in itertools.product(results, lightings, rigs):
         session_shorthand = session_types
 
     elif parsed_search['result'] == 'control':
+        session_types = ['VWheelWF', 'VTuningWF']
+        session_shorthand = ['fixed', 'free']
+
         if parsed_search['lighting'] == 'normal':
             fixed_violin_cmap = fp.hv_yellow_hex
             free_violin_cmap = fp.hv_yellow_hex
@@ -772,12 +777,12 @@ for result, light, rig in itertools.product(results, lightings, rigs):
         if 'still' in activity_dataset:
             session_shorthand = [f + '_still' for f in session_shorthand]
 
-            figure_save_path = os.path.join(paths.wf_figures_path, 'still', save_suffix)
+            figure_save_path = os.path.join(save_base, 'still', save_suffix)
             if not os.path.exists(figure_save_path):
                 os.makedirs(figure_save_path)
 
         else:
-            figure_save_path = os.path.join(paths.wf_figures_path, 'full', save_suffix)
+            figure_save_path = os.path.join(save_base, 'full', save_suffix)
             if not os.path.exists(figure_save_path):
                 os.makedirs(figure_save_path)
 
@@ -860,8 +865,10 @@ for result, light, rig in itertools.product(results, lightings, rigs):
 
             # Get fraction cells and rename the columns
             frac_vis_resp_cols = ['mouse', 'day'] + [f'frac_{col}' for col in vis_resp_cols]
-            frac_vis_resp_fixed = fixed_summary_stats.loc[:, frac_vis_resp_cols].reset_index(drop=True)
-            frac_vis_resp_free = free_summary_stats.loc[:, frac_vis_resp_cols].reset_index(drop=True)
+            frac_vis_resp_fixed = fixed_summary_stats.loc[fixed_summary_stats.old_index == 'all_cells',
+                                                          frac_vis_resp_cols].reset_index(drop=True)
+            frac_vis_resp_free = free_summary_stats.loc[free_summary_stats.old_index == 'all_cells',
+                                                        frac_vis_resp_cols].reset_index(drop=True)
             frac_vis_resp_fixed.fillna(0, inplace=True)
             frac_vis_resp_free.fillna(0, inplace=True)
 
@@ -886,10 +893,10 @@ for result, light, rig in itertools.product(results, lightings, rigs):
             if f'frac_vis_resp_{session_shorthand[1]}' in store.keys():
                 del store[f'frac_vis_resp_{session_shorthand[1]}']
 
-            store[f'count_vis_resp_{session_shorthand[0]}'] = count_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
-            store[f'count_vis_resp_{session_shorthand[1]}'] = count_vis_resp_free.drop(['mouse', 'day'], axis=1)
-            store[f'frac_vis_resp_{session_shorthand[0]}'] = frac_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
-            store[f'frac_vis_resp_{session_shorthand[1]}'] = frac_vis_resp_free.drop(['mouse', 'day'], axis=1)
+            store[f'count_vis_resp_{session_shorthand[0]}'] = count_vis_resp_fixed
+            store[f'count_vis_resp_{session_shorthand[1]}'] = count_vis_resp_free
+            store[f'frac_vis_resp_{session_shorthand[0]}'] = frac_vis_resp_fixed
+            store[f'frac_vis_resp_{session_shorthand[1]}'] = frac_vis_resp_free
 
         count_vis_resp_fixed = count_vis_resp_fixed.drop(['mouse', 'day'], axis=1)
         count_vis_resp_free = count_vis_resp_free.drop(['mouse', 'day'], axis=1)
@@ -1366,6 +1373,7 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                 raw_tunings = raw_tunings.fillna(0)
 
                 tunings = preproc.StandardScaler().fit_transform(raw_tunings.to_numpy())
+                print(f'{cell_kind} - {tunings.shape[0]} cells')
 
                 # perform umap on the fit cell tuning
                 embedded_data = reducer.fit_transform(tunings)
@@ -1435,6 +1443,9 @@ for result, light, rig in itertools.product(results, lightings, rigs):
 
                 tunings_1 = preproc.StandardScaler().fit_transform(raw_tunings_1.to_numpy())
                 tunings_2 = preproc.StandardScaler().fit_transform(raw_tunings_2.to_numpy())
+
+                print(f'{cell_kind} - {tunings_1.shape[0]} cells')
+                print(f'{cell_kind} - {tunings_2.shape[0]} cells')
 
                 # perform umap on the fit cell tuning
                 embedded_data_1 = reducer.fit_transform(tunings_1)

@@ -591,14 +591,18 @@ def normalize(data_in):
         return (data_in - np.nanmin(data_in)) / (np.nanmax(data_in) - np.nanmin(data_in))
 
 
-def normalize_responses(ds, remove_baseline=False, quantile=0.07):
+def normalize_responses(ds, remove_baseline=False, quantile=0.07, columnwise=True):
 
     ds_norm = ds.copy().fillna(0)
     
     # get the number of cells
     cells = [el for el in ds.columns if "cell" in el]
+
     # Normalize cell responses across all sessions
-    ds_norm[cells] = ds_norm[cells].apply(normalize, raw=True)
+    if columnwise:
+        ds_norm[cells] = ds_norm[cells].apply(normalize, raw=True)
+    else:
+        ds_norm[cells] = normalize(ds_norm[cells].to_numpy())
 
     if remove_baseline:
         # Get the 7th percentile of activity per cell for each stimulus
