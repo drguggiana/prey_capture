@@ -374,6 +374,7 @@ if __name__ == '__main__':
                 # Calculate delta prefs for all matched cells
                 delta_pref = pd.DataFrame()
                 if result in ['multi', 'control', 'fullfield']:
+
                     # use the fixed rig as the reference
                     for tuning_type in visual_shifts[id_flags[0]].keys():
                         # Recall that id_flags[0] is the free session, id_flags[1] is the fixed session

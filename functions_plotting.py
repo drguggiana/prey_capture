@@ -472,7 +472,7 @@ def plot_tuning_curve_hv(tuning_curve, error, fit=None, trials=None, pref_angle=
     return hv.Overlay(overlay)
 
 
-def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std', 
+def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std',
                            norm=True, polar=True, subfig=None,
                            plot_selectivity=True, plot_gof=False,
                            **kwargs):
@@ -515,6 +515,7 @@ def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std',
     ds = dataset.loc[cell, :]
     plot_kwargs = {'theta_max': 360 / multiplier}
     plot_kwargs.update(kwargs)
+    
     # Plot directions
     _ = tuning_plot_func(ds[columns[0]], ds[columns[1]],
                          trials=ds[columns[2]],
@@ -524,34 +525,34 @@ def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std',
                          **plot_kwargs
                          )
 
-    # Plot dsi or osi
-    if plot_selectivity:
-        ax2 = subfig.add_subplot(int(f'1{num_subplots}2'))  # resp
-        axes.append(ax2)
-        if 'direction' in tuning_kind:
-            si = 'dsi_abs'
-            title = 'DSI'
-            xlims = (-0.05, 1.001)
-            step = 0.025
-        else:
-            si = 'osi'
-            title = 'OSI'
-            xlims = (-0.05, 1.001)
-            step = 0.025
+    # # Plot dsi or osi
+    # if plot_selectivity:
+    #     ax2 = subfig.add_subplot(int(f'1{num_subplots}2'))  # resp
+    #     axes.append(ax2)
+    #     if 'direction' in tuning_kind:
+    #         si = 'dsi_abs'
+    #         title = 'DSI'
+    #         xlims = (-0.05, 1.001)
+    #         step = 0.025
+    #     else:
+    #         si = 'osi'
+    #         title = 'OSI'
+    #         xlims = (-0.05, 1.001)
+    #         step = 0.025
 
-        hist_resp = np.abs(ds[f'bootstrap_{si}'])
-        hist_resp[np.isnan(hist_resp)] = -0.05
-        real_resp = ds[si]
-        p_resp = ds[f'bootstrap_p_{si}']
-        edges = np.arange(*xlims, step)
-        ax2.hist(hist_resp, bins=edges, edgecolor="black", color=hv_blue_rgb)
-        ax2.axvline(x=real_resp, color='r', linestyle='dashed', linewidth=2)
-        # axes[1].text(1.0, 1.0, f"%ile={p_resp: .2f}", size=10, ha='right', va='bottom', transform=ax2.transAxes)
-        ax2.spines['right'].set_visible(False)
-        ax2.spines['top'].set_visible(False)
-        ax2.xaxis.set_ticks_position('bottom')
-        ax2.yaxis.set_ticks_position('left')
-        ax2.set_title(title)
+    #     hist_resp = np.abs(ds[f'bootstrap_{si}'])
+    #     hist_resp[np.isnan(hist_resp)] = -0.05
+    #     real_resp = ds[si]
+    #     p_resp = ds[f'bootstrap_p_{si}']
+    #     edges = np.arange(*xlims, step)
+    #     ax2.hist(hist_resp, bins=edges, edgecolor="black", color=hv_blue_rgb)
+    #     ax2.axvline(x=real_resp, color='r', linestyle='dashed', linewidth=2)
+    #     # axes[1].text(1.0, 1.0, f"%ile={p_resp: .2f}", size=10, ha='right', va='bottom', transform=ax2.transAxes)
+    #     ax2.spines['right'].set_visible(False)
+    #     ax2.spines['top'].set_visible(False)
+    #     ax2.xaxis.set_ticks_position('bottom')
+    #     ax2.yaxis.set_ticks_position('left')
+    #     ax2.set_title(title)
 
     # # Plot goodness of fit
     # if plot_gof:

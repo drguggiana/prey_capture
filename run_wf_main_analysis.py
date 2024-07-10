@@ -623,7 +623,7 @@ def plot_delta_pref(shifts: pd.DataFrame, session_types: List[str],
     
     scatter.opts(
         hv.opts.Scatter(xlim=(lower_lim, upper_lim), ylim=(lower_lim, upper_lim),
-                        xticks=np.linspace(lower_lim//2, upper_lim, 4),
+                        xticks=np.linspace(lower_lim, upper_lim, 5),
                         yticks=np.linspace(lower_lim, upper_lim, 5)
                         )
     )
@@ -662,14 +662,14 @@ fp.set_theme()
 in2cm = 1./2.54
 
 # define the experimental conditions
-results = ['multi', 'control', 'repeat',]    # 'multi', 'control', 'repeat', 'fullfield'
+results = ['multi', 'repeat', 'control']    # 'multi', 'control', 'repeat', 'fullfield'
 lightings = ['normal', 'dark']    # 'normal', 'dark'
 rigs = ['', 'VWheelWF', 'VTuningWF']    # '', 'VWheelWF', 'VTuningWF'
 analysis_type = 'agg_all'
 
 recalculate_vis_tuning = False
 
-save_base = r'H:\thesis\figures\WF_Figures'
+save_base = r'H:\thesis\figures\WF_Figures'       # r'H:\thesis\figures\WF_Figures', r"Z:\Prey_capture\WF_Figures"
 
 for result, light, rig in itertools.product(results, lightings, rigs):
 
@@ -762,6 +762,11 @@ for result, light, rig in itertools.product(results, lightings, rigs):
 
         # Concatenate the dataframes into a single dataframe
         curated_matches = pd.concat(curated_matches_dict.values(), ignore_index=True)
+
+        # rename columns
+        cols = curated_matches.columns.to_list()
+        cols[0] = 'old_index'
+        curated_matches.columns = cols
 
     except Exception as e:
         print(f"Could not find the file {curated_cell_matches_path}. Continuing with CaImAn matches...")
@@ -1109,16 +1114,22 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                     curated_ref_tcs_list = []
                     curated_comp_tcs_list = []
                     for day, mouse in curated_matches[['day', 'mouse']].drop_duplicates().to_numpy():
-                        curated_idxs = curated_matches.loc[(curated_matches.mouse == mouse) &
-                                                           (curated_matches.day == day)]['index'].to_numpy()
+                        day_mouse_matches = all_cell_matches.loc[(all_cell_matches.mouse == mouse) &
+                                                                 (all_cell_matches.day == day)]
+
+                        ref_original_cell_id = day_mouse_matches.iloc[:, 2].astype(int).to_list()
+                        ref_original_cell_id = [f'cell_{cell_id:04d}' for cell_id in ref_original_cell_id]
+
+                        comp_original_cell_id = day_mouse_matches.iloc[:, 1].astype(int)
+                        comp_original_cell_id = [f'cell_{cell_id:04d}' for cell_id in comp_original_cell_id]
 
                         ref_df = fixed_tcs_by_cell.loc[(fixed_tcs_by_cell.mouse == mouse) &
                                                        (fixed_tcs_by_cell.day == day)].copy()
                         comp_df = free_tcs_by_cell.loc[(free_tcs_by_cell.mouse == mouse) &
                                                        (free_tcs_by_cell.day == day)].copy()
 
-                        curated_ref_df = ref_df.loc[ref_df.old_index.isin(curated_idxs)]
-                        curated_comp_df = comp_df.loc[comp_df.old_index.isin(curated_idxs)]
+                        curated_ref_df = ref_df.loc[ref_df.cell.isin(ref_original_cell_id)]
+                        curated_comp_df = comp_df.loc[comp_df.cell.isin(comp_original_cell_id)]
 
                         curated_ref_tcs_list.append(curated_ref_df.copy())
                         curated_comp_tcs_list.append(curated_comp_df.copy())
@@ -1181,6 +1192,10 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                                                 [ref_tcs, ref_tcs_both_resp],
                                                 [comp_tcs, comp_tcs_both_resp]):
 
+                with pd.HDFStore(data_save_path, 'a') as store:
+                    store[f'ref_cells_{m_kind}_{vis_resp_kind}'] = ref
+                    store[f'comp_cells_{m_kind}_{vis_resp_kind}'] = comp
+
                 # --- Get the shifts in OSI/DSI
 
                 # First do it for all the cells
@@ -1224,15 +1239,15 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                 scatter_OSI_all = plot_delta_pref(all_osi_shifts, session_types, type='orientation')
                 scatter_OSI_all.opts(hv.opts.Scatter(color='gray', alpha=0.5))
 
-                scatter_OSI = plot_delta_pref(tuned_osi_shifts, session_types, type='orientation')
-                scatter_OSI.opts(hv.opts.Scatter(color=scatter_color_theme))
+                scatter_OSI_tuned = plot_delta_pref(tuned_osi_shifts, session_types, type='orientation')
+                scatter_OSI_tuned.opts(hv.opts.Scatter(color=scatter_color_theme))
 
-                scatter_OSI = hv.Overlay([scatter_OSI_all, scatter_OSI]).opts(show_legend=False)
+                scatter_OSI = hv.Overlay([scatter_OSI_all, scatter_OSI_tuned]).opts(show_legend=False)
 
                 scatter_OSI.opts(xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} OSI',
                                  ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} OSI')
                 scatter_OSI.opts(
-                    hv.opts.Scatter(xlim=(0, 1.05), ylim=(0, 1.05),
+                    hv.opts.Scatter(xlim=(-0.1, 1.1), ylim=(-0.1, 1.1),
                                     xticks=(0, 0.5, 1), yticks=(0, 0.5, 1),
                                     size=4))
 
@@ -1244,14 +1259,14 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                 scatter_DSI_all = plot_delta_pref(all_dsi_shifts, session_types, type='direction')
                 scatter_DSI_all.opts(hv.opts.Scatter(color='gray', alpha=0.5))
 
-                scatter_DSI = plot_delta_pref(tuned_dsi_shifts, session_types, type='direction')
-                scatter_DSI.opts(hv.opts.Scatter(color=scatter_color_theme))
+                scatter_DSI_tuned = plot_delta_pref(tuned_dsi_shifts, session_types, type='direction')
+                scatter_DSI_tuned.opts(hv.opts.Scatter(color=scatter_color_theme))
 
-                scatter_DSI = hv.Overlay([scatter_DSI_all, scatter_DSI]).opts(show_legend=False)
+                scatter_DSI = hv.Overlay([scatter_DSI_all, scatter_DSI_tuned]).opts(show_legend=False)
 
                 scatter_DSI.opts(xlabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[0]]} DSI',
                                  ylabel=f'{processing_parameters.wf_label_dictionary_wo_units[session_types[1]]} DSI')
-                scatter_DSI.opts(hv.opts.Scatter(xlim=(0, 1.05), ylim=(0, 1.05),
+                scatter_DSI.opts(hv.opts.Scatter(xlim=(-0.1, 1.1), ylim=(-0.1, 1.1),
                                                  xticks=(0, 0.5, 1), yticks=(0, 0.5, 1),
                                                  size=4))
 
@@ -1286,7 +1301,7 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                     store[f'pd_residuals_vis_resp_{m_kind}_{vis_resp_kind}'] = \
                         pd.DataFrame.from_dict({'direction': all_dir_residuals})
                     store[f'angle_residual_rmse_vis_resp_{m_kind}_{vis_resp_kind}'] = \
-                        pd.DataFrame.from_dict({'orientation': [ rmse_residual_ori_all],
+                        pd.DataFrame.from_dict({'orientation': [rmse_residual_ori_all],
                                                 'direction': [rmse_residual_dir_all]})
 
                     store[f'po_shifts_tuned_{m_kind}_{vis_resp_kind}'] = tuned_po_shifts
