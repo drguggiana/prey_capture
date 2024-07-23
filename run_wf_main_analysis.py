@@ -662,14 +662,14 @@ fp.set_theme()
 in2cm = 1./2.54
 
 # define the experimental conditions
-results = ['multi', 'repeat', 'control']    # 'multi', 'control', 'repeat', 'fullfield'
-lightings = ['normal', 'dark']    # 'normal', 'dark'
+results = ['multi', 'repeat']    # 'multi', 'control', 'repeat', 'fullfield'
+lightings = ['normal']    # 'normal', 'dark'
 rigs = ['', 'VWheelWF', 'VTuningWF']    # '', 'VWheelWF', 'VTuningWF'
 analysis_type = 'agg_all'
 
 recalculate_vis_tuning = False
 
-save_base = r'H:\thesis\figures\WF_Figures'       # r'H:\thesis\figures\WF_Figures', r"Z:\Prey_capture\WF_Figures"
+save_base = r'D:\thesis\WF_Figures'       # r'H:\thesis\figures\WF_Figures', r"Z:\Prey_capture\WF_Figures"
 
 for result, light, rig in itertools.product(results, lightings, rigs):
 
@@ -721,18 +721,23 @@ for result, light, rig in itertools.product(results, lightings, rigs):
             session_types = ['fixed0', 'fixed1']
             scatter_color_theme = 'red'
             fixed_violin_cmap = 'red'
+            free_violin_cmap = fp.hv_blue_hex
+
         elif parsed_search['rig'] in ['VTuningWF', 'VTuning']:
             session_types = ['free0', 'free1']
             scatter_color_theme = fp.hv_blue_hex
+            fixed_violin_cmap = 'red'
             free_violin_cmap = fp.hv_blue_hex
         else:
             raise Exception('Invalid rig')
 
         session_shorthand = session_types
+        ref_idx_order = [1, 2]
 
     elif parsed_search['result'] == 'control':
         session_types = ['VWheelWF', 'VTuningWF']
         session_shorthand = ['fixed', 'free']
+        ref_idx_order = [2, 1]
 
         if parsed_search['lighting'] == 'normal':
             fixed_violin_cmap = fp.hv_yellow_hex
@@ -751,13 +756,14 @@ for result, light, rig in itertools.product(results, lightings, rigs):
         fixed_violin_cmap = 'red'
         free_violin_cmap = fp.hv_blue_hex
         scatter_color_theme = 'purple'
+        ref_idx_order = [1, 2]
 
     # Specify the path to the curated cell matches file
     curated_cell_matches_path = os.path.join(r"C:\Users\mmccann\Desktop", 
                                 f"curated_cell_matches_{parsed_search['result']}_{parsed_search['lighting']}_{parsed_search['rig']}.xlsx")
 
     try:
-        # Read all sheets into a list of dataframes
+        # Read all sheets into a dict of dataframes
         curated_matches_dict = pd.read_excel(curated_cell_matches_path, sheet_name=None)
 
         # Concatenate the dataframes into a single dataframe
@@ -1107,38 +1113,48 @@ for result, light, rig in itertools.product(results, lightings, rigs):
         match_kind = ['all_matches', 'curated_matches']
 
         for m_kind in match_kind:
+
             # Get the hand-curated matches and filter the data by these
             if m_kind == 'curated_matches':
 
                 if curated_matches is not None:
                     curated_ref_tcs_list = []
                     curated_comp_tcs_list = []
+
                     for day, mouse in curated_matches[['day', 'mouse']].drop_duplicates().to_numpy():
-                        day_mouse_matches = all_cell_matches.loc[(all_cell_matches.mouse == mouse) &
-                                                                 (all_cell_matches.day == day)]
+                        # There's occasionally bullshit where some days that I did matching are excluded from the
+                        # dataset for one reason or another. This throws an an error. Skip them.
 
-                        ref_original_cell_id = day_mouse_matches.iloc[:, 2].astype(int).to_list()
-                        ref_original_cell_id = [f'cell_{cell_id:04d}' for cell_id in ref_original_cell_id]
+                        try:
+                            curated_day_mouse_matches = curated_matches.loc[(curated_matches.mouse == mouse) &
+                                                                             (curated_matches.day == day), :]
 
-                        comp_original_cell_id = day_mouse_matches.iloc[:, 1].astype(int)
-                        comp_original_cell_id = [f'cell_{cell_id:04d}' for cell_id in comp_original_cell_id]
+                            ref_original_cell_id = curated_day_mouse_matches.iloc[:, ref_idx_order[0]].astype(int)
+                            ref_original_cell_id = [f'cell_{cell_id:04d}' for cell_id in ref_original_cell_id]
 
-                        ref_df = fixed_tcs_by_cell.loc[(fixed_tcs_by_cell.mouse == mouse) &
-                                                       (fixed_tcs_by_cell.day == day)].copy()
-                        comp_df = free_tcs_by_cell.loc[(free_tcs_by_cell.mouse == mouse) &
-                                                       (free_tcs_by_cell.day == day)].copy()
+                            comp_original_cell_id = curated_day_mouse_matches.iloc[:, ref_idx_order[1]].astype(int)
+                            comp_original_cell_id = [f'cell_{cell_id:04d}' for cell_id in comp_original_cell_id]
 
-                        curated_ref_df = ref_df.loc[ref_df.cell.isin(ref_original_cell_id)]
-                        curated_comp_df = comp_df.loc[comp_df.cell.isin(comp_original_cell_id)]
+                            ref_df = fixed_tcs_by_cell.loc[(fixed_tcs_by_cell.mouse == mouse) &
+                                                           (fixed_tcs_by_cell.day == day)].copy()
+                            comp_df = free_tcs_by_cell.loc[(free_tcs_by_cell.mouse == mouse) &
+                                                           (free_tcs_by_cell.day == day)].copy()
 
-                        curated_ref_tcs_list.append(curated_ref_df.copy())
-                        curated_comp_tcs_list.append(curated_comp_df.copy())
+                            curated_ref_df = ref_df.set_index('cell').loc[ref_original_cell_id].copy().reset_index()
+                            curated_comp_df = comp_df.set_index('cell').loc[comp_original_cell_id].copy().reset_index()
 
-                    curated_ref_df = pd.concat(curated_ref_tcs_list).reset_index(drop=True)
-                    curated_comp_df = pd.concat(curated_comp_tcs_list).reset_index(drop=True)
+                            curated_ref_tcs_list.append(curated_ref_df.copy())
+                            curated_comp_tcs_list.append(curated_comp_df.copy())
 
-                    ref_tcs = curated_ref_df
-                    comp_tcs = curated_comp_df
+                        except:
+                            print(f'Weird error with curated matches for {mouse} on day {day}. Skipping...')
+                            continue
+
+                    curated_ref_df = pd.concat(curated_ref_tcs_list)
+                    curated_comp_df = pd.concat(curated_comp_tcs_list)
+
+                    ref_tcs = curated_ref_df.reset_index(drop=True)
+                    comp_tcs = curated_comp_df.reset_index(drop=True)
 
                 else:
                     print('No curated matches for these experiments. Using all matches...')
@@ -1150,25 +1166,37 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                 match_comp_tcs_list = []
                 for day, mouse in all_cell_matches[['day', 'mouse']].drop_duplicates().to_numpy():
 
-                    match_idxs = all_cell_matches.loc[(all_cell_matches.mouse == mouse) &
-                                                      (all_cell_matches.day == day)]['old_index'].to_numpy()
+                    day_mouse_matches = all_cell_matches.loc[(all_cell_matches.mouse == mouse) &
+                                                             (all_cell_matches.day == day)]
+                    day_mouse_matches.dropna(inplace=True)
 
-                    ref_df = fixed_tcs_by_cell.loc[
-                        (fixed_tcs_by_cell.mouse == mouse) & (fixed_tcs_by_cell.day == day)].copy()
-                    comp_df = free_tcs_by_cell.loc[
-                        (free_tcs_by_cell.mouse == mouse) & (free_tcs_by_cell.day == day)].copy()
+                    ref_original_cell_id = day_mouse_matches.iloc[:, ref_idx_order[0]].astype(int).to_list()
+                    ref_original_cell_id = [f'cell_{cell_id:04d}' for cell_id in ref_original_cell_id]
 
-                    match_ref_this_df = ref_df.loc[ref_df.old_index.isin(match_idxs)]
-                    match_comp_this_df = comp_df.loc[comp_df.old_index.isin(match_idxs)]
+                    comp_original_cell_id = day_mouse_matches.iloc[:, ref_idx_order[1]].astype(int)
+                    comp_original_cell_id = [f'cell_{cell_id:04d}' for cell_id in comp_original_cell_id]
+
+                    ref_df = fixed_tcs_by_cell.loc[(fixed_tcs_by_cell.mouse == mouse) &
+                                                   (fixed_tcs_by_cell.day == day)].copy()
+                    comp_df = free_tcs_by_cell.loc[(free_tcs_by_cell.mouse == mouse) &
+                                                   (free_tcs_by_cell.day == day)].copy()
+
+                    match_ref_this_df = ref_df.loc[ref_df.cell.isin(ref_original_cell_id)]
+                    match_comp_this_df = comp_df.loc[comp_df.cell.isin(comp_original_cell_id)]
 
                     match_ref_tcs_list.append(match_ref_this_df.copy())
                     match_comp_tcs_list.append(match_comp_this_df.copy())
 
-                match_ref_df = pd.concat(match_ref_tcs_list).reset_index(drop=True)
-                match_comp_df = pd.concat(match_comp_tcs_list).reset_index(drop=True)
+                match_ref_df = pd.concat(match_ref_tcs_list)
+                match_comp_df = pd.concat(match_comp_tcs_list)
 
                 ref_tcs = match_ref_df
                 comp_tcs = match_comp_df
+
+            # --- Calculate the OSI/DSI shifts --- #
+
+            ref_tcs = ref_tcs.reset_index(drop=True)
+            comp_tcs = comp_tcs.reset_index(drop=True)
 
             # Set any selectivity index less than 0 to 0
             ref_tcs.loc[ref_tcs.fit_osi < 0, 'fit_osi'] = 0
@@ -1193,6 +1221,12 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                                                 [comp_tcs, comp_tcs_both_resp]):
 
                 with pd.HDFStore(data_save_path, 'a') as store:
+                    if f'ref_cells_{m_kind}_{vis_resp_kind}' in store.keys():
+                        del store[f'ref_cells_{m_kind}_{vis_resp_kind}']
+
+                    if f'comp_cells_{m_kind}_{vis_resp_kind}' in store.keys():
+                        del store[f'comp_cells_{m_kind}_{vis_resp_kind}']
+
                     store[f'ref_cells_{m_kind}_{vis_resp_kind}'] = ref
                     store[f'comp_cells_{m_kind}_{vis_resp_kind}'] = comp
 
