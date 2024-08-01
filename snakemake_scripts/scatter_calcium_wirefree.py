@@ -88,8 +88,9 @@ try:
         if frame_list == 'no_ROIs':
             raise ValueError('empty file')
 
+        raw_fluor_data = np.array(f['YrA'])  # this is raw fluorescence
         spikes_data = np.array(f['S'])     # these are inferred spikes
-        fluor_data = np.array(f['C'])      # This is raw fluorescence
+        deconv_fluor_data = np.array(f['C'])      # This is deconvolved fluorescence
         footprints = np.array(f['A'])
         processed_frames = np.array(f['processed_frames'])
 
@@ -108,7 +109,8 @@ try:
     prepend_pad[:] = np.NaN
     postpend_pad[:] = np.NaN
     current_spikes = np.concatenate((prepend_pad, spikes_data, postpend_pad), axis=1)
-    current_fluor = np.concatenate((prepend_pad, fluor_data, postpend_pad), axis=1)
+    current_deconv_fluor = np.concatenate((prepend_pad, deconv_fluor_data, postpend_pad), axis=1)
+    current_raw_fluor = np.concatenate((prepend_pad, raw_fluor_data, postpend_pad), axis=1)
 
     # clear the rois that don't pass the size criteria
     roi_info = fm.get_roi_stats(footprints)
@@ -127,13 +129,15 @@ try:
 
     # remove from the calcium
     current_spikes = current_spikes[keep_vector, :]
-    current_fluor = current_fluor[keep_vector, :]
+    current_deconv_fluor = current_deconv_fluor[keep_vector, :]
+    current_raw_fluor = current_raw_fluor[keep_vector, :]
     roi_info = roi_info[keep_vector, :]
 
     # save the data as an h5py
     with h5py.File(out_path, 'w') as file:
         file.create_dataset('calcium_data', data=current_spikes)
-        file.create_dataset('fluor_data', data=current_fluor)
+        file.create_dataset('deconv_fluor_data', data=current_deconv_fluor)
+        file.create_dataset('raw_fluor_data', data=current_raw_fluor)
         file.create_dataset('roi_info', data=roi_info)
 
 except (KeyError, ValueError):
@@ -142,7 +146,8 @@ except (KeyError, ValueError):
     # create a dummy empty file
     with h5py.File(out_path, 'w') as file:
         file.create_dataset('calcium_data', data='no_ROIs')
-        file.create_dataset('fluor_data', data='no_ROIs')
+        file.create_dataset('deconv_fluor_data', data='no_ROIs')
+        file.create_dataset('raw_fluor_data', data='no_ROIs')
         file.create_dataset('roi_info', data='no_ROIs')
 
 # update the bondjango entry (need to sort out some fields)
