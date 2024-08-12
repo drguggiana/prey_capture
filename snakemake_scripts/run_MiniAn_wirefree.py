@@ -128,7 +128,7 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=400):
     # start the cluster
     cluster = LocalCluster(
         n_workers=n_workers,
-        memory_limit="15GB",
+        memory_limit="12GB",
         resources={"MEM": 1},
         threads_per_worker=2,
         dashboard_address=":8789",
