@@ -313,7 +313,7 @@ def minian_main(rig, animal, override_dpath=None, subset_start_idx=400):
     A = A.sel(unit_id=C.coords["unit_id"].values)
 
     # save final results for output
-    YrA = save_minian(YrA.rename("A"), **param_save_minian)
+    YrA = save_minian(YrA.rename("YrA"), **param_save_minian)
     A = save_minian(A.rename("A"), **param_save_minian)
     C = save_minian(C.rename("C"), **param_save_minian)
     S = save_minian(S.rename("S"), **param_save_minian)
