@@ -73,7 +73,7 @@ if __name__ == '__main__':
     reg_basepath = r"Z:\Prey_capture\WF_cell_matching_cellreg"
 
     # Search for the cell matching file
-    calcium_data = bd.query_database('analyzed_data', f'mouse:{mouse}, slug:{day}, analysis_type:calciumraw')
+    calcium_data = bd.query_database('analyzed_data', f'slug:{day}, analysis_type:calciumraw')
     calcium_data = [el for el in calcium_data if mouse.lower() in el['slug']]
 
     # Check if at least two files are present for matching
@@ -86,30 +86,36 @@ if __name__ == '__main__':
         calcium_data_paths = [data['analysis_path'] for data in calcium_data]
         calcium_data_slugs = [data['slug'] for data in calcium_data]
 
-        # Create the experiment directory
+        # Create the experiment directory, if it doesn't exist already
         this_exp_dir = os.path.join(reg_basepath, result, lighting, f'{day}_{mouse}')
         if not os.path.isdir(this_exp_dir):
             os.makedirs(this_exp_dir)
+            all_present = False
 
         else:
             # Check if the footprints are already saved
+            present_files = [os.path.basename(file).lower().split('.')[0] for
+                             file in os.listdir(this_exp_dir) if
+                             file.endswith('.mat')]
+            is_slug = [slug in present_files for slug in calcium_data_slugs]
+            all_present = all(is_slug)
 
-            if len(os.listdir(this_exp_dir)) == len(calcium_data):
-                # Skip if already saved
-                print(f'Footprints already saved for {mouse} on {day}. Skipping...')
-            else:
-                # Load the ROI footprints and save to the new directory for the cell matching
-                for i, file in enumerate(calcium_data_paths):
-                    flag = load_footprints_save_mat(file, this_exp_dir)
+        if all_present:
+            # Skip if already saved
+            print(f'Footprints already saved for {mouse} on {day}. Skipping...')
+        else:
+            # Load the ROI footprints and save to the new directory for the cell matching
+            for i, file in enumerate(calcium_data_paths):
+                flag = load_footprints_save_mat(file, this_exp_dir)
 
-                    if flag == 'success':
-                        continue
-                    else:
-                        print(f'No footprints found in {file}. Deleting folder and skipping...')
-                        shutil.rmtree(this_exp_dir)
+                if flag == 'success':
+                    continue
+                else:
+                    print(f'No footprints found in {file}. Deleting folder and skipping...')
+                    shutil.rmtree(this_exp_dir)
 
-                if i == len(calcium_data_paths) - 1:
-                    print(f'Saved footprints for {mouse} on {day} to {this_exp_dir}')
+            if i == len(calcium_data_paths):
+                print(f'Saved footprints for {mouse} on {day} to {this_exp_dir}')
 
     # Write the dummy file
     with open(dummy_out_file, 'w') as f:
