@@ -597,8 +597,12 @@ def parse_kinematic_data(matched_calcium, rig):
         matched_calcium.loc[mask, 'orientation'] = matched_calcium.loc[mask, 'orientation'].apply(fk.wrap, bound=180.1)
         matched_calcium.loc[mask, 'orientation_rel_ground'] = matched_calcium.loc[mask, 'orientation_rel_ground'].apply(fk.wrap, bound=180.1)
 
+    # Parse columns for calcium data
     spikes_cols = [key for key in matched_calcium.keys() if 'spikes' in key]
-    fluor_cols = [key for key in matched_calcium.keys() if 'fluor' in key]
+    raw_fluor_cols = [key for key in matched_calcium.keys() if 'raw_fluor' in key]
+    deconv_fluor_cols = [key for key in matched_calcium.keys() if 'deconv_fluor' in key]
+    dff_cols = [key for key in matched_calcium.keys() if 'dff' in key]
+
     motive_tracking_cols = ['mouse_y_m', 'mouse_z_m', 'mouse_x_m', 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m']
 
     # If there is more than one spatial or temporal frequency, include it, othewise don't
@@ -641,10 +645,14 @@ def parse_kinematic_data(matched_calcium, rig):
     # TODO - handle raw fluorescence and spikes
     raw_spikes = matched_calcium.loc[:, stimulus_cols + spikes_cols]
     raw_spikes.columns = [key.rsplit('_', 1)[0] if 'spikes' in key else key for key in raw_spikes.columns]
-    raw_fluor = matched_calcium.loc[:, stimulus_cols + fluor_cols]
-    raw_fluor.columns = [key.rsplit('_', 1)[0] if 'fluor' in key else key for key in raw_fluor.columns]
+    raw_fluor = matched_calcium.loc[:, stimulus_cols + raw_fluor_cols]
+    raw_fluor.columns = [key.rsplit('_', 1)[0] if 'raw_fluor' in key else key for key in raw_fluor.columns]
+    deconv_fluor = matched_calcium.loc[:, stimulus_cols + deconv_fluor_cols]
+    deconv_fluor.columns = [key.rsplit('_', 1)[0] if 'deconv_fluor' in key else key for key in deconv_fluor.columns]
+    dff = matched_calcium.loc[:, stimulus_cols + dff_cols]
+    dff.columns = [key.rsplit('_', 1)[0] if 'dff' in key else key for key in dff.columns]
 
-    return kinematics, raw_spikes, raw_fluor
+    return kinematics, raw_spikes, raw_fluor, dff, deconv_fluor
 
 
 def predict_running_gmm_hmm(running_trace, n_components=2):
@@ -827,22 +835,23 @@ if __name__ == '__main__':
 
         else:
             # --- Process visual tuning --- #
-            kinematics, inferred_spikes, deconvolved_fluor = parse_kinematic_data(raw_data[0][-1], rig)
+
+            # Separate the kinematic and neural data
+            kinematics, inferred_spikes, raw_fluor, dff, deconvolved_fluor = parse_kinematic_data(raw_data[0][-1], rig)
 
             # Calculate normalized fluorescence and spikes
             activity_ds_dict = {}
+            activity_ds_dict['raw_fluor'] = raw_fluor
+            activity_ds_dict['dff'] = dff
             activity_ds_dict['deconvolved_fluor'] = deconvolved_fluor
             activity_ds_dict['inferred_spikes'] = inferred_spikes
 
-            norm_spikes = tuning.normalize_responses(inferred_spikes)
-            norm_fluor = tuning.normalize_responses(deconvolved_fluor)
-            activity_ds_dict['norm_deconvolved_fluor'] = norm_fluor
-            activity_ds_dict['norm_inferred_spikes'] = norm_spikes
-
-            # dff = tuning.calculate_dff(deconvolved_fluor, baseline_type='quantile', quantile=0.08)
-            # norm_dff = tuning.normalize_responses(dff)
-            # activity_ds_dict['dff'] = dff
-            # activity_ds_dict['norm_dff'] = norm_dff
+            norm_dff = tuning.normalize_responses(dff)
+            norm_inf_spikes = tuning.normalize_responses(inferred_spikes)
+            norm_deconv_fluor = tuning.normalize_responses(deconvolved_fluor)
+            activity_ds_dict['norm_dff'] = norm_dff
+            activity_ds_dict['norm_deconvolved_fluor'] = norm_deconv_fluor
+            activity_ds_dict['norm_inferred_spikes'] = norm_inf_spikes
 
             # Filter trials by head pitch if freely moving
             if rig in ['VTuningWF', 'VTuning']:
@@ -903,8 +912,8 @@ if __name__ == '__main__':
                     activity_ds_type = 'spikes'
                 elif 'dff' in ds_name:
                     activity_ds_type = 'dff'
-                elif 'fluor' in ds_name:
-                    activity_ds_type = 'fluor'
+                elif 'deconv_fluor' in ds_name:
+                    activity_ds_type = 'deconv_fluor'
                 else:
                     raise ValueError(f'Unknown activity dataset type: {ds_name}')
 

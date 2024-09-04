@@ -67,17 +67,21 @@ if __name__ == '__main__':
     if len(raw_data) != 0:
 
         # --- Process visual tuning --- #
-        kinematics, inferred_spikes, deconvolved_fluor = parse_kinematic_data(raw_data[0], rig)
+        kinematics, inferred_spikes, raw_fluor, dff, deconvolved_fluor = parse_kinematic_data(raw_data[0], rig)
 
         # Calculate normalized fluorescence and spikes
         activity_ds_dict = {}
+        activity_ds_dict['raw_fluor'] = raw_fluor
+        activity_ds_dict['dff'] = dff
         activity_ds_dict['deconvolved_fluor'] = deconvolved_fluor
         activity_ds_dict['inferred_spikes'] = inferred_spikes
 
-        norm_spikes = tuning.normalize_responses(inferred_spikes)
-        norm_fluor = tuning.normalize_responses(deconvolved_fluor)
-        activity_ds_dict['norm_deconvolved_fluor'] = norm_fluor
-        activity_ds_dict['norm_inferred_spikes'] = norm_spikes
+        norm_dff = tuning.normalize_responses(dff)
+        norm_inf_spikes = tuning.normalize_responses(inferred_spikes)
+        norm_deconv_fluor = tuning.normalize_responses(deconvolved_fluor)
+        activity_ds_dict['norm_dff'] = norm_dff
+        activity_ds_dict['norm_deconvolved_fluor'] = norm_deconv_fluor
+        activity_ds_dict['norm_inferred_spikes'] = norm_inf_spikes
 
         # Filter trials by head pitch if freely moving
         if rig in ['VTuningWF', 'VTuning']:
@@ -128,7 +132,9 @@ if __name__ == '__main__':
 
         # Run the visual tuning loop and save to file
         print('Calculating visual tuning curves...')
+        
         vis_prop_dict = {}
+
         for ds_name in processing_parameters.activity_datasets:
 
             if ds_name not in activity_ds_dict.keys():
@@ -138,8 +144,8 @@ if __name__ == '__main__':
                 activity_ds_type = 'spikes'
             elif 'dff' in ds_name:
                 activity_ds_type = 'dff'
-            elif 'fluor' in ds_name:
-                activity_ds_type = 'fluor'
+            elif 'deconv_fluor' in ds_name:
+                activity_ds_type = 'deconv_fluor'
             else:
                 raise ValueError(f'Unknown activity dataset type: {ds_name}')
 

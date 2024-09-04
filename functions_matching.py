@@ -1,15 +1,18 @@
-import numpy as np
-from sklearn.preprocessing import scale
-from scipy.interpolate import interp1d
-from scipy import signal
-import cv2
-from functions_misc import add_edges, interp_trace, normalize_matrix
-import h5py
-import pandas as pd
 import os
 import datetime
+
+import cv2
+import h5py
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+from scipy import signal
 from scipy.ndimage import label
+from scipy.interpolate import interp1d
+from sklearn.preprocessing import scale
+
+from functions_tuning import calculate_dff
+from functions_misc import add_edges, interp_trace, normalize_matrix
 
 
 def align_traces_maxrate(frame_rate_1, frame_rate_2, data_1, data_2, sign_vector, frame_times, cricket, z=1):
@@ -939,8 +942,10 @@ def match_calcium_2(calcium_path, sync_path, kinematics_data, trials=None):
     full_dataframe.loc[:, 'time_vector'] = np.array([el - old_time[0] for el in old_time])
 
     # turn the roi info into a dataframe
-    roi_info = pd.DataFrame(roi_info, columns=['centroid_x', 'centroid_y',
-                                               'bbox_left', 'bbox_top', 'bbox_width', 'bbox_height', 'area'])
+    roi_info = pd.DataFrame(roi_info, 
+                            columns=['centroid_x', 'centroid_y',
+                                     'bbox_left', 'bbox_top', 'bbox_width', 'bbox_height', 
+                                     'area'])
 
     return full_dataframe, roi_info
 
@@ -952,18 +957,22 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
 
     # load the calcium data (cells x time), transpose to get time x cells
     with h5py.File(calcium_path, mode='r') as f:
-        calcium_data = np.array(f['calcium_data']).T
-        try:
-            deconv_fluor_data = np.array(f['deconv_fluor_data']).T
-        except KeyError:
-            deconv_fluor_data = np.array(f['fluor_data']).T
+
+        # Load the inferred spikes (must be present)
+        inferred_spikes = np.array(f['calcium_data']).T
+
+        # Load the raw fluorescence data (must be present)
+        raw_fluor_data = np.array(f['raw_fluor_data']).T
+
+        # Load the deconvolved fluorescence data (must be present)
+        deconv_fluor_data = np.array(f['deconv_fluor_data']).T
 
         # if there are no ROIs, skip
-        if (type(calcium_data) == np.ndarray) and np.any(calcium_data.astype(str) == 'no_ROIs'):
+        if (type(inferred_spikes) == np.ndarray) and np.any(inferred_spikes.astype(str) == 'no_ROIs'):
             return None, None
 
         roi_info = np.array(f['roi_info'])
-        ca_frames = np.arange(calcium_data.shape[0], dtype=int)
+        ca_frames = np.arange(inferred_spikes.shape[0], dtype=int)
 
     # check if there are nans in the columns, if so, also skip
     if kinematics_data.columns[0] == 'badFile':
@@ -997,20 +1006,22 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     if frame_idx_mini_sync[0] < frame_idx_camera_sync[0]:
         start_idx = np.argwhere(frame_idx_mini_sync > frame_idx_camera_sync[0])[0][0]
         frame_idx_mini_sync = frame_idx_mini_sync[start_idx:]
-        calcium_data = calcium_data[start_idx:, :]
+        inferred_spikes = inferred_spikes[start_idx:, :]
         deconv_fluor_data = deconv_fluor_data[start_idx:, :]
+        raw_fluor_data = raw_fluor_data[start_idx:, :]
         ca_frames = ca_frames[start_idx:]
 
     # if the calcium ends after the behavior (when experiment runs to completion)
     if frame_idx_mini_sync[-1] > frame_idx_camera_sync[-1]:
         end_idx = np.argwhere(frame_idx_mini_sync < frame_idx_camera_sync[-1])[-1][0] + 1
         frame_idx_mini_sync = frame_idx_mini_sync[:end_idx]
-        calcium_data = calcium_data[:end_idx, :]
+        inferred_spikes = inferred_spikes[:end_idx, :]
         deconv_fluor_data = deconv_fluor_data[:end_idx, :]
+        raw_fluor_data = raw_fluor_data[:end_idx, :]
         ca_frames = ca_frames[:end_idx]
 
     # get the delta frames with the calcium
-    delta_frames = frame_idx_mini_sync.shape[0] - calcium_data.shape[0]
+    delta_frames = frame_idx_mini_sync.shape[0] - inferred_spikes.shape[0]
 
     # remove extra detections coming from terminating the calcium mid frame (I think)
     if delta_frames > 0:
@@ -1019,19 +1030,27 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
         
     elif delta_frames < 0:
         print(f'There were {-delta_frames} more frames than triggers on file {os.path.basename(calcium_path)}')
-        calcium_data = calcium_data[:delta_frames, :]
+        inferred_spikes = inferred_spikes[:delta_frames, :]
         deconv_fluor_data = deconv_fluor_data[:delta_frames, :]
+        raw_fluor_data = raw_fluor_data[:delta_frames, :]
         ca_frames = ca_frames[:delta_frames]
 
+    else:
+        pass
+
     idx_vector = frame_idx_mini_sync > frame_idx_camera_sync[0]
-    # trim calcium according to the frames left within the behavior
-    calcium_data = calcium_data[idx_vector, :]
-    # do the same with fluorescence data
+
+    # trim neural data according to the frames left within the behavior
+    inferred_spikes = inferred_spikes[idx_vector, :]
+    raw_fluor_data = raw_fluor_data[idx_vector, :]
     deconv_fluor_data = deconv_fluor_data[idx_vector, :]
+
     # and also with the frame indexes
     ca_frames = ca_frames[idx_vector]
+
     # and then remove frames before the behavior starts
     frame_idx_mini_sync = frame_idx_mini_sync[idx_vector]
+
     # get the actual mini times
     frame_times_mini_sync = sync_data.loc[frame_idx_mini_sync, 'Time'].to_numpy()
 
@@ -1110,14 +1129,24 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     matched_bonsai['ca_tif_frames'] = ca_frames
 
     # print a single dataframe with the calcium matched positions and timestamps
-    cell_column_names = ['_'.join(('cell', f'{el:04d}', 'spikes')) for el in range(calcium_data.shape[1])]
-    calcium_dataframe = pd.DataFrame(calcium_data, columns=cell_column_names)
+    cell_column_names = ['_'.join(('cell', f'{el:04d}', 'spikes')) for el in range(inferred_spikes.shape[1])]
+    calcium_dataframe = pd.DataFrame(inferred_spikes, columns=cell_column_names)
 
-    cell_column_names = [col.replace('spikes', 'fluor') for col in cell_column_names]
+    cell_column_names = [col.replace('spikes', 'deconv_fluor') for col in cell_column_names]
     deconv_fluorescence_dataframe = pd.DataFrame(deconv_fluor_data, columns=cell_column_names)
 
-    # concatenate both data frames
-    full_dataframe = pd.concat([matched_bonsai, calcium_dataframe, deconv_fluorescence_dataframe], axis=1)
+    cell_column_names = [col.replace('deconv_fluor', 'raw_fluor') for col in cell_column_names]
+    raw_fluorescence_dataframe = pd.DataFrame(raw_fluor_data, columns=cell_column_names)
+
+    # With the raw fluorescence data, we can calculate the dF/F0 and add it to the dataframe
+    # dF/F0 = (F - F0) / F0, where F0 is the baseline fluorescence as established by the 10th percentile
+    # of the raw fluorescence signal
+    dff_dataframe = calculate_dff(raw_fluorescence_dataframe.copy(), baseline_type='quantile', quantile=0.10)
+    cell_column_names = [col.replace('raw_fluor', 'dff') for col in cell_column_names]
+    dff_dataframe.columns = cell_column_names
+
+    # concatenate all data frames
+    full_dataframe = pd.concat([matched_bonsai, calcium_dataframe, deconv_fluorescence_dataframe, raw_fluorescence_dataframe, dff_dataframe], axis=1)
 
     # reset the time vector
     old_time = full_dataframe['time_vector']

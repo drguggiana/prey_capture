@@ -135,20 +135,21 @@ try:
 
     # save the data as an h5py
     with h5py.File(out_path, 'w') as file:
-        file.create_dataset('calcium_data', data=current_spikes)
-        file.create_dataset('deconv_fluor_data', data=current_deconv_fluor)
-        file.create_dataset('raw_fluor_data', data=current_raw_fluor)
         file.create_dataset('roi_info', data=roi_info)
+        file.create_dataset('raw_fluor_data', data=current_raw_fluor)
+        file.create_dataset('deconv_fluor_data', data=current_deconv_fluor)
+        # Ideally, this would be called spikes, but keep the name to work with the existing code
+        file.create_dataset('calcium_data', data=current_spikes)    
 
 except (KeyError, ValueError):
     print('This file did not contain any ROIs: ' + calcium_path)
     
     # create a dummy empty file
     with h5py.File(out_path, 'w') as file:
+        file.create_dataset('roi_info', data='no_ROIs')
+        file.create_dataset('raw_fluor_data', data='no_ROIs')
         file.create_dataset('calcium_data', data='no_ROIs')
         file.create_dataset('deconv_fluor_data', data='no_ROIs')
-        file.create_dataset('raw_fluor_data', data='no_ROIs')
-        file.create_dataset('roi_info', data='no_ROIs')
 
 # update the bondjango entry (need to sort out some fields)
 ori_data = video_data.copy()

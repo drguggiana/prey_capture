@@ -322,11 +322,6 @@ kinematics_data.to_hdf(save_path, key='full_traces', mode='a', format='fixed')
 corners_df = DataFrame(data=corners, columns=['x', 'y'])
 corners_df.to_hdf(save_path, key='arena_corners', mode='a')
 
-# # For these trials, save the trial set and the trial parameters to the output file
-# if files['rig'] in ['VTuning', 'VWheel']:
-#     trials.to_hdf(save_path, key='trial_set', mode='a', format='table')
-#     params.to_hdf(save_path, key='params', mode='a', format='table')
-
 # generate the output figure
 fig_final = fplot.preprocessing_figure(filtered_traces, real_crickets, vr_crickets, corners)
 
