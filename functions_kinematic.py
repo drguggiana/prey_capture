@@ -1,6 +1,5 @@
 import numpy as np
 import scipy.stats as st
-from functions_matching import interp_motive
 
 
 def wrap(angles, bound=360.):
@@ -101,6 +100,7 @@ def _circfuncs_common(samples, high, low):
 
 
 def jump_killer(data_in, jump_threshold, discont=3.141592653589793):
+    from functions_matching import interp_motive
     # unwrap the trace
     data_in = unwrap(data_in, discont=discont)
     # id the large jumps

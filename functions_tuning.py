@@ -6,7 +6,7 @@ from scipy.optimize import least_squares, curve_fit
 from sklearn.metrics import r2_score, mean_squared_error
 
 import processing_parameters
-import functions_kinematic as fk
+from functions_kinematic import wrap, wrap_negative
 from functions_misc import find_nearest
 
 
@@ -110,8 +110,8 @@ def calculate_pref_gaussian(angles, tuning_curve, fit_kind, **kwargs):
 
     # Following Carandini and Ferster, 2000, (https://doi.org/10.1523%2FJNEUROSCI.20-01-00470.2000)
     # initialize the double gaussian with the same width and amplitude, but shift the mean of the second gaussian
-    # if wrapping on [-180, 180] domain, use fk.wrap(mean + mean_shift, bound=180) - mean_shift
-    mean2 = fk.wrap(mean + 180)
+    # if wrapping on [-180, 180] domain, use wrap(mean + mean_shift, bound=180) - mean_shift
+    mean2 = wrap(mean + 180)
 
     init_params = [amp, mean, width, amp, mean2, width]
     lower_bound = [0, 0, 10, 0, 0, 10]
@@ -156,8 +156,8 @@ def calculate_pref_direction(angles, tuning_curve, **kwargs):
 
     # Following Carandini and Ferster, 2000, (https://doi.org/10.1523%2FJNEUROSCI.20-01-00470.2000)
     # initialize the double gaussian with the same width and amplitude, but shift the mean of the second gaussian
-    # if wrapping on [-180, 180] domain, use fk.wrap(mean + mean_shift, bound=180) - mean_shift
-    mean2 = fk.wrap(mean + 180)
+    # if wrapping on [-180, 180] domain, use wrap(mean + mean_shift, bound=180) - mean_shift
+    mean2 = wrap(mean + 180)
 
     # init_params = [amp, mean, width, amp, mean2, width]
     # lower_bound = [0, 0, 10, 0, 0, 10]
@@ -244,7 +244,7 @@ def calculate_pref_von_mises(angles, tuning_curve, fit_kind, **kwargs):
     amp = kwargs.get('amplitude', min(1, np.max(curve_to_fit, axis=0)))
     kappa = kwargs.get('kappa', 5)
     mean = kwargs.get('mean', rads[np.argmax(curve_to_fit, axis=0)])
-    mean2 = fk.wrap(mean + np.pi, bound=2*np.pi)
+    mean2 = wrap(mean + np.pi, bound=2*np.pi)
 
     init_params = [amp, mean, kappa, amp, mean2, kappa]
     lower_bound = [0, 0, 1, 0, 0, 1]
@@ -335,8 +335,8 @@ def bootstrap_resultant_orientation(responses, multiplier, sampling_method, min_
 
             resultant_length, resultant_angle = resultant_vector(theta_subset, magnitude_subset, multiplier)
             # Need this correction because pycircstat does mod2pi by default
-            resultant_angle = fk.wrap(resultant_angle, bound=np.pi)
-            resultant_angle = fk.wrap(np.rad2deg(resultant_angle), bound=180.)
+            resultant_angle = wrap(resultant_angle, bound=np.pi)
+            resultant_angle = wrap(np.rad2deg(resultant_angle), bound=180.)
 
             shuffled_resultant[i, 0] = resultant_length
             shuffled_resultant[i, 1] = resultant_angle
@@ -409,18 +409,18 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
     half_period_mags_1 = magnitudes[angles <= np.pi]
 
     res_mag_1, res_angle_1 = resultant_vector(half_period_angles_1, half_period_mags_1, 1)
-    res_angle_1 = fk.wrap(res_angle_1, bound=np.pi)     # Need this correction because pycircstat does mod2pi by default
+    res_angle_1 = wrap(res_angle_1, bound=np.pi)     # Need this correction because pycircstat does mod2pi by default
     closest_idx1 = np.argmin(np.abs(angles - res_angle_1))
     resp1 = magnitudes[closest_idx1]
     angle1 = angles[closest_idx1]
 
     # Get resultant on second half of the data
-    half_period_angles_2 = fk.wrap(angles[angles >= np.pi], bound=np.deg2rad(180.1))
+    half_period_angles_2 = wrap(angles[angles >= np.pi], bound=np.deg2rad(180.1))
     half_period_angles_2[0] = 0.0
     half_period_mags_2 = magnitudes[angles >= np.pi]
 
     res_mag_2, res_angle_2 = resultant_vector(half_period_angles_2, half_period_mags_2, 1)
-    res_angle_2 = fk.wrap(res_angle_2, bound=np.pi)
+    res_angle_2 = wrap(res_angle_2, bound=np.pi)
     res_angle_2 += np.pi
     closest_idx2 = np.argmin(np.abs(angles - res_angle_2))
     resp2 = magnitudes[closest_idx2]
@@ -438,7 +438,7 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
         resultant_length = res_mag_2
 
     # for dsi
-    closest_idx_to_null = np.argmin(np.abs(angles - fk.wrap(pref + np.pi, bound=2*np.pi)))
+    closest_idx_to_null = np.argmin(np.abs(angles - wrap(pref + np.pi, bound=2*np.pi)))
     resp_null = magnitudes[closest_idx_to_null-1:closest_idx_to_null+2].mean()
 
     if resp_pref + resp_null == 0:
@@ -453,8 +453,8 @@ def calculate_dsi_osi_resultant(angles, magnitudes, bootstrap=False):
 
     # for osi
     resp_pref_osi = np.nanmean([resp_pref, resp_null])
-    closest_idx_to_null_1 = np.argmin(np.abs(angles - fk.wrap(pref + np.pi/2, bound=2*np.pi)))
-    closest_idx_to_null_2 = np.argmin(np.abs(angles - fk.wrap(pref - np.pi/2, bound=2*np.pi)))
+    closest_idx_to_null_1 = np.argmin(np.abs(angles - wrap(pref + np.pi/2, bound=2*np.pi)))
+    closest_idx_to_null_2 = np.argmin(np.abs(angles - wrap(pref - np.pi/2, bound=2*np.pi)))
     resp_null_1 = magnitudes[closest_idx_to_null_1]
     resp_null_2 = magnitudes[closest_idx_to_null_2]
     resp_null_osi = np.nanmean([resp_null_1, resp_null_2])
@@ -547,7 +547,7 @@ def goodness_of_fit(angles, responses, fit_angles, fit_values, type='rmse'):
 
 
 def wrap_sort_negative(angles, values, bound=180):
-    wrapped_angles = fk.wrap_negative(angles, bound=bound)
+    wrapped_angles = wrap_negative(angles, bound=bound)
     sorted_index = np.argsort(wrapped_angles)
     sorted_values = values[sorted_index]
     sorted_wrapped_angles = wrapped_angles[sorted_index]
@@ -555,7 +555,7 @@ def wrap_sort_negative(angles, values, bound=180):
 
 
 def wrap_sort(angles, bound=360):
-    wrapped_angles = fk.wrap(angles, bound=bound)
+    wrapped_angles = wrap(angles, bound=bound)
     sort_idx = np.argsort(wrapped_angles)
     angles_sorted = wrapped_angles[sort_idx]
     return angles_sorted, sort_idx
@@ -677,15 +677,15 @@ def parse_trial_frames(df, pre_trial=0, post_trial=0):
 def calculate_dsi_osi_fit(angles, magnitudes, pref):
     # DSI with directions
     dir_pref_idx = np.argwhere(angles == pref).squeeze()
-    dir_null_idx = np.argmin(np.abs(angles - fk.wrap(pref + 180, bound=360.))).squeeze()
+    dir_null_idx = np.argmin(np.abs(angles - wrap(pref + 180, bound=360.))).squeeze()
     mag_dir_pref = magnitudes[dir_pref_idx]
     mag_dir_null = magnitudes[dir_null_idx]
     dsi = 1 - (mag_dir_null / mag_dir_pref)
 
     # OSI from direction data
     mean_mag_ori_pref = (mag_dir_pref + mag_dir_null) / 2
-    null_idxs_ori_1 = np.argmin(np.abs(angles - fk.wrap(pref + 90, bound=360.))).squeeze()
-    null_idxs_ori_2 = np.argmin(np.abs(angles - fk.wrap(pref - 90, bound=360.))).squeeze()
+    null_idxs_ori_1 = np.argmin(np.abs(angles - wrap(pref + 90, bound=360.))).squeeze()
+    null_idxs_ori_2 = np.argmin(np.abs(angles - wrap(pref - 90, bound=360.))).squeeze()
     mag_ori_1 = magnitudes[null_idxs_ori_1]
     mag_ori_2 = magnitudes[null_idxs_ori_2]
     mean_mag_ori_null = (mag_ori_1 + mag_ori_2) / 2
