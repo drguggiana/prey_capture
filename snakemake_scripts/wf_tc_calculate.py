@@ -642,17 +642,18 @@ def parse_kinematic_data(matched_calcium, rig):
         kinematics['wheel_acceleration_abs'] = np.abs(kinematics['wheel_acceleration'])
         kinematics['norm_wheel_speed'] = tuning.normalize(kinematics['wheel_speed_abs'])
 
-    # TODO - handle raw fluorescence and spikes
-    raw_spikes = matched_calcium.loc[:, stimulus_cols + spikes_cols]
-    raw_spikes.columns = [key.rsplit('_', 1)[0] if 'spikes' in key else key for key in raw_spikes.columns]
+    # handle Ca2+ data
     raw_fluor = matched_calcium.loc[:, stimulus_cols + raw_fluor_cols]
-    raw_fluor.columns = [key.rsplit('_', 1)[0] if 'raw_fluor' in key else key for key in raw_fluor.columns]
-    deconv_fluor = matched_calcium.loc[:, stimulus_cols + deconv_fluor_cols]
-    deconv_fluor.columns = [key.rsplit('_', 1)[0] if 'deconv_fluor' in key else key for key in deconv_fluor.columns]
+    raw_fluor.columns = [key.rsplit('_', 2)[0] if 'raw_fluor' in key else key for key in raw_fluor.columns]
     dff = matched_calcium.loc[:, stimulus_cols + dff_cols]
     dff.columns = [key.rsplit('_', 1)[0] if 'dff' in key else key for key in dff.columns]
+    inferred_spikes = matched_calcium.loc[:, stimulus_cols + spikes_cols]
+    inferred_spikes.columns = [key.rsplit('_', 1)[0] if 'spikes' in key else key for key in inferred_spikes.columns]
+    deconv_fluor = matched_calcium.loc[:, stimulus_cols + deconv_fluor_cols]
+    deconv_fluor.columns = [key.rsplit('_', 2)[0] if 'deconv_fluor' in key else key for key in deconv_fluor.columns]
+    
 
-    return kinematics, raw_spikes, raw_fluor, dff, deconv_fluor
+    return kinematics, inferred_spikes, raw_fluor, dff, deconv_fluor
 
 
 def predict_running_gmm_hmm(running_trace, n_components=2):

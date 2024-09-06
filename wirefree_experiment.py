@@ -54,6 +54,8 @@ class WirefreeExperiment(DataContainer):
 
         # Neural and kinematic data structures
         self.kinematics = None
+        self.raw_fluor = None
+        self.dff = None
         self.inferred_spikes = None
         self.deconv_fluor = None
 
@@ -168,13 +170,18 @@ class WirefreeExperiment(DataContainer):
             matched_calcium.loc[mask, 'orientation_rel_ground'] = matched_calcium.loc[mask, 'orientation_rel_ground'].apply(wrap, bound=180.1)
 
 
-        # Get the columns for spikes, fluorescence, and kinematics
-        spikes_cols = [key for key in matched_calcium.keys() if 'spikes' in key]
-        fluor_cols = [key for key in matched_calcium.keys() if 'fluor' in key]
+        # Parse columns for calcium data
+        raw_fluor_cols = [key for key in matched_calcium.keys() if 'raw_fluor' in key]
+        dff_cols = [key for key in matched_calcium.keys() if 'dff' in key]
+        inferred_spikes_cols = [key for key in matched_calcium.keys() if 'spikes' in key]
+        deconv_fluor_cols = [key for key in matched_calcium.keys() if 'deconv_fluor' in key]
+
+        # Parse motive tracking columns
         motive_tracking_cols = ['mouse_y_m', 'mouse_z_m', 'mouse_x_m', 'mouse_yrot_m', 'mouse_zrot_m', 'mouse_xrot_m']
 
         # If there is more than one spatial or temporal frequency, include it, othewise don't
         stimulus_cols = ['trial_num', 'time_vector', 'direction', 'direction_wrapped', 'orientation', 'grating_phase']
+
         if len(self.exp_params.temporal_freq) > 1:
             stimulus_cols.append('temporal_freq')
         if len(self.exp_params.spatial_freq) > 1:
@@ -227,10 +234,15 @@ class WirefreeExperiment(DataContainer):
             self.kinematics['wheel_acceleration_abs'] = np.abs(self.kinematics['wheel_acceleration'].copy())
             self.kinematics['norm_wheel_speed'] = normalize(self.kinematics['wheel_speed_abs'])
 
-        self.inferred_spikes = matched_calcium.loc[:, stimulus_cols + spikes_cols]
+        # Assign Ca2+ data
+        self.raw_fluor = matched_calcium.loc[:, stimulus_cols + raw_fluor_cols]
+        self.raw_fluor.columns = [key.rsplit('_', 2)[0] if 'raw_fluor' in key else key for key in self.raw_fluor.columns]
+        self.dff = matched_calcium.loc[:, stimulus_cols + dff_cols]
+        self.dff.columns = [key.rsplit('_', 1)[0] if 'dff' in key else key for key in self.dff.columns]
+        self.inferred_spikes = matched_calcium.loc[:, stimulus_cols + inferred_spikes_cols]
         self.inferred_spikes.columns = [key.rsplit('_', 1)[0] if 'spikes' in key else key for key in self.inferred_spikes.columns]
-        self.deconv_fluor = matched_calcium.loc[:, stimulus_cols + fluor_cols]
-        self.deconv_fluor.columns = [key.rsplit('_', 1)[0] if 'fluor' in key else key for key in self.deconv_fluor.columns]
+        self.deconv_fluor = matched_calcium.loc[:, stimulus_cols + deconv_fluor_cols]
+        self.deconv_fluor.columns = [key.rsplit('_', 2)[0] if 'deconv_fluor' in key else key for key in self.deconv_fluor.columns]
 
     def _parse_params(self, df):
         params = df.to_dict('list')

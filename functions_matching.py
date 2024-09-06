@@ -11,6 +11,7 @@ from scipy.ndimage import label
 from scipy.interpolate import interp1d
 from sklearn.preprocessing import scale
 
+import processing_parameters
 from functions_tuning import calculate_dff
 from functions_misc import add_edges, interp_trace, normalize_matrix
 
@@ -1139,9 +1140,12 @@ def match_calcium_wf(calcium_path, sync_path, kinematics_data, trials=None):
     raw_fluorescence_dataframe = pd.DataFrame(raw_fluor_data, columns=cell_column_names)
 
     # With the raw fluorescence data, we can calculate the dF/F0 and add it to the dataframe
-    # dF/F0 = (F - F0) / F0, where F0 is the baseline fluorescence as established by the 10th percentile
-    # of the raw fluorescence signal
-    dff_dataframe = calculate_dff(raw_fluorescence_dataframe.copy(), baseline_type='quantile', quantile=0.10)
+    # dF/F0 = (F - F0) / F0, where F0 is the baseline fluorescence as established by a quantile
+    # of the entire raw fluorescence signal. We also zero the baseline to avoid negative values, 
+    # since these are not present in the raw traces and there is no reason to epect nonzero baseline activity
+    dff_dataframe = calculate_dff(raw_fluorescence_dataframe.copy(), 
+                                  baseline_type='quantile', quantile=processing_parameters.dff_quantile,
+                                  zero_baseline=True)
     cell_column_names = [col.replace('raw_fluor', 'dff') for col in cell_column_names]
     dff_dataframe.columns = cell_column_names
 

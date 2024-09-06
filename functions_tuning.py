@@ -618,13 +618,11 @@ def normalize_responses(ds, remove_baseline=False, quantile=0.07, columnwise=Tru
     return ds_norm
 
 
-def calculate_dff(ds, baseline_type='iti_mean', **kwargs):
+def calculate_dff(ds, baseline_type='iti_mean', zero_baseline=False, **kwargs):
     
     cells = [el for el in ds.columns if "cell" in el]
-    ds = ds.replace([np.inf, -np.inf], 0).fillna(0)
+    ds[cells] = ds[cells].apply(np.nan_to_num, axis=0, raw=True, nan=0, posinf=0, neginf=0)
     dff = ds.copy()
-    # mask = dff[cells] < 0
-    # ds.loc[:, cells].mask(mask, 0.0, inplace=True)
 
     if baseline_type == 'iti_mean':
         baselines = ds[ds.trial_num == 0][cells].mean(axis=0).copy()
@@ -641,6 +639,10 @@ def calculate_dff(ds, baseline_type='iti_mean', **kwargs):
     
     dff[cells] -= baselines
     dff[cells] /= baselines
+
+    # Shift so that there are no non-zero values
+    if zero_baseline:
+        dff[cells] -= dff[cells].min(axis=0)
 
     return dff
 
