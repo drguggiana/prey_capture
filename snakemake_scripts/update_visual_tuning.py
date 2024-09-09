@@ -67,7 +67,7 @@ if __name__ == '__main__':
     if len(raw_data) != 0:
 
         # --- Process visual tuning --- #
-        kinematics, inferred_spikes, raw_fluor, dff, deconvolved_fluor = parse_kinematic_data(raw_data[0], rig)
+        kinematics, raw_fluor, dff, inferred_spikes, deconvolved_fluor = parse_kinematic_data(raw_data[0], rig)
 
         # Calculate normalized fluorescence and spikes
         activity_ds_dict = {}
@@ -146,6 +146,8 @@ if __name__ == '__main__':
                 activity_ds_type = 'dff'
             elif 'deconv_fluor' in ds_name:
                 activity_ds_type = 'deconv_fluor'
+            elif 'raw_fluor' in ds_name:
+                activity_ds_type = 'raw_fluor'
             else:
                 raise ValueError(f'Unknown activity dataset type: {ds_name}')
 

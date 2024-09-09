@@ -13,34 +13,10 @@ import functions_bondjango as bd
 from functions_data_handling import parse_search_string
 from functions_misc import slugify
 from functions_tuning import calculate_dff, normalize_responses
+from snakemake_scripts.wf_tc_calculate import parse_kinematic_data,
 
-sys.path.insert(0, os.path.abspath(r'F:\Repositories\mine_pub\prey_capture'))
-sys.path.insert(0, os.path.abspath(r'F:\Repositories\mine_pub'))
+sys.path.insert(0, os.path.abspath(r'C:\Users\mmccann\repos\mine_pub'))
 from mine import Mine, MineData
-
-
-def calculate_extra_angles(ds, exp_type):
-    # Apply wrapping for directions to get range [0, 360]
-    ds['direction_wrapped'] = ds['direction'].copy()
-    mask = ds['direction_wrapped'] > -1000
-    ds.loc[mask, 'direction_wrapped'] = ds.loc[mask, 'direction_wrapped'].apply(fk.wrap)
-
-    # Now find the direction relative to the ground plane
-    if exp_type == 'free':
-        ds['direction_rel_ground'] = ds['direction_wrapped'].copy()
-        ds.loc[mask, 'direction_rel_ground'] = ds.loc[mask, 'direction_rel_ground'] + ds.loc[mask, 'head_roll']
-    else:
-        ds['direction_rel_ground'] = ds['direction_wrapped'].copy()
-
-    # Calculate orientation explicitly
-    if 'orientation' not in ds.columns:
-        ds['orientation'] = ds['direction_wrapped'].copy()
-        ds['orientation_rel_ground'] = ds['direction_rel_ground'].copy()
-        mask = ds['orientation'] > -1000
-        ds.loc[mask, 'orientation'] = ds.loc[mask, 'orientation'].apply(fk.wrap, bound=180.1)
-        ds.loc[mask, 'orientation_rel_ground'] = ds.loc[mask, 'orientation_rel_ground'].apply(fk.wrap, bound=180.1)
-
-    return ds
 
 
 def run_mine(target_trials, mine_params, predictor_columns):
@@ -126,12 +102,13 @@ if __name__ == '__main__':
         animal = '_'.join([animal[0].upper()] + animal[1:])
 
     # define ca activity type
-    ca_type = 'fluor'    #'spikes' or 'fluor'
+    ca_type = 'dff'    # 'dff', 'spikes' or 'deconv_fluor'
+
     # define if dropping ITI
     drop_ITI = False
-    # get frame rate
-    frame_rate = processing_parameters.wf_frame_rate
 
+    # get some vars from the processing parameters
+    frame_rate = processing_parameters.wf_frame_rate
     variable_list = processing_parameters.variable_list_visual
 
     if rig in ['VWheelWF', 'VWheel']:
@@ -148,23 +125,30 @@ if __name__ == '__main__':
 
     # Load the data
     with pd.HDFStore(input_path, mode='r') as h:
-        data = h['matched_calcium']
+        full_dataset = h['matched_calcium']
+
+    # Parse the data into calcium and kinematic data
+    kinematics, raw_fluor, dff, inferred_spikes, deconvolved_fluor = parse_kinematic_data(full_dataset, rig)
+
+    if ca_type == 'dff':
+        data = dff
+    elif ca_type == 'spikes':
+        data = inferred_spikes
+    elif ca_type == 'deconv_fluor':
+        data = deconvolved_fluor
+    else:
+        ValueError('Unrecognized calcium activity type')
+
+    # If using fluorescence data, calculate normalized dF/F
+    if ca_type in ['dff', 'deconv_fluor']:
+        data = normalize_responses(data)
 
     # drop activity not of correct type
     cols_to_drop = [el for el in data.columns if ('cell' in el) and (ca_type not in el)]
     data.drop(cols_to_drop, axis='columns', inplace=True)
 
-    # If using fluorescence data, calulate normalized dF/F
-    if ca_type == 'fluor':
-        data = calculate_dff(data, baseline_type='quantile', inplace=False)
-        data = normalize_responses(data)
-
-    # Do a quick calculation of orientation & dir/ori relative to ground
-    if ('direction_wrapped' in variable_list) and ('direction_wrapped' not in data.columns):
-        data = calculate_extra_angles(data, exp_type)
-
-    if ('wheel_speed_abs' in variable_list) and ('wheel_speed_abs' not in data.columns):
-        data['wheel_speed_abs'] = np.abs(data['wheel_speed']).copy()
+    # Concatenate the kinematic data to to the selected calcium data
+    data = pd.concat([data, kinematics], axis=1)
 
     # Drop the ITI
     if drop_ITI:
@@ -190,6 +174,16 @@ if __name__ == '__main__':
         mine_data.save_to_hdf5(f, overwrite=True)
         # f.create_dataset('cell_ids', data=cell_ids.astype('S'))
 
+    # Define the result for correct saving (not necessarily consistent with proproc data)
+    if 'control' in input_path:
+        result = 'control'
+    elif 'repeat' in input_path:
+        result = 'repeat'
+    elif 'fullfield' in input_path:
+        result = 'fullfield'
+    else:
+        result = 'multi'
+
     # save as a new entry to the data base
     # assemble the entry data
     entry_data = {
@@ -197,7 +191,7 @@ if __name__ == '__main__':
         'analysis_path': out_path,
         'date': '',
         'pic_path': '',
-        'result': str(file_info['result']),
+        'result': result,
         'rig': str(file_info['rig']),
         'lighting': str(file_info['lighting']),
         'imaging': 'wirefree',
