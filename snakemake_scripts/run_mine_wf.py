@@ -8,14 +8,13 @@ import sklearn.preprocessing as preproc
 
 import paths
 import processing_parameters
-import functions_kinematic as fk
 import functions_bondjango as bd
 from functions_data_handling import parse_search_string
 from functions_misc import slugify
-from functions_tuning import calculate_dff, normalize_responses
-from snakemake_scripts.wf_tc_calculate import parse_kinematic_data,
+from functions_tuning import normalize_responses
+from wf_tc_calculate import parse_kinematic_data
 
-sys.path.insert(0, os.path.abspath(r'C:\Users\mmccann\repos\mine_pub'))
+sys.path.insert(0, os.path.abspath(r'C:\Users\setup\Repositories\mine_pub'))
 from mine import Mine, MineData
 
 
@@ -92,7 +91,8 @@ if __name__ == '__main__':
         search_string = processing_parameters.search_string
         parsed_search = parse_search_string(search_string)
         data_all = bd.query_database('analyzed_data', processing_parameters.search_string)
-        file_info = [entry for entry in data_all if parsed_search['mouse'] in entry['analysis_path']][0]
+        file_info = [entry for entry in data_all if (parsed_search['mouse'] in entry['analysis_path']) and
+                     ('preproc' in entry['slug'])][0]
         input_path = file_info['analysis_path']
         out_path = input_path.replace('preproc', 'mine')
         # get the day, animal and rig
@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
     # Load the data
     with pd.HDFStore(input_path, mode='r') as h:
-        full_dataset = h['matched_calcium']
+        full_dataset = h['/matched_calcium']
 
     # Parse the data into calcium and kinematic data
     kinematics, raw_fluor, dff, inferred_spikes, deconvolved_fluor = parse_kinematic_data(full_dataset, rig)
@@ -143,17 +143,14 @@ if __name__ == '__main__':
     if ca_type in ['dff', 'deconv_fluor']:
         data = normalize_responses(data)
 
-    # drop activity not of correct type
-    cols_to_drop = [el for el in data.columns if ('cell' in el) and (ca_type not in el)]
-    data.drop(cols_to_drop, axis='columns', inplace=True)
-
-    # Concatenate the kinematic data to to the selected calcium data
-    data = pd.concat([data, kinematics], axis=1)
+    # Concatenate the kinematic data to the selected calcium data
+    cell_cols = [col for col in data.columns if 'cell' in col]
+    used_data = pd.concat([kinematics, data], axis=1)
 
     # Drop the ITI
     if drop_ITI:
-        data.drop(data[data['trial_num'] == 0].index, inplace=True)
-        data.reset_index(drop=True, inplace=True)
+        used_data.drop(used_data[used_data['trial_num'] == 0].index, inplace=True)
+        used_data.reset_index(drop=True, inplace=True)
 
     # define the MINE parameters
     MINE_params = {
@@ -167,7 +164,7 @@ if __name__ == '__main__':
     }
 
     # Run MINE
-    mine_data = run_mine(data, MINE_params, variable_list)
+    mine_data = run_mine(used_data, MINE_params, variable_list)
 
     # Save data
     with h5py.File(out_path, 'w') as f:
