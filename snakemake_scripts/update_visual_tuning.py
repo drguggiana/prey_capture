@@ -54,13 +54,14 @@ if __name__ == '__main__':
         dummy_out_file = tc_file.replace('_tcday.hdf5', '_update_dummy.txt')
 
     # --- Process kinematic tuning --- #
+    update_existing = processing_parameters.update_existing_tcs
 
     # load the preprocessed data
     raw_data = []
     with pd.HDFStore(preproc_file, mode='r') as h:
         if '/matched_calcium' in h.keys():
             # concatenate the latents
-            dataframe = h['matched_calcium']
+            dataframe = h['/matched_calcium']
             raw_data.append(dataframe)
 
     # process if file is not empty
@@ -135,17 +136,35 @@ if __name__ == '__main__':
         
         vis_prop_dict = {}
 
+        # loop through the datasets
         for ds_name in processing_parameters.activity_datasets:
 
+            # Check if the dataset exists in the extracted activity dictionary
             if ds_name not in activity_ds_dict.keys():
                 raise ValueError(f'Activity dataset {ds_name} not found in the dataset.')
+
+            # Check if the dataset exists in the output file already.
+            feature = f'{ds_name}_props'
+            feature_save_key = '/' + feature
+
+            with pd.HDFStore(tc_file, mode='r') as f:
+                if feature_save_key in f.keys():
+                    # if it is already in the file, decide if it needs to be updated or not based on the flag
+                    if update_existing:
+                        # Go to the processing
+                        pass
+                    else:
+                        # Continue to the next dataset
+                        continue
+                else:
+                    pass
 
             if 'spikes' in ds_name:
                 activity_ds_type = 'spikes'
             elif 'dff' in ds_name:
                 activity_ds_type = 'dff'
-            elif 'deconv_fluor' in ds_name:
-                activity_ds_type = 'deconv_fluor'
+            elif 'deconvolved_fluor' in ds_name:
+                activity_ds_type = 'deconvolved_fluor'
             elif 'raw_fluor' in ds_name:
                 activity_ds_type = 'raw_fluor'
             else:
@@ -159,13 +178,11 @@ if __name__ == '__main__':
                                             metric_for_analysis=processing_parameters.analysis_metric,
                                             bootstrap_shuffles=processing_parameters.bootstrap_repeats)
 
+
             # Update visual features to hdf5 files
             with pd.HDFStore(tc_file, mode='r+') as f:
-                feature = f'{ds_name}_props'
-                feature_key = '/' + feature
-
                 # update the file
-                if feature_key in f.keys():
+                if feature_save_key in f.keys():
                     f.remove(feature)
                     props.to_hdf(tc_file, feature)
                 else:

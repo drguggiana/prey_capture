@@ -912,8 +912,8 @@ if __name__ == '__main__':
                     activity_ds_type = 'spikes'
                 elif 'dff' in ds_name:
                     activity_ds_type = 'dff'
-                elif 'deconv_fluor' in ds_name:
-                    activity_ds_type = 'deconv_fluor'
+                elif 'deconvolved_fluor' in ds_name:
+                    activity_ds_type = 'deconvolved_fluor'
                 elif 'raw_fluor' in ds_name:
                     activity_ds_type = 'raw_fluor'
                 else:
