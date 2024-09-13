@@ -154,9 +154,6 @@ if __name__ == '__main__':
         id_flags = rigs
         rig = 'multi'
 
-    # Set the dataset to use
-    used_tc_dataset = processing_parameters.activity_datasets[0]
-
     # Sort the input paths by id_flag so they are in the same order
     input_paths = [path for id in id_flags for path in input_paths if id in path]
 
@@ -217,9 +214,11 @@ if __name__ == '__main__':
                 visual_shifts = {}
                 for data, id_flag in zip(data_list, id_flags):
 
+                    # Parse all the kinematic features
                     kine_features = [el for el in data.keys() if not any([x in el for x in ['props', 'counts', 'edges',
                                                                                             'running_modulated']])]
-                    vis_features = [el for el in data.keys() if used_tc_dataset in el]
+                    # Parse all of the visual data sets
+                    vis_datasets = [el for el in data.keys() if 'props' in el]
 
                     # Initialize some DataFrames for saving the summary stats
                     all_cells_summary_stats = pd.DataFrame(columns=['num_cells', 'num_matches', 'match_frac'])
@@ -231,7 +230,7 @@ if __name__ == '__main__':
 
                     # get matches and save
                     match_idxs = matches.loc[:, id_flag].to_numpy(dtype=int)
-                    num_cells = data[f'{used_tc_dataset}_props'].shape[0]
+                    num_cells = data[vis_datasets[0]].shape[0]    # Just use the first visual dataset here, same for all
 
                     all_cells_summary_stats.loc[0, 'num_cells'] = num_cells
                     all_cells_summary_stats.loc[0, 'num_matches'] = len(match_idxs)
@@ -293,8 +292,9 @@ if __name__ == '__main__':
                         unmatched_summary_stats[f"frac_resp_{feature}"] = unmatched_frac_kine_resp
 
                     # Run the visual features
+
                     exp_vis_features = {}
-                    for feature in vis_features:
+                    for feature in vis_datasets:
                         feat = '_'.join(feature.split('_')[3:-1])
 
                         # When looking at all the data, the feature name is empty, so give it a name

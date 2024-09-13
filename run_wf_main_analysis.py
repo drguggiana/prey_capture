@@ -787,13 +787,14 @@ for result, light, rig in itertools.product(results, lightings, rigs):
 
         if 'still' in activity_dataset:
             session_shorthand = [f + '_still' for f in session_shorthand]
-
-            figure_save_path = os.path.join(save_base, 'still', save_suffix)
+            activity_ds_basename = activity_ds.rsplit('_', 2)[0]
+            figure_save_path = os.path.join(save_base, activity_ds_basename, 'still', save_suffix)
             if not os.path.exists(figure_save_path):
                 os.makedirs(figure_save_path)
 
         else:
-            figure_save_path = os.path.join(save_base, 'full', save_suffix)
+            activity_ds_basename = activity_ds.rsplit('_', 1)[0]
+            figure_save_path = os.path.join(save_base, activity_ds_basename, 'full', save_suffix)
             if not os.path.exists(figure_save_path):
                 os.makedirs(figure_save_path)
 

@@ -81,7 +81,7 @@ for mouse, result, light, rig in itertools.product(mice, results, lightings, rig
                         data = tc[key]
 
                         # If this is the cell matches, check if empty, and add NaNa if so
-                        if (label == 'cell_matches'):
+                        if label == 'cell_matches':
                             if data.empty:
                                 data.loc[0, :] = np.nan
 
@@ -93,8 +93,9 @@ for mouse, result, light, rig in itertools.product(mice, results, lightings, rig
                     data_list.append(data_dict)
 
         if len(data_list) > 0:
-            concat_data_dict = {}
+
             # Aggregate it all
+            concat_data_dict = {}
             for key in data_list[0].keys():
                 if key == 'cell_matches':
                     df = concatenate_cell_matches([d[key] for d in data_list], parsed_search['result'])
