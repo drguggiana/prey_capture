@@ -113,6 +113,8 @@ for idx, target_entries in enumerate(full_queries):
         out_path = os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt')
     elif parsed_search['analysis_type'] == 'update_ca_reg_run':
         out_path = os.path.join(paths.analysis_path, 'ca_reg_run.txt')
+    elif parsed_search['analysis_type'] == 'setup_cellReg_directory_run':
+        out_path = os.path.join(paths.analysis_path, 'cellreg_setup_run.txt')
     else:
         # feed the aggregation path
         out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
@@ -123,7 +125,7 @@ for idx, target_entries in enumerate(full_queries):
                               '-d', paths.snakemake_working,
                               # '--use-conda',
                               # '-F',                       # (hard) force rerun everything
-                              # '-f',                       # (soft) force rerun last step
+                              '-f',                       # (soft) force rerun last step
                               # '--unlock',                 # unlocks the files after force quit
                               # '--rerun-incomplete',       # rerun incomplete jobs
                               # '--touch',                  # updates output file timestamp, but doesn't process
@@ -167,5 +169,7 @@ for idx, target_entries in enumerate(full_queries):
     elif (parsed_search['analysis_type'] == 'update_ca_reg_run') & \
             (os.path.isfile(os.path.join(paths.analysis_path, 'ca_reg_run.txt'))):
         os.remove(os.path.join(paths.analysis_path, 'ca_reg_run.txt'))
-
+    elif (parsed_search['analysis_type'] == 'setup_cellReg_directory_run') & \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'cellreg_setup_run.txt'))):
+        os.remove(os.path.join(paths.analysis_path, 'cellreg_setup_run.txt'))
 print('yay')

@@ -35,8 +35,8 @@ def concatenate_cell_matches(data_list, exp_type):
 
 # Main script
 
-mice = processing_parameters.all_mice
-results = ['multi', 'control', 'fullfield']  # ['multi', 'fullfield', 'control'], ['repeat']
+mice = ['MM_221110_a']    # processing_parameters.all_mice
+results = ['multi', 'fullfield', 'control']  # ['multi', 'fullfield', 'control'], ['repeat']
 lightings = ['normal', 'dark']     # ['normal', 'dark']
 rigs = ['ALL']     # ['VWheelWF', 'VTuningWF'], ['ALL']    # 'ALL' used for everything but repeat aggs
 analysis_type = 'tc_consolidate'

@@ -708,7 +708,7 @@ def get_running_modulated_cells(activity_df, running_bouts_idxs, ci_interval=0.9
     return df
 
 
-def calculate_kinematic_tuning(df, day, animal, rig):
+def calculate_kinematic_tuning(df, day, animal, rig, data_type='spikes'):
     """ Process kinematic tuning
     This is lifted directly from tc_calculate.py
     Note here that the kinematic data that was used for the visual tuning is not fed to the kinematic tuning
@@ -719,8 +719,25 @@ def calculate_kinematic_tuning(df, day, animal, rig):
     print('Calculating kinematic tuning curves...')
 
     # Drop fluorescence columns since not used for this analysis
-    fluor_cols = [col for col in df.columns if 'fluor' in col]
-    df.drop(columns=fluor_cols, inplace=True)
+    raw_fluor_cols = [col for col in df.columns if 'raw_fluor' in col]
+    dff_cols = [col for col in df.columns if 'dff' in col]
+    deconv_fluor_cols = [col for col in df.columns if 'deconv_fluor' in col]
+    inf_spikes_cols = [col for col in df.columns if 'spikes' in col]
+    neural_data_cols = raw_fluor_cols + deconv_fluor_cols + dff_cols + inf_spikes_cols
+
+    # drop the unused activity columns
+    if data_type == 'spikes':
+        drop_cols = raw_fluor_cols + deconv_fluor_cols + dff_cols
+    elif data_type == 'deconvolved_fluor':
+        drop_cols = raw_fluor_cols + dff_cols + inf_spikes_cols
+    elif data_type == 'raw_fluor':
+        drop_cols = dff_cols + deconv_fluor_cols + inf_spikes_cols
+    elif data_type == 'dff':
+        drop_cols = raw_fluor_cols + deconv_fluor_cols + inf_spikes_cols
+    else:
+        raise ValueError('data_type must be one of spikes, deconvolved_fluor, raw_fluor, dff')
+
+    df.drop(columns=drop_cols, inplace=True)
 
     # get the number of bins
     bin_num = processing_parameters.bin_number

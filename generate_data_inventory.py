@@ -46,8 +46,4 @@ for mouse in ['MM_221110_a', 'MM_221109_a', 'MM_220928_a', 'MM_220915_a',
     df_list.append(df)
 
 data_df = pd.concat(df_list, axis=0)
-data_df.to_csv(r'C:\Users\mmccann\Desktop\tc_status.csv')
-
-
-
-
+data_df.to_excel(r'C:\Users\mmccann\Desktop\tc_status.xlsx', index=False, engine='xlsxwriter')

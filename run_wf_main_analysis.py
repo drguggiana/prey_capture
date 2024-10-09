@@ -71,6 +71,9 @@ def make_aggregate_file(search_string):
         # Aggregate it all
         agg_dict = {}
 
+        # Get the keys present in all files
+        unique_keys = list(np.unique([key for ds in data_list for key in ds.keys()]))
+        missing_keys = np.unique([key for ds in data_list for key in ds.keys() if key not in unique_keys])
         for key in data_list[0].keys():
             df = pd.concat([d[key] for d in data_list]).reset_index(drop=True)
             df.to_hdf(output_path, key)
@@ -662,16 +665,20 @@ fp.set_theme()
 in2cm = 1./2.54
 
 # define the experimental conditions
-results = ['multi', 'repeat']    # 'multi', 'control', 'repeat', 'fullfield'
-lightings = ['normal']    # 'normal', 'dark'
+results = ['multi', 'control', 'repeat', 'fullfield']    # 'multi', 'control', 'repeat', 'fullfield'
+lightings = ['normal', 'dark']    # 'normal', 'dark'
 rigs = ['', 'VWheelWF', 'VTuningWF']    # '', 'VWheelWF', 'VTuningWF'
 analysis_type = 'agg_all'
 
 recalculate_vis_tuning = False
+only_aggregate = True
+overwrite_aggregate = True
 
 save_base = r'D:\thesis\WF_Figures'       # r'H:\thesis\figures\WF_Figures', r"Z:\Prey_capture\WF_Figures"
 
-for result, light, rig in itertools.product(results, lightings, rigs):
+combinations = list(itertools.product(results, lightings, rigs))
+
+for i, (result, light, rig) in enumerate(combinations):
 
     # Filter out searches that don't make sense
     if (result == 'repeat') and (rig == ''):
@@ -689,11 +696,19 @@ for result, light, rig in itertools.product(results, lightings, rigs):
     file_infos = bd.query_database("analyzed_data", search_string)
     input_paths = [el['analysis_path'] for el in file_infos]
 
-    if len(input_paths) == 0:
+    if (len(input_paths) == 0) or overwrite_aggregate:
         # Need to create the file
         data_dict = make_aggregate_file(search_string)
+
         if data_dict is None:
             continue
+
+        if only_aggregate and (i < len(combinations) - 1):
+            continue
+        elif only_aggregate and (i == len(combinations) - 1):
+            break
+        else:
+            pass
     else:
         input_path = input_paths[0]
 
@@ -707,11 +722,18 @@ for result, light, rig in itertools.product(results, lightings, rigs):
                     data = tc[key]
                     data_dict[label] = data
             del data
+
         # Otherwise the entry exists but the file doesn't. Create the file
         else:
             data_dict = make_aggregate_file(search_string)
             if data_dict is None:
                 continue
+            if only_aggregate and (i < len(combinations) - 1):
+                continue
+            elif only_aggregate and (i == len(combinations) - 1):
+                break
+            else:
+                pass
 
     save_suffix = f"{parsed_search['result']}_{parsed_search['lighting']}_{parsed_search['rig']}"
 

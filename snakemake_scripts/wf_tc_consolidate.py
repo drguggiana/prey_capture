@@ -13,7 +13,7 @@ import functions_misc as fm
 from functions_kinematic import wrap_negative, wrap
 
 # Ignore warnings
-warnings.simplefilter(action='ignore')
+# warnings.simplefilter(action='ignore')
 
 
 def rename_match_df(matches, exp_type):
@@ -43,22 +43,22 @@ def vis_frac_responsive(data, sel_tresh=0.5):
     resp_df = data.loc[:, ['is_vis_resp', 'mod_vis_resp', 'not_vis_resp']].copy()
 
     # Get boolean vector of direction and orientation tuned cells
-    resp_df['vis_resp_dir_tuned'] = (resp_df['is_vis_resp'] == 1) & (data['fit_dsi'] >= sel_tresh)
-    resp_df['vis_resp_ori_tuned'] = (resp_df['is_vis_resp'] == 1) & (data['fit_osi'] >= sel_tresh)
+    resp_df['vis_resp_dir_tuned'] = (data['is_vis_resp'] == 1) & (data['fit_dsi'] >= sel_tresh)
+    resp_df['vis_resp_ori_tuned'] = (data['is_vis_resp'] == 1) & (data['fit_osi'] >= sel_tresh)
 
     # For those that are both direction and orientation tuned, pick the tuning based on the higher value
     resp_df['vis_resp_dir_tuned'] = resp_df['vis_resp_dir_tuned'] & (data['fit_dsi'] > data['fit_osi'])
     resp_df['vis_resp_ori_tuned'] = resp_df['vis_resp_ori_tuned'] & (data['fit_osi'] > data['fit_dsi'])
 
     # Do the same but for moderate tuning
-    resp_df['mod_resp_dir_tuned'] = (resp_df['mod_vis_resp'] == 1) & (data['fit_dsi'] >= sel_tresh)
-    resp_df['mod_resp_ori_tuned'] = (resp_df['mod_vis_resp'] == 1) & (data['fit_osi'] >= sel_tresh)
+    resp_df['mod_resp_dir_tuned'] = (data['mod_vis_resp'] == 1) & (data['fit_dsi'] >= sel_tresh)
+    resp_df['mod_resp_ori_tuned'] = (data['mod_vis_resp'] == 1) & (data['fit_osi'] >= sel_tresh)
     resp_df['mod_resp_dir_tuned'] = resp_df['mod_resp_dir_tuned'] & (data['fit_dsi'] > data['fit_osi'])
     resp_df['mod_resp_ori_tuned'] = resp_df['mod_resp_ori_tuned'] & (data['fit_osi'] > data['fit_dsi'])
 
     # And for those not responsive
-    resp_df['not_resp_dir_tuned'] = (resp_df['not_vis_resp'] == 1) & (data['fit_dsi'] >= sel_tresh)
-    resp_df['not_resp_ori_tuned'] = (resp_df['not_vis_resp'] == 1) & (data['fit_osi'] >= sel_tresh)
+    resp_df['not_resp_dir_tuned'] = (data['not_vis_resp'] == 1) & (data['fit_dsi'] >= sel_tresh)
+    resp_df['not_resp_ori_tuned'] = (data['not_vis_resp'] == 1) & (data['fit_osi'] >= sel_tresh)
     resp_df['not_resp_dir_tuned'] = resp_df['not_resp_dir_tuned'] & (data['fit_dsi'] > data['fit_osi'])
     resp_df['not_resp_ori_tuned'] = resp_df['not_resp_ori_tuned'] & (data['fit_osi'] > data['fit_dsi'])
 
@@ -215,8 +215,12 @@ if __name__ == '__main__':
                 for data, id_flag in zip(data_list, id_flags):
 
                     # Parse all the kinematic features
-                    kine_features = [el for el in data.keys() if not any([x in el for x in ['props', 'counts', 'edges',
-                                                                                            'running_modulated']])]
+                    kine_features = [el for el in data.keys()
+                                     if not any([x in el for x in
+                                                 ['props', 'counts', 'edges', 'params', 'running_modulated']
+                                                 ]
+                                                )
+                                     ]
                     # Parse all of the visual data sets
                     vis_datasets = [el for el in data.keys() if 'props' in el]
 
@@ -265,9 +269,10 @@ if __name__ == '__main__':
 
                     multimodal_tuning = pd.concat([multimodal_tuning, run_mod], axis=1)
 
-                    # Run the kinematic features
+                    # -- Run the kinematic features -- #
                     for feature in kine_features:
                         # Save the whole dataset
+                        data[feature].fillna(0, inplace=True)
                         data[feature].to_hdf(out_path, f'{id_flag}/all_cells/{feature}')
                         frac_kine_resp, cells_kine_resp = kine_fraction_tuned(data[feature])
                         all_cells_summary_stats[f"frac_resp_{feature}"] = frac_kine_resp
@@ -291,27 +296,24 @@ if __name__ == '__main__':
                         unmatched_frac_kine_resp, _ = kine_fraction_tuned(unmatched_feature)
                         unmatched_summary_stats[f"frac_resp_{feature}"] = unmatched_frac_kine_resp
 
-                    # Run the visual features
-
+                    # -- Run the visual features -- #
                     exp_vis_features = {}
+                    summary_dfs = []
+
                     for feature in vis_datasets:
-                        feat = '_'.join(feature.split('_')[3:-1])
-
-                        # When looking at all the data, the feature name is empty, so give it a name
-                        if feat == "":
-                            feat = "all"
-
-                        feat = 'vis_' + feat
+                        feat = feature.replace('_props', '')
 
                         # Save the whole dataset
+                        data[feature].reset_index(names=['original_cell_id']).to_hdf(out_path,
+                                                                                     f'{id_flag}/all_cells/{feature}')
                         resp_df, frac_resp = vis_frac_responsive(data[feature])
 
                         if 'still' in feature:
                             new_cols = [f'{col}_still' for col in frac_resp.columns]
                             frac_resp.columns = new_cols
-                        all_cells_summary_stats = pd.concat([all_cells_summary_stats, frac_resp], axis=1)
 
-                        data[feature].reset_index(names=['original_cell_id']).to_hdf(out_path, f'{id_flag}/all_cells/{feature}')
+                        # Update the summary stats
+                        all_cells_summary_w_vis = pd.concat([all_cells_summary_stats.copy(), frac_resp], axis=1)
 
                         # Add to multimodal tuning dataframe
                         temp_df = data[feature][['vis_resp_pval', 'fit_dsi', 'fit_osi',
@@ -322,8 +324,8 @@ if __name__ == '__main__':
                             new_cols = [f'{col}_still' for col in resp_df.columns]
                             resp_df.columns = new_cols
 
-                        multimodal_tuning = pd.concat([multimodal_tuning, temp_df], axis=1)
-                        multimodal_tuning = pd.concat([multimodal_tuning, resp_df], axis=1)
+                        multimodal_tuning_w_vis = pd.concat([multimodal_tuning.copy(), temp_df, resp_df], axis=1)
+                        multimodal_tuning_w_vis.to_hdf(out_path, f'{id_flag}/multimodal_tuned/{feature}')
 
                         # Save matched TCs
                         matched_feature = data[feature].iloc[match_idxs, :]
@@ -334,12 +336,10 @@ if __name__ == '__main__':
                             new_cols = [f'{col}_still' for col in matched_frac_resp.columns]
                             matched_frac_resp.columns = new_cols
 
-                        matched_summary_stats = pd.concat([matched_summary_stats, matched_frac_resp], axis=1)
+                        matched_summary_stats_w_vis = pd.concat([matched_summary_stats.copy(), matched_frac_resp], axis=1)
 
                         # Get the preferred orientation/direction from the matched cells
-                        exp_vis_features[feat] = \
-                            matched_feature.loc[:,
-                                ['pref_dir', 'bootstrap_pref_dir', 'real_pref_dir', 'bootstrap_real_pref_dir',
+                        vis_feat_cols = ['pref_dir', 'bootstrap_pref_dir', 'real_pref_dir', 'bootstrap_real_pref_dir',
                                  'resultant_dir', 'bootstrap_resultant_dir', 'shuffle_resultant_dir',
                                  'responsivity_dir', 'bootstrap_responsivity_dir', 'bootstrap_p_responsivity_dir',
                                  'shuffle_responsivity_dir', 'shuffle_p_responsivity_dir',
@@ -348,7 +348,7 @@ if __name__ == '__main__':
                                  'shuffle_resultant_ori', 'responsivity_ori', 'bootstrap_responsivity_ori',
                                  'bootstrap_p_responsivity_ori', 'shuffle_responsivity_ori', 'shuffle_p_responsivity_ori',
                                  ]
-                            ]
+                        exp_vis_features[feat] = matched_feature.loc[:, vis_feat_cols]
 
                         # save unmatched TCs
                         unmatched_feature = data[feature].drop(data[feature].index[match_idxs], axis=0)
@@ -359,24 +359,39 @@ if __name__ == '__main__':
                             new_cols = [f'{col}_still' for col in unmatched_frac_resp.columns]
                             unmatched_frac_resp.columns = new_cols
 
-                        unmatched_summary_stats = pd.concat([unmatched_summary_stats, unmatched_frac_resp], axis=1)
+                        unmatched_summary_stats_w_vis = pd.concat([unmatched_summary_stats.copy(), unmatched_frac_resp],
+                                                                  axis=1)
 
-                    summary_stats = pd.concat([all_cells_summary_stats, matched_summary_stats, unmatched_summary_stats],
-                                              axis=0).reset_index(drop=True)
-                    summary_stats['new_idx'] = ['all_cells', 'matched', 'unmatched']
-                    summary_stats.set_index('new_idx', inplace=True)
-                    summary_stats.to_hdf(out_path, f'{id_flag}/summary_stats')
+                        summary_stats = pd.concat([all_cells_summary_w_vis, matched_summary_stats_w_vis,
+                                                   unmatched_summary_stats_w_vis],
+                                                  axis=0).reset_index(drop=True)
+                        summary_stats.insert(0, 'dataset', feature.replace('_props', ''))
+                        summary_stats.insert(1, 'cell_kind', ['all_cells', 'matched', 'unmatched'])
+                        summary_dfs.append(summary_stats)
 
+                    # Save the summary stats
+                    concat_summary_stats = pd.concat(summary_dfs, axis=0)
+                    concat_summary_stats.to_hdf(out_path, f'{id_flag}/summary_stats')
+
+                    # Assemble the dict for the visual features
                     visual_shifts[id_flag] = exp_vis_features
 
-                    multimodal_tuning.to_hdf(out_path, f'{id_flag}/multimodal_tuned')
+                # -- Calculate delta prefs for all matched cells in all datasets -- #
+                delta_pref_list_fixed_free = []
+                delta_pref_list_rel_fixed_still = []
 
-                # Calculate delta prefs for all matched cells
-                delta_pref = pd.DataFrame()
                 if result in ['multi', 'control', 'fullfield']:
 
                     # use the fixed rig as the reference
                     for tuning_type in visual_shifts[id_flags[0]].keys():
+                        if 'still' in tuning_type:
+                            is_still = '_still'
+                            tuning_type = tuning_type.replace('_still', '')
+                        else:
+                            is_still = ''
+
+                        delta_pref = pd.DataFrame()
+
                         # Recall that id_flags[0] is the free session, id_flags[1] is the fixed session
                         free = visual_shifts[id_flags[0]][tuning_type].reset_index()
                         fixed = visual_shifts[id_flags[1]][tuning_type].reset_index()
@@ -386,13 +401,33 @@ if __name__ == '__main__':
                         diff_dir = wrap_negative(diff_dir)
                         diff_ori = wrap(diff_ori, bound=180.1)
 
-                        delta_pref[f"delta_{tuning_type}_dir"] = diff_dir
-                        delta_pref[f"delta_{tuning_type}_ori"] = diff_ori
+                        delta_pref[f"delta_dir{is_still}"] = diff_dir
+                        delta_pref[f"delta_ori{is_still}"] = diff_ori
+                        delta_pref.insert(0, 'dataset', tuning_type)
+                        delta_pref.insert(1, 'match_idxs', match_idxs)
+                        delta_pref_list_fixed_free.append(delta_pref)
+
+                    # Merge the delta pref DataFrames so moving and still are together
+                    delta_pref_fixed_free_merge = [pd.merge(df1, df2, on=['dataset', 'match_idxs'], how='outer') for
+                                                     df1, df2 in
+                                                     zip(delta_pref_list_fixed_free[:-1:2],
+                                                         delta_pref_list_fixed_free[1::2])]
+
+                    # Concat the merged DataFrames
+                    delta_pref_fixed_free = pd.concat(delta_pref_fixed_free_merge, axis=0)
 
                     # Now do the same, but with the still fixed session as the reference
                     still_tunings = [el for el in visual_shifts[id_flags[0]].keys() if 'still' in el]
                     all_tunings = [el for el in visual_shifts[id_flags[0]].keys() if 'still' not in el]
+
                     for still_tuning, moving_tuning in zip(still_tunings, all_tunings):
+                        delta_pref = pd.DataFrame()
+
+                        if 'still' in tuning_type:
+                            is_still = '_still'
+                        else:
+                            is_still = ''
+
                         free_still = visual_shifts[id_flags[0]][still_tuning].reset_index()
                         fixed_still = visual_shifts[id_flags[1]][still_tuning].reset_index()
 
@@ -421,17 +456,36 @@ if __name__ == '__main__':
                         diff_moving_fixed_ori = wrap(diff_moving_fixed_ori, bound=180.1)
                         diff_moving_free_ori = wrap(diff_moving_free_ori, bound=180.1)
 
-                        delta_pref[f"delta_dir_{moving_tuning}_free_still_rel_fixed_still"] = diff_rig_dir
-                        delta_pref[f"delta_dir_{moving_tuning}_fixed_moving_rel_fixed_still"] = diff_moving_fixed_dir
-                        delta_pref[f"delta_dir_{moving_tuning}_free_moving_rel_fixed_still"] = diff_moving_free_dir
+                        delta_pref[f"delta_dir_free_still_rel_fixed_still"] = diff_rig_dir
+                        delta_pref[f"delta_dir_fixed_moving_rel_fixed_still"] = diff_moving_fixed_dir
+                        delta_pref[f"delta_dir_free_moving_rel_fixed_still"] = diff_moving_free_dir
 
-                        delta_pref[f"delta_ori_{moving_tuning}_free_still_rel_fixed_still"] = diff_rig_ori
-                        delta_pref[f"delta_ori_{moving_tuning}_fixed_moving_rel_fixed_still"] = diff_moving_fixed_ori
-                        delta_pref[f"delta_ori_{moving_tuning}_free_moving_rel_fixed_still"] = diff_moving_free_ori
+                        delta_pref[f"delta_ori_free_still_rel_fixed_still"] = diff_rig_ori
+                        delta_pref[f"delta_ori_fixed_moving_rel_fixed_still"] = diff_moving_fixed_ori
+                        delta_pref[f"delta_ori_free_moving_rel_fixed_still"] = diff_moving_free_ori
+                        delta_pref.insert(0, 'dataset', moving_tuning)
+                        delta_pref.insert(1, 'match_idxs', match_idxs)
+                        delta_pref_list_rel_fixed_still.append(delta_pref)
+
+                    # Concat these DataFrames
+                    delta_pref_rel_fixed_still = pd.concat(delta_pref_list_rel_fixed_still, axis=0)
+
+                    # Now merge the fixed free and fixed still DataFrames into one
+                    delta_pref = pd.merge(delta_pref_fixed_free, delta_pref_rel_fixed_still, on=['dataset', 'match_idxs'],
+                                            how='outer')
 
                 # If we have repeat sessions, we can't try fixed as a reference, so just look at delta between sessions
                 else:
+                    delta_pref_list = []
+
                     for tuning_type in visual_shifts[id_flags[0]].keys():
+                        if 'still' in tuning_type:
+                            is_still = '_still'
+                            tuning_type = tuning_type.replace('_still', '')
+                        else:
+                            is_still = ''
+
+                        delta_pref = pd.DataFrame()
                         session1 = visual_shifts[id_flags[0]][tuning_type].reset_index()
                         session2 = visual_shifts[id_flags[1]][tuning_type].reset_index()
                         diff_dir = session2.loc[:, ['pref_dir']].subtract(session1.loc[:, ['pref_dir']]).to_numpy().flatten()
@@ -440,10 +494,16 @@ if __name__ == '__main__':
                         diff_dir = wrap_negative(diff_dir)
                         diff_ori = wrap(diff_ori, bound=180.1)
 
-                        delta_pref[f"delta_{tuning_type}_dir"] = diff_dir
-                        delta_pref[f"delta_{tuning_type}_ori"] = diff_ori
+                        delta_pref[f"delta_dir{is_still}"] = diff_dir
+                        delta_pref[f"delta_ori{is_still}"] = diff_ori
+                        delta_pref.insert(0, 'dataset', tuning_type)
+                        delta_pref.insert(1, 'match_idxs', match_idxs)
+                        delta_pref_list.append(delta_pref)
 
-                delta_pref['match_idxs'] = match_idxs
+                    delta_pref_merge_list = [pd.merge(df1, df2, on=['dataset', 'match_idxs'], how='outer') for
+                                                df1, df2 in zip(delta_pref_list[:-1:2], delta_pref_list[1::2])]
+                    delta_pref = pd.concat(delta_pref_merge_list, axis=0)
+
                 delta_pref.to_hdf(out_path, 'delta_vis_tuning')
 
             # assemble the entry data
