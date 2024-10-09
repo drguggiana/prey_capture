@@ -13,7 +13,7 @@ import functions_misc as fm
 from functions_kinematic import wrap_negative, wrap
 
 # Ignore warnings
-# warnings.simplefilter(action='ignore')
+warnings.simplefilter(action='ignore')
 
 
 def rename_match_df(matches, exp_type):
@@ -196,6 +196,8 @@ if __name__ == '__main__':
                             break
                         elif key == '/cell_matches':
                             matches = h[key].dropna().reset_index(drop=True)
+                            if matches.size == 0:
+                                matches = None
                         else:
                             file_dict[key.split('/')[-1]] = h[key]
 
@@ -233,7 +235,11 @@ if __name__ == '__main__':
                     multimodal_tuning = pd.DataFrame()
 
                     # get matches and save
-                    match_idxs = matches.loc[:, id_flag].to_numpy(dtype=int)
+                    if matches is not None:
+                        match_idxs = matches.loc[:, id_flag].to_numpy(dtype=int)
+                    else:
+                        match_idxs = np.empty(0)
+
                     num_cells = data[vis_datasets[0]].shape[0]    # Just use the first visual dataset here, same for all
 
                     all_cells_summary_stats.loc[0, 'num_cells'] = num_cells
@@ -285,13 +291,21 @@ if __name__ == '__main__':
                         multimodal_tuning[f'{feature}_cons_index'] = data[feature]['Cons_index'].values
 
                         # Save matched TCs
-                        matched_feature = data[feature].iloc[match_idxs, :].reset_index(names=['original_cell_id'])
-                        matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
-                        matched_frac_kine_resp, _ = kine_fraction_tuned(matched_feature)
-                        matched_summary_stats[f"frac_resp_{feature}"] = matched_frac_kine_resp
+                        if len(match_idxs) > 0:
+                            matched_feature = data[feature].iloc[match_idxs, :].reset_index(names=['original_cell_id'])
+                            matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
+                            matched_frac_kine_resp, _ = kine_fraction_tuned(matched_feature)
+                            matched_summary_stats[f"frac_resp_{feature}"] = matched_frac_kine_resp
+                        else:
+                            matched_feature = pd.DataFrame([])
+                            matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
+                            matched_summary_stats[f"frac_resp_{feature}"] = 0
 
                         # save unmatched tcs
-                        unmatched_feature = data[feature].drop(match_idxs, axis=0)
+                        if len(match_idxs) > 0:
+                            unmatched_feature = data[feature].drop(match_idxs, axis=0)
+                        else:
+                            unmatched_feature = data[feature].copy()
                         unmatched_feature.to_hdf(out_path, f'{id_flag}/unmatched/{feature}')
                         unmatched_frac_kine_resp, _ = kine_fraction_tuned(unmatched_feature)
                         unmatched_summary_stats[f"frac_resp_{feature}"] = unmatched_frac_kine_resp
@@ -328,30 +342,43 @@ if __name__ == '__main__':
                         multimodal_tuning_w_vis.to_hdf(out_path, f'{id_flag}/multimodal_tuned/{feature}')
 
                         # Save matched TCs
-                        matched_feature = data[feature].iloc[match_idxs, :]
-                        matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
-                        matched_resp_df, matched_frac_resp = vis_frac_responsive(matched_feature)
+                        # Get the preferred orientation/direction from the matched cells
+                        vis_feat_cols = ['pref_dir', 'bootstrap_pref_dir', 'real_pref_dir', 'bootstrap_real_pref_dir',
+                                         'resultant_dir', 'bootstrap_resultant_dir', 'shuffle_resultant_dir',
+                                         'responsivity_dir', 'bootstrap_responsivity_dir',
+                                         'bootstrap_p_responsivity_dir',
+                                         'shuffle_responsivity_dir', 'shuffle_p_responsivity_dir',
+                                         'pref_ori', 'null_ori', 'bootstrap_pref_ori', 'real_pref_ori',
+                                         'bootstrap_real_pref_ori', 'resultant_ori', 'bootstrap_resultant_ori',
+                                         'shuffle_resultant_ori', 'responsivity_ori', 'bootstrap_responsivity_ori',
+                                         'bootstrap_p_responsivity_ori', 'shuffle_responsivity_ori',
+                                         'shuffle_p_responsivity_ori',
+                                         ]
+
+                        if len(match_idxs) > 0:
+                            matched_feature = data[feature].iloc[match_idxs, :]
+                            matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
+                            matched_resp_df, matched_frac_resp = vis_frac_responsive(matched_feature)
+
+                        else:
+                            matched_feature = pd.DataFrame([])
+                            matched_feature.to_hdf(out_path, f'{id_flag}/matched/{feature}')
+                            matched_resp_df, matched_frac_resp = pd.DataFrame([]), pd.DataFrame([])
 
                         if 'still' in feature:
                             new_cols = [f'{col}_still' for col in matched_frac_resp.columns]
                             matched_frac_resp.columns = new_cols
 
-                        matched_summary_stats_w_vis = pd.concat([matched_summary_stats.copy(), matched_frac_resp], axis=1)
-
-                        # Get the preferred orientation/direction from the matched cells
-                        vis_feat_cols = ['pref_dir', 'bootstrap_pref_dir', 'real_pref_dir', 'bootstrap_real_pref_dir',
-                                 'resultant_dir', 'bootstrap_resultant_dir', 'shuffle_resultant_dir',
-                                 'responsivity_dir', 'bootstrap_responsivity_dir', 'bootstrap_p_responsivity_dir',
-                                 'shuffle_responsivity_dir', 'shuffle_p_responsivity_dir',
-                                 'pref_ori', 'null_ori', 'bootstrap_pref_ori', 'real_pref_ori',
-                                 'bootstrap_real_pref_ori',  'resultant_ori', 'bootstrap_resultant_ori',
-                                 'shuffle_resultant_ori', 'responsivity_ori', 'bootstrap_responsivity_ori',
-                                 'bootstrap_p_responsivity_ori', 'shuffle_responsivity_ori', 'shuffle_p_responsivity_ori',
-                                 ]
+                        matched_summary_stats_w_vis = pd.concat([matched_summary_stats.copy(), matched_frac_resp],
+                                                                axis=1)
                         exp_vis_features[feat] = matched_feature.loc[:, vis_feat_cols]
 
+
                         # save unmatched TCs
-                        unmatched_feature = data[feature].drop(data[feature].index[match_idxs], axis=0)
+                        if len(match_idxs) > 0:
+                            unmatched_feature = data[feature].drop(data[feature].index[match_idxs], axis=0)
+                        else:
+                            unmatched_feature = data[feature].copy()
                         unmatched_feature.to_hdf(out_path, f'{id_flag}/unmatched/{feature}')
                         unmatched_resp_df, unmatched_frac_resp = vis_frac_responsive(unmatched_feature)
 
