@@ -1,18 +1,46 @@
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
-from matplotlib import animation, ticker
+import os
+
 import numpy as np
-import sklearn.cluster as clu
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 import holoviews as hv
+import sklearn.cluster as clu
+from mpl_toolkits.mplot3d import Axes3D
+from functools import partial
+from matplotlib import animation, ticker
 from bokeh.themes.theme import Theme
 from bokeh.plotting import show as bokeh_show
-from functools import partial
 
+import processing_parameters
+
+
+# define in to cm
+constant_in2cm = 2.54
+
+# Define standard colors for holoviews
+hv_blue_rgb = tuple(np.array([42, 158, 210]) / 255.)
+hv_blue_hex = '#2a9ed2'
+hv_orange_rgb = tuple(np.array([255, 191, 134]) / 255.)
+hv_orange_hex = '#ffbf86'
+hv_mpi_green_rgb = tuple(np.array([0, 136, 122]) / 255.)
+hv_mpi_green_hex = '#00887a'
+hv_mpi_yellow_rgb = tuple(np.array([203, 219, 42]) / 255.)
+hv_mpi_yellow_hex = '#cbdb2a'
+hv_gray_hex = '#bcbcbc'
+hv_yellow_hex = '#fae365'
+
+hv_white_hex = '#FFFFFF'
+hv_red_hex = '#db3c30'
+
+violin_palette = {'Freely Moving': hv_red_hex, 'Head Fixed': hv_blue_hex}
+swarm_pallete = {'Freely Moving': hv_white_hex, 'Head Fixed': hv_white_hex}  
 
 # define the standard font sizes
-paper = '7pt'
+paper = '12pt'
 poster = '15pt'
 screen = '18pt'
+small = '7pt'
 # define the conversion constant from pt to cm
 constant_pt2cm = 0.0352778
 # define the font size default dictionary for figures
@@ -38,7 +66,7 @@ font_sizes_raw = {
         'ylabel': poster,
         'zlabel': poster,
         'labels': poster,
-        'xticks': poster,
+        'xticks': '13pt',
         'yticks': poster,
         'zticks': poster,
         'ticks': poster,
@@ -46,7 +74,7 @@ font_sizes_raw = {
         'minor_yticks': poster,
         'minor_ticks': poster,
         'title': poster,
-        # 'legend': poster - 1,
+        'legend': '13pt',
         'legend_title': poster,
     },
     'screen': {
@@ -65,6 +93,22 @@ font_sizes_raw = {
         # 'legend': screen - 1,
         'legend_title': screen,
     },
+    'small': {
+        'xlabel': small,
+        'ylabel': small,
+        'zlabel': small,
+        'labels': small,
+        'xticks': small,
+        'yticks': small,
+        'zticks': small,
+        'ticks': small,
+        'minor_xticks': small,
+        'minor_yticks': small,
+        'minor_ticks': small,
+        'title': small,
+        # 'legend': screen - 1,
+        'legend_title': small,
+    }
 }
 
 attr_dict = {
@@ -80,7 +124,7 @@ attr_dict = {
         # },
         'Text':
             {
-                'text_font': 'Arial',
+                'text_font': 'arial',
                 'text_color': 'black',
                 'text_font_style': 'normal',
                 'text_alpha': 1.0,
@@ -306,6 +350,231 @@ def simple_animation(data_in, interval=10):
     return anim
 
 
+def spike_raster(data_in, cells=None):
+    if cells is None:
+        cells = [el for el in data_in.columns if 'cell' in el]
+
+    spikes = data_in.loc[:, cells]
+
+    im = hv.Image((data_in.time_vector, np.arange(len(cells)), spikes.values.T),
+                  kdims=['Time (s)', 'Cells'], vdims=['Activity (a.u.)'])
+    im.opts(width=600)  # , cmap='Purples')
+    return im
+
+
+def trace_raster(data, cells=None, ds_factor=1):
+    if cells is None:
+        cells = [el for el in data.columns if 'cell' in el]
+
+    trace = data.loc[:, cells]
+    max_std = trace.std().max()
+
+    lines = {i: hv.Curve((data.time_vector, trace.iloc[:, i].values.T + i * max_std)) for i in np.arange(len(cells))}
+    lineoverlay = hv.NdOverlay(lines, kdims=['Time (s)']).opts(height=500, width=800)
+    return lineoverlay
+
+
+def rand_jitter(arr):
+    stdev = .001 * (max(arr) - min(arr))
+    return arr + np.random.randn(len(arr)) * stdev
+
+
+def plot_tuning_curve(tuning_curve, error, plot_fit=True, plot_trials=False, plot_pref_angle=False,
+                      fit=None, trials=None, pref_angle=None, ax=None, **kwargs):
+    if ax is None:
+        fig = plt.figure(dpi=300, figsize=(10, 6))
+        ax = fig.add_subplot(111)
+
+    tuning = ax.errorbar(tuning_curve[:, 0], tuning_curve[:, 1],
+                         c='k', alpha=1, yerr=error, elinewidth=1,
+                         **kwargs)
+
+    if (fit is not None) and plot_fit:
+        ax.plot(fit[:, 0], fit[:, 1], c='#1f77b4')
+
+    if (pref_angle is not None) and plot_pref_angle:
+        ax.axvline(pref_angle, color='r', linewidth=1)
+
+    if (trials is not None) and plot_trials:
+        ax.scatter(rand_jitter(trials[:, 0]), trials[:, 1], marker='.', c='k', alpha=0.5, edgecolor='none')
+
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+
+    return tuning
+
+
+def plot_polar_tuning_curve(tuning_curve, error, plot_fit=True, plot_trials=False, plot_pref_angle=True,
+                            fit=None, trials=None, pref_angle=None, ax=None, **kwargs):
+    theta_max = kwargs.pop('theta_max', 360)
+    font_size = kwargs.pop('font_size', 'poster')
+    font_size = int(font_sizes_raw[font_size]['xlabel'][:-2])
+
+    if ax is None:
+        fig = plt.figure(dpi=300, figsize=(5, 5))
+        ax = fig.add_subplot(111, projection='polar')
+        ax.grid(linewidth=0.25, zorder=0)
+
+    ax.errorbar(np.deg2rad(tuning_curve[:, 0]), tuning_curve[:, 1],
+                c='k', alpha=1, linewidth=2, yerr=error, elinewidth=1,
+                zorder=2, **kwargs)
+
+    if (fit is not None) and plot_fit:
+        ax.plot(np.deg2rad(fit[:, 0]), fit[:, 1], c='#1f77b4', linewidth=1, zorder=2.5)
+
+    if (trials is not None) and plot_trials:
+        ax.scatter(rand_jitter(np.deg2rad(trials[:, 0])), trials[:, 1], 
+                   marker='.', color='k', alpha=0.5, edgecolor='none',
+                   zorder=2)
+
+    if (pref_angle is not None) and plot_pref_angle:
+        ax.axvline(np.deg2rad(pref_angle), color='r', linewidth=1, zorder=2)
+
+    ax.set_thetamax(theta_max)
+    ax.set_theta_zero_location("W")
+    ax.set_theta_direction(-1)
+    # ax.set_rorigin(0)
+    radial_ticks = [0.0, 0.5, 1.0]
+    ax.set_rticks(radial_ticks, color='black')
+    ax.set_yticklabels([], color='black')
+    ax.set_rlabel_position(0)
+    # ax.set_xticklabels(['0', '', '90', '', '180', '', '270', ''], color='black', fontsize=font_size)
+    ax.set_xticklabels([], color='black', fontsize=font_size)
+
+    # ax.yaxis.set_label_position('right')
+
+    return ax
+
+
+def plot_tuning_curve_hv(tuning_curve, error, fit=None, trials=None, pref_angle=None, **kwargs):
+    overlay = []
+
+    tuning = hv.Curve(tuning_curve).opts(width=600, height=300, **kwargs)
+    overlay.append(tuning)
+
+    error_plot = hv.Spread((*tuning_curve.T, error)).opts(fill_alpha=0.25)
+    overlay.append(error_plot)
+
+    if fit is not None:
+        fit_plot = hv.Curve(fit)
+        overlay.append(fit_plot)
+
+    if trials is not None:
+        trials_plot = hv.Scatter(trials).opts(color='k', size=3)
+        overlay.append(trials_plot)
+
+    if pref_angle is not None:
+        pref_plot = hv.VLine(pref_angle).opts(color='k', line_width=1)
+        overlay.append(pref_plot)
+
+    return hv.Overlay(overlay)
+
+
+def plot_tuning_with_stats(dataset, cell, tuning_kind='direction', error='std',
+                           norm=True, polar=True, subfig=None,
+                           plot_selectivity=True, plot_gof=False,
+                           **kwargs):
+
+    num_subplots = 1 + plot_selectivity + plot_gof
+    
+    data_cols = ['mean', error, 'resp']
+    fit_cols = ['fit_curve', 'pref']
+
+    if 'direction' in tuning_kind:
+        multiplier = 1.
+    else:
+        multiplier = 2.
+
+    if norm:
+        data_cols = [el + '_norm' for el in data_cols]
+
+    columns = data_cols + fit_cols
+    columns = [el + '_' + tuning_kind[:3] for el in columns]
+
+    if subfig is None:
+        figsize = kwargs.pop('figsize', (5 * constant_in2cm, 5 * constant_in2cm))
+        fig = plt.figure(layout='constrained', figsize=figsize)
+        fig.suptitle(f"Cell {cell}", fontsize='x-large')
+        subfig = fig.subfigures(nrows=1, ncols=1)
+
+    if polar:
+        ax1 = subfig.add_subplot(int(f'1{num_subplots}1'), projection="polar")  # tuning
+    else:
+        ax1 = subfig.add_subplot(int(f'1{num_subplots}1'))  # tuning
+
+    axes = [ax1]
+
+    # Plot the TC
+    if polar:
+        tuning_plot_func = plot_polar_tuning_curve
+    else:
+        tuning_plot_func = plot_tuning_curve
+
+    ds = dataset.loc[cell, :]
+    plot_kwargs = {'theta_max': 360 / multiplier}
+    plot_kwargs.update(kwargs)
+    
+    # Plot directions
+    _ = tuning_plot_func(ds[columns[0]], ds[columns[1]],
+                         trials=ds[columns[2]],
+                         fit=ds[columns[3]],
+                         pref_angle=ds[columns[4]],
+                         ax=ax1,
+                         **plot_kwargs
+                         )
+
+    # # Plot dsi or osi
+    # if plot_selectivity:
+    #     ax2 = subfig.add_subplot(int(f'1{num_subplots}2'))  # resp
+    #     axes.append(ax2)
+    #     if 'direction' in tuning_kind:
+    #         si = 'dsi_abs'
+    #         title = 'DSI'
+    #         xlims = (-0.05, 1.001)
+    #         step = 0.025
+    #     else:
+    #         si = 'osi'
+    #         title = 'OSI'
+    #         xlims = (-0.05, 1.001)
+    #         step = 0.025
+
+    #     hist_resp = np.abs(ds[f'bootstrap_{si}'])
+    #     hist_resp[np.isnan(hist_resp)] = -0.05
+    #     real_resp = ds[si]
+    #     p_resp = ds[f'bootstrap_p_{si}']
+    #     edges = np.arange(*xlims, step)
+    #     ax2.hist(hist_resp, bins=edges, edgecolor="black", color=hv_blue_rgb)
+    #     ax2.axvline(x=real_resp, color='r', linestyle='dashed', linewidth=2)
+    #     # axes[1].text(1.0, 1.0, f"%ile={p_resp: .2f}", size=10, ha='right', va='bottom', transform=ax2.transAxes)
+    #     ax2.spines['right'].set_visible(False)
+    #     ax2.spines['top'].set_visible(False)
+    #     ax2.xaxis.set_ticks_position('bottom')
+    #     ax2.yaxis.set_ticks_position('left')
+    #     ax2.set_title(title)
+
+    # # Plot goodness of fit
+    # if plot_gof:
+        # ax3 = subfig.add_subplot(int(f'1{num_subplots}3'))  # resp
+        # axes.append(ax3)
+        # hist_gof = ds['bootstrap_gof']
+        # hist_gof[np.isnan(hist_gof)] = -0.1
+        # real_gof = ds['gof']
+        # p_gof = ds['p_gof']
+        # edges = np.arange(-0.1, 1.001, 0.025)
+        # ax3.hist(hist_gof, bins=edges, edgecolor="black", color=holoviews_blue_rgb)
+        # ax3.axvline(x=real_gof, color='r', linestyle='dashed', linewidth=2)
+        # # ax3.text(1.0, 1.0, f"%ile={p_gof: .2f}", size=10, ha='right', va='bottom', transform=ax3.transAxes)
+        # ax3.spines['right'].set_visible(False)
+        # ax3.spines['top'].set_visible(False)
+        # ax3.xaxis.set_ticks_position('bottom')
+        # ax3.yaxis.set_ticks_position('left')
+        # ax3.set_title(gof_type.upper())
+
+    return axes
+
+
 def histogram(data_in, rows=1, columns=1, bins=50, fig=None, color=None, fontsize=None, dpi=None):
     """Wrapper for the histogram function in subplots"""
     # create a new figure window
@@ -341,6 +610,150 @@ def histogram(data_in, rows=1, columns=1, bins=50, fig=None, color=None, fontsiz
             # update the plot counter
             plot_counter += 1
     return fig
+
+
+def violin_swarm(ds, save_path, backend='hvplot', save=False,
+                 cmap='blue', xlabel='', ylabel='',
+                 width=1500, height=1000, 
+                 font_size='screen', dpi=800, **kwargs):
+    """
+    Generate a violin plot with swarm plot overlay using either hvplot or seaborn backend.
+
+    Parameters:
+    - ds (pandas.DataFrame): The input dataset.
+    - save_path (str): The path to save the generated plot.
+    - backend (str, optional): The plotting backend to use. Default is 'hvplot'.
+    - save (bool, optional): Whether to save the plot. Default is False.
+    - cmap (str, optional): The color map to use for the violin plot. Default is 'blue'.
+    - xlabel (str, optional): The label for the x-axis. Default is an empty string.
+    - ylabel (str, optional): The label for the y-axis. Default is an empty string.
+    - width (int, optional): The width of the plot in pixels. Default is 1500.
+    - height (int, optional): The height of the plot in pixels. Default is 1000.
+    - font_size (str, optional): The font size for the axis labels. Default is 'screen'.
+    - dpi (int, optional): The DPI (dots per inch) for saving the plot. Default is 800.
+
+    Returns:
+    - violinplot (object): The generated violin plot.
+
+    Raises:
+    - Exception: If an invalid backend is specified.
+    """
+
+    ylim = kwargs.pop('ylim', (-0.05, 1.05))
+
+    rename_dict = dict(zip(list(ds.columns), [processing_parameters.wf_label_dictionary_wo_units[col] for col in list(ds.columns)]))
+    ds = ds.rename(columns=rename_dict)
+
+    if backend == 'hvplot':
+        violinplot = ds[list(rename_dict.values())].hvplot.violin(legend=False, inner='quartiles', color=cmap)
+        violinplot.opts(xlabel=xlabel, ylabel=ylabel, ylim=ylim, xrotation=45, width=width, height=height)
+        if save:
+            violinplot = save_figure(violinplot, save_path=save_path, fig_width=width, dpi=dpi, fontsize='screen',
+                                     target='both', display_factor=0.1)
+        else:
+            violinplot = save_figure(violinplot, save_path=save_path, fig_width=width, dpi=dpi, fontsize='screen',
+                                     target='screen', display_factor=0.1)
+        return violinplot
+
+    # elif backend=='holoviews':
+    
+    elif backend == 'seaborn':
+        swarm_palette = {k: 'k' for k in rename_dict.values()}
+        fig, ax = plt.subplots(figsize=(width, height))
+        violinplot = sns.violinplot(data=ds[list(rename_dict.values())], color=cmap, native_scale=True, width=1)
+        violinplot = sns.stripplot(data=ds[list(rename_dict.values())], size=2, palette=swarm_palette, marker="x", linewidth=1)
+        ax.set_ylim(ylim)
+
+        violinplot.spines[['right', 'top']].set_visible(False)
+        font_size = int(font_sizes_raw[font_size]['xlabel'][:-2])
+
+        if len(list(rename_dict.values())) == 1:
+            ax.spines[['left']].set_visible(False)
+            ax.set(xticklabels=[])
+            ax.set(xlabel=None)  # remove the y-axis label
+            ax.set(yticklabels=[])
+            ax.set(ylabel=None)  # remove the y-axis label
+            ax.tick_params(left=False)  # remove the ticks
+        else:
+            violinplot.set_ylabel(ylabel, fontsize=font_size)
+            violinplot.set_xlabel(xlabel, fontsize=font_size)
+            plt.xticks(rotation=45)
+
+        plt.tight_layout()
+
+        if save:
+            plt.savefig(save_path, dpi=dpi, format='png')
+
+        return violinplot
+    else:
+        return Exception('Invalid backend')
+
+
+def plot_dff_spikes_trials(exp, save_dir, save=True, plot_spikes=True, plot_trials=True, plot_running=False, **kwargs):
+    basename_modifier = kwargs.pop('basename_modifier', '')
+    fig_width = kwargs.pop('fig_width', 7)
+    dpi = kwargs.pop('dpi', 800)
+    fontsize = kwargs.pop('fontsize', 'poster')
+
+    dff_plots = []
+    for i, cell in enumerate(exp.cells_to_match):
+        basename = f"dff_{i}{basename_modifier}"
+
+        # Plot the dff
+        out_fig = hv.Curve(exp.norm_dff[['time_vector', cell]]).opts(color='black', height=75, width=1000, **kwargs)
+
+        if plot_spikes:
+            spikes_plot = hv.Curve(exp.norm_spikes[['time_vector', cell]]).opts(color='green', alpha=0.5)
+            out_fig = hv.Overlay([spikes_plot, out_fig])
+            basename += '_spikes'
+
+        if plot_trials:
+            trials_on = exp.norm_dff['trial_num'] > 0
+            time = exp.norm_dff['time_vector']
+            trials_plot = hv.Area((time, trials_on)).opts(color='gray', alpha=0.25)
+            out_fig = hv.Overlay([trials_plot, out_fig]).opts(
+                hv.opts.Area(yaxis=None, xaxis=None, xlabel=None, ylabel=None, show_legend=False))
+            basename += '_trials'
+
+        if plot_running:
+            try:
+                running_plot = hv.Curve(exp.norm_dff[['time_vector', 'running_speed']]).opts(color='red', alpha=0.5)
+            except KeyError:
+                running_plot = hv.Curve(exp.norm_dff[['time_vector', 'wheel_speed_abs']]).opts(color='red', alpha=0.5)
+
+            out_fig = hv.Overlay([out_fig, running_plot])
+            basename += '_running'
+
+        # Final options for the figure
+        out_fig = out_fig.opts(
+            hv.opts.Curve(yaxis=None, xaxis=None, xlabel=None, ylabel=None, show_legend=False, width=1000, height=75))
+
+        # Save the figure
+        save_path = os.path.join(save_dir, f'{basename}.png')
+
+        if save:
+            out_fig = save_figure(out_fig, save_path=save_path, fig_width=fig_width, dpi=dpi, fontsize=fontsize,
+                                     target='save', display_factor=0.2)
+        else:
+            out_fig = save_figure(out_fig, save_path=save_path, fig_width=fig_width, dpi=dpi, fontsize=fontsize,
+                                     target='screen', display_factor=0.2)
+
+        dff_plots.append(out_fig)
+
+    return dff_plots
+
+
+def hv_hist(ds, key, label, drop_na=True, xlabel=''):
+    data = ds[key].copy()
+
+    if drop_na:
+        data.replace([np.inf, -np.inf], np.nan, inplace=True)
+        data.dropna(inplace=True)
+        data = data[data >= 0]
+        
+    frequencies, edges = np.histogram(data, 20)
+    hist = hv.Histogram((edges, frequencies), label=label).opts(xlabel=xlabel, ylabel='Freq.')
+    return hist
 
 
 def plot_arrow(trajectory, centers, heading, head, cricket, angles, angles2, fig=None):
@@ -679,7 +1092,7 @@ def get_figure_dimensions(render_fig):
     """Get a rendered figures pixel dimensions"""
 
     # get the original width and height of the figure
-    px_width = render_fig.properties_with_values()['plot_width']
+    px_width = render_fig.properties_with_values()['width']
     # set flag for which dim to change later
     flag_width = 'plot'
     # get the frame width if the plot one wasn't defined
@@ -687,7 +1100,7 @@ def get_figure_dimensions(render_fig):
         px_width = render_fig.properties_with_values()['frame_width']
         flag_width = 'frame'
     # repeat for height
-    px_height = render_fig.properties_with_values()['plot_height']
+    px_height = render_fig.properties_with_values()['height']
     flag_height = 'plot'
     if px_height is None:
         px_height = render_fig.properties_with_values()['frame_height']
@@ -756,6 +1169,7 @@ def format_axis_hook(plot, element, dpi=600, scale_factor=1):
         b.left[0].major_tick_out = 0
         b.below[0].major_tick_line_width = 0
         b.left[0].major_tick_line_width = 0
+    
     # scale the tick standoff
     current_tick_standoff = b.below[0].major_label_standoff
     b.below[0].major_label_standoff = px2pt(current_tick_standoff, dpi, scale_factor)
@@ -764,7 +1178,9 @@ def format_axis_hook(plot, element, dpi=600, scale_factor=1):
     current_label_standoff = b.below[0].axis_label_standoff
     b.below[0].axis_label_standoff = px2pt(current_label_standoff, dpi, scale_factor)
     b.left[0].axis_label_standoff = px2pt(current_label_standoff, dpi, scale_factor)
-    plot.outline_line_color = None
+
+    plot.handles["plot"].outline_line_color = None
+    plot.handles["plot"].border_fill_color = None
 
     # detect if there's a colorbar
     if len(b.right) > 0:
@@ -808,14 +1224,23 @@ def holoviews_mods(figure_in, dpi, scale_factor):
             # also scale the dot size
             dot_size = props['size']
             figure_in.opts(size=px2pt(dot_size, dpi, scale_factor))
-        # check for BoxWHisker plot
+        # check for BoxWhisker plot
         if 'BoxWhisker' in str(type(figure_in)):
-            box_line_width = props['box_line_width']
+            box_line_width = props.get('box_line_width', 1)
             figure_in.opts(box_line_width=px2pt(box_line_width, dpi, scale_factor))
-            whisker_line_width = props['whisker_line_width']
+            whisker_line_width = props.get('whisker_line_width', 1)
             figure_in.opts(whisker_line_width=px2pt(whisker_line_width, dpi, scale_factor))
-            outlier_line_width = props['outlier_line_width']
+            outlier_line_width = props.get('outlier_line_width', 1)
             figure_in.opts(outlier_line_width=px2pt(outlier_line_width, dpi, scale_factor))
+        if 'Violin' in str(type(figure_in)):
+            violin_line_width = props.get('violin_line_width', 1)
+            figure_in.opts(box_line_width=px2pt(violin_line_width, dpi, scale_factor))
+            stats_line_width = props.get('stats_line_width', 0.5)
+            figure_in.opts(stats_line_width=px2pt(stats_line_width, dpi, scale_factor))
+            outline_line_width = props.get('outline_line_width', 1)
+            figure_in.opts(box_line_width=px2pt(outline_line_width, dpi, scale_factor))
+            box_line_width = props.get('box_line_width', 1)
+            figure_in.opts(box_line_width=px2pt(box_line_width, dpi, scale_factor))
 
     return figure_in
 
@@ -882,8 +1307,8 @@ def scale_figure(figure_in, target, dpi, fontsize, mode='convert'):
         is_legend = False
     if is_legend:
         # scale legend
-        current_fontsize = float(render_fig.above[0].label_text_font_size[:-2])
-        figure_in.opts(legend_opts={'label_text_font_size': str(px2pt(current_fontsize, dpi, scale_factor)) + 'pt'})
+        current_fontsize = float(render_fig.legend[0].label_text_font_size[:-2])
+        figure_in.opts(legend_opts={'label_text_font_size': str(px2pt(current_fontsize-5, dpi, scale_factor)) + 'pt'})
 
     # select between singular and nested structures
     if ('Overlay' in str(type(figure_in))) | ('Layout' in str(type(figure_in))):
@@ -926,3 +1351,58 @@ def save_figure(fig, save_path=None, fig_width=5, dpi=600, fontsize='paper', tar
         bokeh_show(hv.render(fig))
 
     return fig
+
+
+def plot_dff_spikes_trials(exp, save_dir, save=True, plot_spikes=True, plot_trials=True, plot_running=False, **kwargs):
+
+    basename_modifier = kwargs.pop('basename_modifier', '')
+    fig_width = kwargs.pop('fig_width', 7)
+    dpi = kwargs.pop('dpi', 800)
+    fontsize = kwargs.pop('fontsize', 'poster')
+    
+    dff_plots = []
+    cells_to_plot = kwargs.pop('cells_to_plot', exp.cells_to_match)
+    for i, cell in enumerate(cells_to_plot):
+        basename = f"dff_{i}{basename_modifier}"
+
+        # Plot the dff
+        out_fig = hv.Curve(exp.norm_deconv_fluor[['time_vector', cell]]).opts(color='black', 
+                                                                              height=kwargs.pop('height', 75), 
+                                                                              width=kwargs.pop('width', 1000), 
+                                                                              **kwargs)
+
+        if plot_spikes:
+            spikes_plot = hv.Curve(exp.norm_inferred_spikes[['time_vector', cell]]).opts(color='green', alpha=0.5)
+            out_fig = hv.Overlay([spikes_plot, out_fig])
+            basename += '_spikes'
+
+        if plot_trials:
+            trials_on = exp.norm_deconv_fluor['trial_num'] > 0
+            time = exp.norm_deconv_fluor['time_vector']
+            trials_plot = hv.Area((time, trials_on)).opts(color='gray', alpha=0.25)
+            out_fig = hv.Overlay([trials_plot, out_fig]).opts(hv.opts.Area(yaxis=None, xaxis=None, xlabel=None, ylabel=None, show_legend=False))
+            basename += '_trials'
+
+        if plot_running:
+            try:
+                running_plot = hv.Curve(exp.norm_dff[['time_vector', 'running_speed']]).opts(color='red', alpha=0.5)
+            except KeyError:
+                running_plot = hv.Curve(exp.norm_dff[['time_vector', 'wheel_speed_abs']]).opts(color='red', alpha=0.5)
+
+            out_fig = hv.Overlay([out_fig, running_plot])
+            basename += '_running'
+
+        # Final options for the figure
+        out_fig = out_fig.opts(hv.opts.Curve(yaxis=None, xaxis=None, xlabel=None, ylabel=None, show_legend=False))
+        
+        # Save the figure
+        save_path = os.path.join(save_dir, f'{basename}.png')
+
+        if save:
+            out_fig = save_figure(out_fig, save_path=save_path, fig_width=fig_width, dpi=dpi, fontsize=fontsize, target='save', display_factor=0.3)
+        else:
+            out_fig = save_figure(out_fig, save_path=save_path, fig_width=fig_width, dpi=dpi, fontsize=fontsize, target='screen', display_factor=0.3)
+
+        dff_plots.append(out_fig)
+
+    return dff_plots

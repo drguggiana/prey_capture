@@ -1,0 +1,31 @@
+---
+# Experiments to exclude from the analysis because the trials are wonky
+repeat:
+  - 07_11_2023_15_17_09_VTuningWF_MM_230518_b_repeat_free1_gabor
+
+control:
+  - 08_09_2023_14_16_48_VTuningWF_MM_230706_a_control_light_free1_nogabor
+  - 08_03_2023_12_18_17_VTuningWF_MM_230518_b_control_light_free1_nogabor
+  - 08_03_2023_11_50_40_VWheelWF_MM_230518_b_control_light_fixed0_nogabor
+  - 07_25_2023_15_38_12_VWheelWF_MM_230518_b_control_light_fixed0_nogabor
+  - 01_27_2023_14_40_55_VWheelWF_MM_221109_a_control_dark_fixed0_gabor
+
+multi:
+  - 08_08_2023_13_19_32_VWheelWF_MM_230705_b_fixed1_gabor
+  - 08_01_2023_16_55_58_VTuningWF_MM_230706_b_free1_gabor
+  - 06_30_2023_12_36_30_VTuningWF_MM_230518_b_free0_gabor_gray_bg_32
+  - 08_10_2023_14_40_03_VWheelWF_MM_230706_a_fixed1_gabor
+  - 08_02_2023_14_23_15_VWheelWF_MM_230518_b_fixed1_gabor_error_underexposed
+
+all:
+  - 07_11_2023_15_17_09_VTuningWF_MM_230518_b_repeat_free1_gabor
+  - 08_09_2023_14_16_48_VTuningWF_MM_230706_a_control_light_free1_nogabor
+  - 08_03_2023_12_18_17_VTuningWF_MM_230518_b_control_light_free1_nogabor
+  - 08_03_2023_11_50_40_VWheelWF_MM_230518_b_control_light_fixed0_nogabor
+  - 07_25_2023_15_38_12_VWheelWF_MM_230518_b_control_light_fixed0_nogabor
+  - 01_27_2023_14_40_55_VWheelWF_MM_221109_a_control_dark_fixed0_gabor
+  - 08_08_2023_13_19_32_VWheelWF_MM_230705_b_fixed1_gabor
+  - 08_01_2023_16_55_58_VTuningWF_MM_230706_b_free1_gabor
+  - 06_30_2023_12_36_30_VTuningWF_MM_230518_b_free0_gabor_gray_bg_32
+  - 08_10_2023_14_40_03_VWheelWF_MM_230706_a_fixed1_gabor
+  - 08_02_2023_14_23_15_VWheelWF_MM_230518_b_fixed1_gabor_error_underexposed

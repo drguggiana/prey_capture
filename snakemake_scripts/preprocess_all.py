@@ -1,19 +1,20 @@
-# imports
-import functions_matching as fm
-import functions_preprocessing as fp
-import functions_plotting as fplot
-import paths
-import snakemake_scripts.sub_preprocess_S1 as s1
-import snakemake_scripts.sub_preprocess_S2 as s2
-import datetime
-import functions_bondjango as bd
-import functions_vrtarget as vt
 import os
 import yaml
-import matplotlib.pyplot as plt
+import datetime
 import h5py
+import matplotlib.pyplot as plt
 from pandas import read_hdf, DataFrame
+
+
+import paths
 import processing_parameters
+import functions_bondjango as bd
+import functions_matching as fm
+import functions_preprocessing as fp
+import functions_wirefree_trigger_fix as wf_trig
+import functions_plotting as fplot
+import snakemake_scripts.sub_preprocess_S1 as s1
+import snakemake_scripts.sub_preprocess_S2 as s2
 
 
 def preprocess_selector(ref_path, file_info):
@@ -21,22 +22,22 @@ def preprocess_selector(ref_path, file_info):
     # check if the input has a dlc path or not
     if (len(file_info['dlc_path']) > 0 and file_info['dlc_path'] != 'N/A') or \
             os.path.isfile(file_info['avi_path'].replace('.avi', '_dlc.h5')):
+
         # assemble the path here, in case the file wasn't in the database
         dlc_path = file_info['avi_path'].replace('.avi', '_dlc.h5')
+
         # select function depending on the rig
-        if files['rig'] == 'VWheel':
+        if file_info['rig'] in ['VWheel', 'VWheelWF']:
             # use the eye specific function
             traces, corner_out, frame_b = s1.run_preprocess_eye(ref_path, dlc_path, file_info)
         else:
             # if there's a dlc file, use this preprocessing
             traces, corner_out, frame_b = s1.run_dlc_preprocess(ref_path, dlc_path, file_info)
+
     else:
         # if not, use the legacy non-dlc preprocessing
-        output_path, traces = s1.run_preprocess(ref_path, file_info)
-        # set corners to empty
-        corner_out = []
-        # set frame bounds to empty
-        frame_b = []
+        traces, corner_out, frame_b = s1.run_preprocess(ref_path, file_info)
+
     return traces, corner_out, frame_b
 
 
@@ -66,7 +67,8 @@ except NameError:
     raw_path = files['avi_path']
     calcium_path = files['avi_path'][:-4] + '_calcium.hdf5'
     # match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], files['rig'], 'cellMatch.hdf5')))
-    match_path = os.path.join(paths.analysis_path, '_'.join((files['mouse'], 'cellMatch.hdf5')))
+    day = files['slug'][:10]
+    match_path = os.path.join(paths.analysis_path, '_'.join((day, files['mouse'], 'dayCellMatch.hdf5')))
     # assemble the save paths
     save_path = os.path.join(paths.analysis_path,
                              os.path.basename(files['avi_path'][:-4]))+'_rawcoord.hdf5'
@@ -98,7 +100,7 @@ if files['rig'] == 'miniscope':
     # run the preprocessing kinematic calculations
     kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
 
-    if files['imaging'] == 'doric':
+    if files['imaging'] in ['doric', 'wirefree', 'uc3', 'uc4']:
 
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data)
@@ -142,7 +144,7 @@ elif files['rig'] in ['VTuning']:
     params.to_hdf(save_path, key='params', mode='a')
 
     # calculate only if calcium is present
-    if files['imaging'] == 'doric':
+    if files['imaging'] in ['doric', 'wirefree', 'uc3', 'uc4']:
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
         # if there is a calcium output, write to the file
@@ -179,7 +181,7 @@ elif files['rig'] in ['VWheel']:
     params.to_hdf(save_path, key='params', mode='a')
 
     # calculate only if calcium is present
-    if files['imaging'] == 'doric':
+    if files['imaging'] in ['doric', 'wirefree', 'uc3', 'uc4']:
         # get a dataframe with the calcium data matched to the bonsai data
         matched_calcium, roi_info = fm.match_calcium_2(calcium_path, files['sync_path'], kinematics_data, trials=trials)
         # if there is a calcium output, write to the file
@@ -189,6 +191,123 @@ elif files['rig'] in ['VWheel']:
             # also get the cell matching if it exists
             cell_matches = fm.match_cells(match_path)
             cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
+
+elif files['rig'] in ['VTuningWF']:
+    # Correct the miniscope timestamps and fix the sync file
+    if not os.path.exists(files['sync_path'].replace('.csv', '_original.csv')):
+        _ = wf_trig.fix_wirefree_timestamps(files['tif_path'], files['sync_path'])
+
+    # load the data for the trial structure and parameters
+    trials = read_hdf(files['screen_path'], key='trial_set')
+    params = read_hdf(files['screen_path'], key='params')
+
+    # get the video tracking data
+    filtered_traces, px_corners, frame_bounds = preprocess_selector(files['avi_path'], files)
+
+    # define the dimensions of the arena
+    manual_coordinates = paths.arena_coordinates['VTuningWF']
+
+    # get the motive tracking data
+    motive_traces, reference_coordinates, obstacle_coordinates = \
+        s1.extract_motive(files['track_path'], files['rig'])
+
+    # scale the traces accordingly
+    filtered_traces, corners = \
+        fp.rescale_pixels(filtered_traces, files, manual_coordinates, px_corners.to_numpy().T)
+
+    # align them temporally based on the sync file
+    filtered_traces = fm.match_motive_2(motive_traces, files['sync_path'], filtered_traces)
+
+    # run the preprocessing kinematic calculations
+    # also saves the data
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations(filtered_traces)
+
+    # For these trials, save the trial set and the trial parameters to the output file
+    trials.to_hdf(save_path, key='trial_set', mode='a')
+    params.to_hdf(save_path, key='params', mode='a')
+
+    # calculate only if calcium is present
+    if files['imaging'] in ['wirefree']:
+        # get a dataframe with the calcium data matched to the bonsai data
+        matched_calcium, roi_info = fm.match_calcium_wf(calcium_path, files['sync_path'], kinematics_data, trials=trials)
+        # if there is a calcium output, write to the file
+        if matched_calcium is not None:
+            _ = wf_trig.get_trial_duration_stats(matched_calcium, 'trial_num', 'time_vector')
+            matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
+            roi_info.to_hdf(save_path, key='roi_info', mode='a', format='fixed')
+            # also get the cell matching if it exists
+            cell_matches = fm.match_cells(match_path)
+            cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
+
+elif files['rig'] in ['VWheelWF']:
+    # Correct the miniscope timestamps and fix the sync file
+    if not os.path.exists(files['sync_path'].replace('.csv', '_original.csv')):
+        _ = wf_trig.fix_wirefree_timestamps(files['tif_path'], files['sync_path'])
+
+    # load the data for the trial structure and parameters
+    trials = read_hdf(files['screen_path'], key='trial_set')
+    params = read_hdf(files['screen_path'], key='params')
+
+    # run the first stage of preprocessing
+    filtered_traces, corners, frame_bounds = preprocess_selector(files['avi_path'], files)
+
+    # compute the eye metrics
+    filtered_traces = fm.match_eye(filtered_traces)
+
+    # get the wheel info
+    filtered_traces = fm.match_wheel(files, filtered_traces)
+
+    # get the motive tracking data
+    motive_traces, reference_coordinates, obstacle_coordinates = \
+        s1.extract_motive(files['track_path'], files['rig'])
+
+    # align them temporally based on the sync file
+    kinematics_data = fm.match_motive_2(motive_traces, files['sync_path'], filtered_traces)
+
+    # For these trials, save the trial set and the trial parameters to the output file
+    trials.to_hdf(save_path, key='trial_set', mode='a')
+    params.to_hdf(save_path, key='params', mode='a')
+
+    # calculate only if calcium is present
+    if files['imaging'] in ['wirefree']:
+        # get a dataframe with the calcium data matched to the bonsai data
+        matched_calcium, roi_info = fm.match_calcium_wf(calcium_path, files['sync_path'], kinematics_data, trials=trials)
+
+        # if there is a calcium output, write to the file
+        if matched_calcium is not None:
+            _ = wf_trig.get_trial_duration_stats(matched_calcium, 'trial_num', 'time_vector')
+
+            matched_calcium.to_hdf(save_path, key='matched_calcium', mode='a', format='fixed')
+            roi_info.to_hdf(save_path, key='roi_info', mode='a', format='fixed')
+            # also get the cell matching if it exists
+            cell_matches = fm.match_cells(match_path)
+            cell_matches.to_hdf(save_path, key='cell_matches', mode='a', format='fixed')
+
+elif files['rig'] == 'ARPrey':
+    # get the video tracking data
+    filtered_traces, px_corners, frame_bounds = preprocess_selector(files['avi_path'], files)
+
+    # define the dimensions of the arena
+    manual_coordinates = paths.arena_coordinates['VR']
+
+    # get the motive tracking data
+    motive_traces, reference_coordinates, obstacle_coordinates = \
+        s1.extract_motive(files['track_path'], files['rig'])
+
+    # assemble the sync path
+    # TODO: fix this in the database, need to modify entries or regenerate them, but they were parsed wrong, there
+    # was a missing underscore in the parsing function that I just corrected
+    sync_path = files['avi_path'].replace('_ARPrey_', '_syncARPrey_').replace('.avi', '.csv')
+    # align them temporally based on the sync file
+    filtered_traces = fm.match_motive(motive_traces, sync_path, filtered_traces)
+
+    # # scale the traces accordingly
+    # filtered_traces, corners = \
+    #     fp.rescale_pixels(filtered_traces, files, manual_coordinates, manual_coordinates)
+    corners = []
+
+    # run the preprocessing kinematic calculations
+    kinematics_data, real_crickets, vr_crickets = s2.kinematic_calculations_arprey(filtered_traces)
 
 else:
     # return all empty outputs and print a warning
@@ -202,11 +321,6 @@ else:
 kinematics_data.to_hdf(save_path, key='full_traces', mode='a', format='fixed')
 corners_df = DataFrame(data=corners, columns=['x', 'y'])
 corners_df.to_hdf(save_path, key='arena_corners', mode='a')
-
-# # For these trials, save the trial set and the trial parameters to the output file
-# if files['rig'] in ['VTuning', 'VWheel']:
-#     trials.to_hdf(save_path, key='trial_set', mode='a', format='table')
-#     params.to_hdf(save_path, key='params', mode='a', format='table')
 
 # generate the output figure
 fig_final = fplot.preprocessing_figure(filtered_traces, real_crickets, vr_crickets, corners)

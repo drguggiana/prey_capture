@@ -11,3 +11,4 @@ dask-worker-space/
 snakemake_scripts/dask-worker-space/
 Vis_minian.ipynb
 debugging.py
+mine_pub/

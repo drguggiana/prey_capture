@@ -820,7 +820,7 @@ def flip_DLC_y(traces):
     column_names = np.unique([el[:-1] for el in traces.columns])
     # for all the unique names
     for column in column_names:
-        # if the name + x exists, transform
+        # if the name + y exists, transform
         if column + 'y' in traces.columns:
             # get the y data
             original_data = traces[[column + 'y']].to_numpy()
@@ -874,6 +874,9 @@ def build_interval_tree(intervals):
 
 def parse_bonsai(path_in):
     """Parse bonsai files"""
+
+    # if it's an avi path, convert to bonsai
+    path_in = path_in.replace('.avi', '.csv')
     parsed_data = []
     last_nan = 0
     with open(path_in) as f:

@@ -4,7 +4,6 @@ import functions_bondjango as bd
 import paths
 import functions_data_handling as fd
 import os
-import numpy as np
 import processing_parameters
 
 
@@ -85,10 +84,13 @@ for idx, target_entries in enumerate(full_queries):
                    'output_info': yaml.dump(parsed_search),
                    'target_path': target_path,
                    'dlc_path': paths.dlc_script,
+                   'denoising_path': paths.ca_denoising_script,
                    'cnmfe_path': paths.calcium_script,
+                   'ca_reg_path': paths.update_motion_path,
                    'interval': [2, 3],
                    'analysis_type': parsed_search['analysis_type'],
                    }
+
     # write the file
     with open(paths.snakemake_config, 'w') as f:
         target_file = yaml.dump(config_dict, f)
@@ -97,25 +99,43 @@ for idx, target_entries in enumerate(full_queries):
     if parsed_search['analysis_type'] == 'preprocessing_run':
         # feed the generic txt file for preprocessing
         out_path = os.path.join(paths.analysis_path, 'preprocessing_run.txt')
-    elif parsed_search['analysis_type'] == 'combinedanalysis_run':
-        out_path = os.path.join(paths.analysis_path, 'combinedanalysis_run.txt')
+    elif parsed_search['analysis_type'] == 'tuning_run':
+        out_path = os.path.join(paths.analysis_path, 'tuning_run.txt')
+    elif parsed_search['analysis_type'] == 'mine_run':
+        out_path = os.path.join(paths.analysis_path, 'mine_run.txt')
+    elif parsed_search['analysis_type'] == 'aggregate_run':
+        out_path = os.path.join(paths.analysis_path, 'aggregate_run.txt')
+    elif parsed_search['analysis_type'] == 'update_matches_run':
+        out_path = os.path.join(paths.analysis_path, 'update_cells_match_run.txt')
+    elif parsed_search['analysis_type'] == 'update_vis_tcs_run':
+        out_path = os.path.join(paths.analysis_path, 'update_vis_tc_run.txt')
+    elif parsed_search['analysis_type'] == 'update_kinem_tcs_run':
+        out_path = os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt')
+    elif parsed_search['analysis_type'] == 'update_ca_reg_run':
+        out_path = os.path.join(paths.analysis_path, 'ca_reg_run.txt')
+    elif parsed_search['analysis_type'] == 'setup_cellReg_directory_run':
+        out_path = os.path.join(paths.analysis_path, 'cellreg_setup_run.txt')
     else:
         # feed the aggregation path
         out_path = os.path.join(paths.analysis_path, '_'.join(('preprocessing', *parsed_search.values())) + '.hdf5')
 
     # run snakemake
     preprocess_sp = sp.Popen(['snakemake', out_path, out_path, '--cores', '1',
-                              # '-F',         # (hard) force rerun everything
-                              # '-f',         # (soft) force rerun last step
-                              # '--unlock',   # unlocks the files after force quit
-                              '--rerun-incomplete',
-                              '--verbose',  # make the output more verbose for debugging
-                              # '--debug-dag',  # show the file selection operation, also for debugging
-                              # '--dryrun',  # generates the DAG and everything, but doesn't process
-                              # '--reason',  # print the reason for executing each job
                               '-s', paths.snakemake_scripts,
-                              '-d', paths.snakemake_working],
-                             stdout=sp.PIPE)
+                              '-d', paths.snakemake_working,
+                              # '--use-conda',
+                              # '-F',                       # (hard) force rerun everything
+                              '-f',                       # (soft) force rerun last step
+                              # '--unlock',                 # unlocks the files after force quit
+                              # '--rerun-incomplete',       # rerun incomplete jobs
+                              # '--touch',                  # updates output file timestamp, but doesn't process
+                              # '--verbose',                # make the output more verbose for debugging
+                              # '--debug-dag',              # show the file selection operation, also for debugging
+                              # '--dryrun',                 # generates the DAG and everything, but doesn't process,
+                              # '--reason'  ,               # print the reason for executing each job
+                              ],
+                             stdout=sp.PIPE,
+                             )
 
     stdout = preprocess_sp.communicate()[0]
     print(stdout.decode())
@@ -125,9 +145,31 @@ for idx, target_entries in enumerate(full_queries):
             (os.path.isfile(os.path.join(paths.analysis_path, 'preprocessing_run.txt'))):
         # delete the txt file (specify de novo to not run risks)
         os.remove(os.path.join(paths.analysis_path, 'preprocessing_run.txt'))
-    elif (parsed_search['analysis_type'] == 'combinedanalysis_run') &  \
-            (os.path.isfile(os.path.join(paths.analysis_path, 'combinedanalysis_run.txt'))):
+    elif (parsed_search['analysis_type'] == 'tuning_run') & \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'tuning_run.txt'))):
         # delete the txt file (specify de novo to not run risks)
-        os.remove(os.path.join(paths.analysis_path, 'combinedanalysis_run.txt'))
-
+        os.remove(os.path.join(paths.analysis_path, 'tuning_run.txt'))
+    elif (parsed_search['analysis_type'] == 'mine_run') & \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'mine_run.txt'))):
+        # delete the txt file (specify de novo to not run risks)
+        os.remove(os.path.join(paths.analysis_path, 'mine_run.txt'))
+    elif (parsed_search['analysis_type'] == 'aggregate_run') &  \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'aggregate_run.txt'))):
+        # delete the txt file (specify de novo to not run risks)
+        os.remove(os.path.join(paths.analysis_path, 'aggregate_run.txt'))
+    elif (parsed_search['analysis_type'] == 'update_matches_run') & \
+         (os.path.isfile(os.path.join(paths.analysis_path, 'update_cells_match_run.txt'))):
+        os.remove(os.path.join(paths.analysis_path, 'update_cells_match_run.txt'))
+    elif (parsed_search['analysis_type'] == 'update_vis_tcs_run') & \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'update_vis_tc_run.txt'))):
+        os.remove(os.path.join(paths.analysis_path, 'update_vis_tc_run.txt'))
+    elif (parsed_search['analysis_type'] == 'update_kinem_tcs_run') & \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt'))):
+        os.remove(os.path.join(paths.analysis_path, 'update_kinem_tc_run.txt'))
+    elif (parsed_search['analysis_type'] == 'update_ca_reg_run') & \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'ca_reg_run.txt'))):
+        os.remove(os.path.join(paths.analysis_path, 'ca_reg_run.txt'))
+    elif (parsed_search['analysis_type'] == 'setup_cellReg_directory_run') & \
+            (os.path.isfile(os.path.join(paths.analysis_path, 'cellreg_setup_run.txt'))):
+        os.remove(os.path.join(paths.analysis_path, 'cellreg_setup_run.txt'))
 print('yay')

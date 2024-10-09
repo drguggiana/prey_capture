@@ -152,3 +152,60 @@ def get_roi_stats(footprints):
         roi_info.append(np.hstack((output[3][1, :], output[2][1, :])))
 
     return np.vstack(roi_info)
+
+
+def list_lists_to_array(list_of_lists, alignment='right', on=None):
+    """ Converts a list of lists into a 2D array
+
+    Parameters
+    ----------
+    list_of_lists : list
+
+    Returns
+    -------
+    new_array : np.array
+        Array where each row was an entry in the list of lists
+    """
+
+    max_length = max([len(sublist) for sublist in list_of_lists])
+    new_array = np.empty((len(list_of_lists), max_length))
+    new_array[:] = np.NaN
+
+    for i, sublist in enumerate(list_of_lists):
+
+        if alignment == 'right':
+            start = new_array.shape[-1] - len(sublist)
+            new_array[i, start:] = sublist
+
+        elif alignment == 'left':
+            new_array[i, :len(sublist)] = sublist
+
+        elif alignment == 'on':
+
+            if on is not None:
+                
+                if isinstance(on, np.ndarray) or isinstance(on, list):
+                    on_idx = on[i]
+                elif isinstance(on, int) or isinstance(on, float):
+                    on_idx = int(on)
+                else:
+                    raise ValueError('on must be an array, list or int')
+
+                new_array[i, on_idx:on_idx+len(sublist)] = sublist
+                
+            else:
+                raise ValueError('index must be provided when using alignment on')
+
+        else:
+            raise ValueError('alignment can only be right, left or on')
+
+    return new_array
+
+
+def find_nearest(array, value):
+    idx = (np.abs(array - value)).argmin()
+    return idx, array[idx]
+
+
+def consecutive(data, stepsize=1):
+    return np.split(data, np.where(np.diff(data) > stepsize)[0]+1)

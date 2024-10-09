@@ -1,14 +1,27 @@
 import numpy as np
 import scipy.stats as st
-from functions_matching import interp_motive
 
 
-def wrap(angles, bound=360):
+def wrap(angles, bound=360.):
     """wrap angles to the range 0 to 360 deg"""
     # modified from https://stackoverflow.com/questions/15927755/opposite-of-numpy-unwrap
     out_angles = angles % bound
     return out_angles
 
+
+def wrap_negative(angles, bound=180.):
+    """Wrap angles to the range [-180, 180]"""
+
+    if isinstance(angles, (int, float)):
+        if angles > bound:
+            return (angles % bound) - bound
+        else:
+            return angles
+    else:
+        bound_excess_idx = np.argwhere(angles > bound)
+        out_angles = angles.copy()
+        out_angles[bound_excess_idx] = (angles[bound_excess_idx] % bound) - bound
+        return out_angles
 
 def unwrap(angles, discont=3.141592653589793, axis=0):
     """unwrap angles in degrees"""
@@ -86,9 +99,10 @@ def _circfuncs_common(samples, high, low):
     return samples, ang
 
 
-def jump_killer(data_in, jump_threshold):
+def jump_killer(data_in, jump_threshold, discont=3.141592653589793):
+    from functions_matching import interp_motive
     # unwrap the trace
-    data_in = unwrap(data_in)
+    data_in = unwrap(data_in, discont=discont)
     # id the large jumps
     smooth_map = np.concatenate(([1], np.abs(np.diff(data_in)) < jump_threshold)) == 1
     # generate a vector with indexes
@@ -123,3 +137,12 @@ def accumulated_distance(data_in):
     distance = np.zeros(len(data_in))
     distance[1:] = distance_calculation(data_in[1:, :], data_in[:-1, :])
     return distance
+
+
+def smooth_trace(data, jump=25, kernel_size=5, range=(0, 360), discont=2*np.pi):
+    jump_killed = jump_killer(data, jump, discont=discont)
+    jump_killed[jump_killed > range[-1]] = range[-1]
+    jump_killed[jump_killed < range[0]] = range[0]
+    kernel = np.ones(kernel_size) / kernel_size
+    smoothed = np.convolve(jump_killed, kernel, mode='same')
+    return smoothed

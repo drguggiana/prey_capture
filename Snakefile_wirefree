@@ -1,0 +1,609 @@
+configfile: "snakemake_scripts/config_snake.yaml"
+import os
+import paths
+import yaml
+import json
+import datetime
+import numpy as np
+import processing_parameters
+from itertools import product
+
+
+def yaml_to_json(wildcards):
+
+    """Dumps a single YAML into to a JSON dict for later processing"""
+    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    # escape the double quotes inside the json
+    json_dict = json.dumps(python_dict).replace('"', '\\"')
+    return json_dict
+
+def yaml_list_to_json(wildcards):
+    """Dumps a list of YAMLS files into to a JSON dict for later processing"""
+
+    day_paths = day_selector(wildcards)
+    python_list = [yaml.load(config["file_info"][os.path.basename(el)[:-4]], Loader=yaml.FullLoader)
+                   for el in day_paths]
+    url_dict = {}
+    for idx, el in enumerate(day_paths):
+        url_dict[os.path.basename(el)[:-4]] = python_list[idx]['url']
+    json_dict = json.dumps(url_dict).replace('"', '\\"')
+    return json_dict
+
+def yaml_to_json_single_file(wildcards):
+    """Used only for calcium extraction because we get a weird wildcard input"""
+    experiment_path = day_animal_rig_trial_selector(wildcards)
+    python_dict = yaml.load(config["file_info"][os.path.basename(experiment_path)[:-4]], Loader=yaml.FullLoader)
+    url_dict = {os.path.basename(experiment_path)[:-4]: python_dict['url']}
+    # escape the double quotes inside the json
+    json_dict = json.dumps(url_dict).replace('"', '\\"')
+    return json_dict
+
+
+rule dlc_extraction:
+    """Runs DLC in a new process in its conda environment"""
+    input:
+          lambda wildcards: os.path.join(config["target_path"], config["files"][wildcards.file] + '.avi')
+    output:
+          os.path.join(config["target_path"], "{file}_dlc.h5")
+    params:
+            info=yaml_to_json,
+            dlc_path=config["dlc_path"]
+    shell:
+        r'conda activate DEEPLABCUT & python "{params.dlc_path}" "{input}" "{output}" "{params.info}"'
+
+def dlc_input_selector(wildcards):
+    """Returns a path for the to-be created DLC file if dlc_flag is True"""
+    if config["dlc_flag"][wildcards.file]:
+        return rules.dlc_extraction.output
+    else:
+        return os.path.join(config["target_path"],config["files"][wildcards.file] + '.csv')
+
+def day_selector(wildcards):
+    name_parts = wildcards.file.split('_')
+    day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
+    animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
+    info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
+
+    day_paths = [el['tif_path'] for el in info_list if
+                 (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]]
+                  and el['mouse']==animal and el['date'][:10]==day)]
+    wildcards.day_paths = day_paths
+    return day_paths
+
+def day_animal_rig_trial_selector(wildcards):
+    """"Used to select single experiments for a given mouse on a given day"""
+    file_info = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    return file_info["tif_path"]
+
+
+# TODO finish this rule and separate from calcium extract
+# rule calcium_denoise:
+#     input:
+#         day_animal_rig_trial_selector
+#     output:
+#         os.path.join(paths.temp_path, r'{file}_denoised.tif')
+#     params:
+#         info=yaml_to_json_single_file,
+#         denoising_path=config["denoising_path"]
+#         processing_dir = paths.temp_path
+#     shell:
+#         r'python "{params.denoising_path}" "{input}" "{output}" "{params.processing_dir}" "{params.info}"'
+
+
+rule calcium_extract:
+    input:
+        day_animal_rig_trial_selector
+    output:
+        os.path.join(paths.analysis_path,'{file}_calciumraw.hdf5')
+    params:
+        info=yaml_to_json_single_file,
+        cnmfe_path=config["cnmfe_path"]
+    shell:
+        r'conda activate minian && python "{params.cnmfe_path}" "{input}" "{output}" "{params.info}"'
+
+def day_animal_rig_calcium_file(wildcards):
+    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    animal = python_dict['mouse']
+    rig = python_dict['rig']
+    day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
+    return os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'calciumraw.hdf5')))
+
+
+rule calcium_scatter:
+    input:
+        rules.calcium_extract.output
+    output:
+        os.path.join(config["target_path"], "{file}_calcium.hdf5"),
+    params:
+        info=lambda wildcards: config["file_info"][wildcards.file]
+    script:
+        "snakemake_scripts/scatter_calcium_wirefree.py"
+
+def calcium_input_selector(wildcards):
+    if config["calcium_flag"][wildcards.file]:
+        return rules.calcium_scatter.output
+    else:
+        return os.path.join(config["target_path"],config["files"][wildcards.file] + '.avi')
+
+# --- Cell matching across  all experiments of a given animal --- #
+def matched_input(wildcards):
+    """Find all paths associated with experiments from a given animal"""
+
+    name_parts = wildcards.file.split('_')
+    animal = '_'.join([name_parts[0].upper()] + name_parts[1:3])
+
+    info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
+
+    # leave only the files with calcium data
+    available_dates = np.unique([el['slug'][:10] for el in info_list
+                         if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
+                         (animal in el['mouse'])])
+
+    # Get list od available rigs for files with calcium
+    available_rigs = np.unique([el['rig'] for el in info_list
+                         if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
+                         (animal in el['mouse'])])
+
+    # combine animal names and dates
+    animal_dates = ['_'.join((el, animal)) for el in available_dates]
+
+    # Get unique animal-day-rig combinations
+    unique_combinations = list(list(zip(animal_dates, element)) for
+                               element in product(available_rigs, repeat=len(animal_dates)))
+
+    # create filenames
+    animal_routes = ['_'.join((*el[0], 'calciumraw.hdf5')) for el in unique_combinations]
+
+    # assemble the paths to the calciumraw files
+    animal_routes = [os.path.join(paths.analysis_path, el) for el in animal_routes]
+
+    return animal_routes
+
+
+rule match_cells:
+    """Matches ROIs across all experimental instances from a given mouse."""
+    input:
+        matched_input,
+    output:
+        os.path.join(paths.analysis_path,'{file}_cellMatch.hdf5'),
+    shell:
+        r'conda activate caiman & python "{paths.matching_script}" "{input}" "{output}"'
+
+def match_animal_selector(wildcards):
+    """Returns a path for cell matching across all experiments for a given animal if calcium data is present for the
+    file in question. This triggers the match_cells rule."""
+
+    if config["calcium_flag"][wildcards.file]:
+        # return rules.calcium_extraction.output
+        python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+        animal = python_dict['mouse']
+        # rig = python_dict['rig']
+        return os.path.join(paths.analysis_path,'_'.join((animal, 'cellMatch.hdf5')))
+        # return rules.match_cells.output
+    else:
+        return os.path.join(config["target_path"],config["files"][wildcards.file] + '.avi')
+
+# --- Cell matching across the experiments of a given animal on a particular day --- #
+def matched_day(wildcards):
+    """Finds the matching session for a given file from the same mouse on the same day. The matched files paths are
+    fed to the rule match_cells_day"""
+
+    name_parts = wildcards.file.split('_')
+
+    day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%m_%d_%Y')
+    animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
+
+    info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
+
+    # leave only the files with calcium data on that given day for that mouse
+    matched_slugs = np.unique([os.path.basename(el['avi_path']).split('.')[0] for el in info_list
+                         if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
+                         (animal in el['mouse']) &
+                         (day in el['slug'])])
+
+    # # assemble the paths to the calciumraw files
+    ca_files = ['_'.join((el, 'calciumraw.hdf5')) for el in matched_slugs]
+    ca_files = [os.path.join(paths.analysis_path, el) for el in ca_files]
+    return ca_files
+
+
+rule match_cells_day:
+    input:
+        matched_day
+    output:
+        os.path.join(paths.analysis_path, '{file}_dayCellMatch.hdf5')
+    shell:
+        r'conda activate caiman & python "{paths.matching_script}" "{input}" "{output}"'
+
+def check_multiple_exist_calcium_files(file):
+    name_parts = file.split('_')
+    day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y')
+    animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
+
+    info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
+
+    # leave only the files with calcium data on that given day for that mouse
+    matched_slugs = np.unique([os.path.basename(el['avi_path']).split('.')[0] for el in info_list
+                         if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
+                         (animal in el['mouse']) &
+                         (day in el['slug'])])
+
+    # # assemble the paths to the calciumraw files
+    ca_files = ['_'.join((el, 'calciumraw.hdf5')) for el in matched_slugs]
+    ca_files = [os.path.join(paths.analysis_path, el) for el in ca_files]
+    multiple_exist = sum([os.path.isfile(file) for file in ca_files])
+    if multiple_exist > 1:
+        return True
+    else:
+        return False
+
+def match_day_selector(wildcards):
+    """Returns a path for cell matching across experiments for a given animal on a given day if calcium data is present
+    for the file in question. This triggers the match_cells_day rule."""
+
+    # If the experiment has calcium data, try matching
+    if config["calcium_flag"][wildcards.file]:
+
+        # Check if multiple Ca2+ files from the day exist. If they do, proceed with the matching
+        if check_multiple_exist_calcium_files:
+            python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+            animal = python_dict['mouse']
+            name_parts = wildcards.file.split('_')
+            day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y').strftime('%m_%d_%Y')
+            return os.path.join(paths.analysis_path,'_'.join((day, animal, 'dayCellMatch.hdf5')))
+
+        # Otherwise return the avi path
+        else:
+            return os.path.join(config["target_path"],config["files"][wildcards.file] + '.avi')
+    else:
+        return os.path.join(config["target_path"],config["files"][wildcards.file] + '.avi')
+
+# --- Cell matching across all experiments of a given animal on a particular rig --- #
+def matched_rig(wildcards):
+    '''
+    Finds all experiments done on a particular rig for a particular animal. These matched files paths are
+    fed to the rule match_cells_rig
+
+    :param wildcards:
+    :return:
+    '''
+
+    name_parts = wildcards.file.split('_')
+    animal = '_'.join([name_parts[0].upper()] + name_parts[1:3])
+    rig = name_parts[-1]
+
+    info_list = [yaml.load(config["file_info"][el],Loader=yaml.FullLoader) for el in config["file_info"]]
+
+    # leave only the files with calcium data on that rig
+    matched_slugs = np.unique([os.path.basename(el['avi_path']).split('.')[0] for el in info_list
+                               if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]] == True) &
+                               (animal in el['mouse']) & (rig in el['rig'])])
+
+    # # assemble the paths to the calciumraw files
+    ca_files = ['_'.join((el, 'calciumraw.hdf5')) for el in matched_slugs]
+    ca_files = [os.path.join(paths.analysis_path,el) for el in ca_files]
+
+    return ca_files
+
+
+rule match_cells_rig:
+    input:
+        matched_rig
+    output:
+        os.path.join(paths.analysis_path, '{file}_rigCellMatch.hdf5')
+    shell:
+        r'conda activate caiman & python "{paths.matching_script}" "{input}" "{output}"'
+
+def match_rig_selector(wildcards):
+    """Returns a path for cell matching across all experiments for a given animal on a particular rig if calcium
+    data is present for the file in question. This triggers the match_cells_rig rule."""
+    if config["calcium_flag"][wildcards.file]:
+        # return rules.calcium_extraction.output
+        file_info = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+        animal = file_info['mouse']
+        rig = file_info['rig']
+        return os.path.join(paths.analysis_path,'_'.join((animal, rig, 'rigCellMatch.hdf5')))
+    else:
+        return os.path.join(config["target_path"],config["files"][wildcards.file] + '.avi')
+
+
+rule preprocess:
+    input:
+          dlc_input_selector,
+          calcium_input_selector,
+          match_day_selector
+    output:
+          os.path.join(paths.analysis_path, "{file}_rawcoord.hdf5"),
+          os.path.join(paths.analysis_path, "{file}.png")
+    params:
+          info=lambda wildcards: config["file_info"][wildcards.file]
+    script:
+          "snakemake_scripts/preprocess_all.py"
+
+
+rule preprocess_compile:
+    input:
+        os.path.join(paths.analysis_path, '{file}_rawcoord.hdf5'),
+    output:
+        os.path.join(paths.analysis_path, "{file}_preproc.hdf5"),
+    params:
+        info=lambda wildcards: config["file_info"][wildcards.file]
+    script:
+        "snakemake_scripts/combine_preprocessing_wf.py"
+
+
+def files_to_day(wildcards):
+    name_parts = wildcards.file.split('_')
+    day = datetime.datetime.strptime('_'.join(name_parts[0:3]), '%m_%d_%Y').strftime('%Y-%m-%d')
+    animal = '_'.join([name_parts[3].upper()] + name_parts[4:6])
+    info_list = [yaml.load(config["file_info"][el], Loader=yaml.FullLoader) for el in config["file_info"]]
+
+    day_routes = [el['avi_path'].replace('.avi', '_preproc.hdf5').replace('VRExperiment', 'AnalyzedData')
+                  for el in info_list if (config['calcium_flag'][os.path.basename(el['avi_path'])[:-4]]
+                  and el['mouse']==animal and el['date'][:10]==day)]
+
+    wildcards.day_routes = day_routes
+    return day_routes
+
+def days_to_file(wildcards):
+    python_dict = yaml.load(config["file_info"][wildcards.file], Loader=yaml.FullLoader)
+    animal = python_dict['mouse']
+    day = datetime.datetime.strptime(python_dict['date'], '%Y-%m-%dT%H:%M:%SZ').strftime('%m_%d_%Y')
+    rig = python_dict['rig']
+    return os.path.join(paths.analysis_path, '_'.join((day, animal, rig, 'regressionday.hdf5')))
+
+
+def all_days(wildcards):
+    # initialize the keyword list
+    keyword_list = []
+
+    # run through all files in the config
+    for files in config["file_info"].keys():
+        # get the day, rig and animal
+        name_parts = files.split('_')
+        day = '_'.join(name_parts[0:3])
+        rig = name_parts[6]
+        animal = '_'.join(name_parts[7:10])
+        keyword_list.append([day, animal, rig])
+
+    # ID the unique combinations
+    unique_patterns = np.unique(np.array(keyword_list), axis=0)
+    # generate the corresponding file names and output
+    path_list = [os.path.join(paths.analysis_path, '_'.join((el[0], el[1], el[2], 'tcday.hdf5')))
+                 for el in unique_patterns]
+
+    return path_list
+
+
+rule tc_day:
+    input:
+        os.path.join(paths.analysis_path, '{file}_preproc.hdf5')
+    output:
+        os.path.join(paths.analysis_path, '{file}_tcday.hdf5')
+    params:
+        file_info = lambda wildcards: config["file_info"][wildcards.file]
+    script:
+        "snakemake_scripts/wf_tc_calculate.py"
+
+def matched_tc_files(wildcards):
+    """Finds the matching session for a given file from the same mouse on the same day. The matched files paths are
+    fed to the rule tc_day_combine"""
+
+    name_parts = wildcards.file.split('_')
+
+    day = datetime.datetime.strptime('_'.join(name_parts[0:3]),'%m_%d_%Y').strftime('%m_%d_%Y')
+    animal = '_'.join([name_parts[7].upper()] + name_parts[8:10])
+
+    if os.path.isfile(os.path.join(paths.analysis_path, f'{day[0]}_{animal[0]}_tcconsolidate.hdf5')):
+        return os.path.join(paths.analysis_path, f"{wildcards.file}_tcdummy.txt")
+
+    else:
+        info_list = [yaml.load(config["file_info"][el],Loader=yaml.FullLoader) for el in config["file_info"]]
+
+        # leave only the tuning curve files on a given day for that mouse
+        match_tc_files = [el['avi_path'].replace('.avi', '_tcday.hdf5').replace('VRExperiment', 'AnalyzedData') for el in info_list
+                         if (animal in el['mouse']) & (day in el['slug'])]
+
+        if (len(match_tc_files) < 2) or not all([os.path.isfile(tc_file) for tc_file in match_tc_files]):
+            print(f'Not all tuning curve files are present for {animal} on {day}')
+            return os.path.join(paths.analysis_path, f"{wildcards.file}_tcdummy.txt")
+
+        else:
+            return match_tc_files
+
+
+rule tc_day_combine:
+    """Combines TC files for matched experiments"""
+    input:
+        matched_tc_files,
+        # match_rig_selector
+    output:
+        temp(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"))
+    params:
+        info=lambda wildcards: config["file_info"]
+    script:
+        "snakemake_scripts/wf_tc_consolidate.py"
+
+
+rule agg_tcs:
+    input:
+        expand(os.path.join(paths.analysis_path, "{file}_tcconsolidate.hdf5"), file=config['files'])
+    wildcard_constraints:
+        query=".*_agg.*"
+
+
+rule update_cell_matches:
+    input:
+        os.path.join(paths.analysis_path,'{file}_preproc.hdf5'),
+        os.path.join(paths.analysis_path, '{file}_tcday.hdf5')
+    output:
+        temp(os.path.join(paths.analysis_path, "{file}_update_dummy_matches.txt"))
+    script:
+        "snakemake_scripts/update_cell_matches.py"
+
+
+rule update_visual_tcs:
+    input:
+        os.path.join(paths.analysis_path,'{file}_preproc.hdf5'),
+        os.path.join(paths.analysis_path, '{file}_tcday.hdf5')
+    output:
+        temp(os.path.join(paths.analysis_path, "{file}_update_dummy_vis_tcs.txt"))
+    params:
+        file_info = lambda wildcards: config["file_info"][wildcards.file]
+    script:
+        "snakemake_scripts/update_visual_tuning.py"
+
+
+rule update_kinematic_tcs:
+    input:
+        os.path.join(paths.analysis_path,'{file}_preproc.hdf5'),
+        os.path.join(paths.analysis_path, '{file}_tcday.hdf5')
+    output:
+        temp(os.path.join(paths.analysis_path, "{file}_update_dummy_kinem_tcs.txt"))
+    params:
+        file_info = lambda wildcards: config["file_info"][wildcards.file]
+    script:
+        "snakemake_scripts/update_kinematic_tc_wf.py"
+
+
+rule update_calcium_registration:
+    input:
+        os.path.join(paths.vrexperiment_path,'{file}.tif')
+    output:
+        temp(os.path.join(paths.analysis_path, "{file}_update_ca_reg.txt"))
+    params:
+        file_info = lambda wildcards: config["file_info"][wildcards.file],
+        reg_path=config["ca_reg_path"]
+    shell:
+        r'conda activate minian && python "{params.reg_path}" "{input}" "{output}" "{params.file_info}"'
+
+
+rule setup_cellReg_directory:
+    input:
+        os.path.join(paths.analysis_path,'{file}_preproc.hdf5')
+    output:
+        temp(os.path.join(paths.analysis_path, "{file}_cellReg_setup_dummy.txt"))
+    params:
+        file_info = lambda wildcards: config["file_info"][wildcards.file],
+    script:
+        "snakemake_scripts/group_calcium_data_for_cellReg.py"
+
+
+rule mine:
+    input:
+        os.path.join(paths.analysis_path,"{file}_preproc.hdf5"),
+    output:
+        os.path.join(paths.analysis_path,"{file}_mine.hdf5")
+    params:
+        file_info=lambda wildcards: config["file_info"][wildcards.file]
+    script:
+        "snakemake_scripts/run_mine_wf.py"
+
+# --- Top level rules --- #
+
+rule preprocessing_run:
+    input:
+          expand(os.path.join(paths.analysis_path,"{file}"+'_preproc.hdf5'), file=config['files'])
+    output:
+          os.path.join(paths.analysis_path, "preprocessing_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"
+
+
+rule tuning_run:
+    input:
+          expand(os.path.join(paths.analysis_path, "{file}_tcdummy.txt"), file=config['files'])
+           #tcdummy.txt, tcday.hdf5
+    output:
+          os.path.join(paths.analysis_path, "tuning_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"
+
+rule mine_run:
+    input:
+          expand(os.path.join(paths.analysis_path,"{file}"+'_mine.hdf5'), file=config['files'])
+    output:
+          os.path.join(paths.analysis_path, "mine_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"
+
+
+rule aggregate_run:
+    input:
+          expand(os.path.join(paths.analysis_path,"{file}"+'_combinedanalysis.hdf5'), file=config['files']),
+    output:
+          os.path.join(paths.analysis_path, "aggregate_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"
+
+
+rule update_cell_matches_run:
+    input:
+        expand(os.path.join(paths.analysis_path,"{file}_update_dummy_matches.txt"), file=config['files'])
+    output:
+        os.path.join(paths.analysis_path, "update_cells_match_run.txt")
+    params:
+        file_info=expand("{info}",info=config["file_info"].values()),
+        output_info=config["output_info"]
+    script:
+        "snakemake_scripts/full_run.py"
+
+
+rule update_visual_tcs_run:
+    input:
+        expand(os.path.join(paths.analysis_path,"{file}_update_dummy_vis_tcs.txt"), file=config['files'])
+    output:
+        os.path.join(paths.analysis_path, "update_vis_tc_run.txt")
+    params:
+        file_info=expand("{info}",info=config["file_info"].values()),
+        output_info=config["output_info"]
+    script:
+        "snakemake_scripts/full_run.py"
+
+
+rule update_kinem_tcs_run:
+    input:
+        expand(os.path.join(paths.analysis_path,"{file}_update_dummy_kinem_tcs.txt"), file=config['files'])
+    output:
+        os.path.join(paths.analysis_path, "update_kinem_tc_run.txt")
+    params:
+        file_info=expand("{info}",info=config["file_info"].values()),
+        output_info=config["output_info"]
+    script:
+        "snakemake_scripts/full_run.py"
+
+
+rule update_ca_reg_run:
+    input:
+          expand(os.path.join(paths.analysis_path, "{file}_update_ca_reg.txt"), file=config['files'])
+    output:
+          os.path.join(paths.analysis_path, "ca_reg_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"
+
+
+rule cellReg_setup_run:
+    input:
+          expand(os.path.join(paths.analysis_path, "{file}_cellReg_setup_dummy.txt"), file=config['files'])
+    output:
+          os.path.join(paths.analysis_path, "cellreg_setup_run.txt")
+    params:
+          file_info=expand("{info}", info=config["file_info"].values()),
+          output_info=config["output_info"]
+    script:
+          "snakemake_scripts/full_run.py"
