@@ -4,7 +4,7 @@ from paths import *
 from functions_plotting import *
 from os.path import join, split
 from functions_misc import *
-from functions_kinematic import *
+from src.functions_kinematic import *
 import pandas as pd
 import matplotlib
 from bokeh.plotting import figure, show
