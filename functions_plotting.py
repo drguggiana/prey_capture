@@ -696,7 +696,7 @@ def get_figure_dimensions(render_fig):
     """Get a rendered figures pixel dimensions"""
 
     # get the original width and height of the figure
-    px_width = render_fig.properties_with_values()['plot_width']
+    px_width = render_fig.properties_with_values()['width']
     # set flag for which dim to change later
     flag_width = 'plot'
     # get the frame width if the plot one wasn't defined
@@ -704,7 +704,7 @@ def get_figure_dimensions(render_fig):
         px_width = render_fig.properties_with_values()['frame_width']
         flag_width = 'frame'
     # repeat for height
-    px_height = render_fig.properties_with_values()['plot_height']
+    px_height = render_fig.properties_with_values()['height']
     flag_height = 'plot'
     if px_height is None:
         px_height = render_fig.properties_with_values()['frame_height']

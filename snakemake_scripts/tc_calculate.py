@@ -543,6 +543,9 @@ if __name__ == '__main__':
                     latents = h['latents']
                     motifs = h['motifs']
                     egocentric_coords = h['egocentric_coord']
+                    # Convert column names to str from bytes
+                    column_name_to_str = {col: str(col).replace("b'", "").replace("'", "") for col in egocentric_coords.columns}
+                    egocentric_coords = egocentric_coords.rename(columns=column_name_to_str)
                     egocentric_coords = egocentric_coords.loc[:, ['cricket_0_x', 'cricket_0_y']]
                     egocentric_coords = egocentric_coords.rename(columns={'cricket_0_x': 'ego_cricket_x',
                                                                           'cricket_0_y': 'ego_cricket_y'})

@@ -47,8 +47,8 @@ if '_motifs.hdf5' in motifs_path:
 
     # load the motifs
     with h5py.File(motifs_path, 'r') as f:
-        columns = np.array(f['columns'])
-        if columns[0] != 'all_nans':
+        columns = np.array([str(el).replace("b'", "").replace("'", "") for el in np.array(f['columns'])])
+        if 'all_nans' not in str(columns[0]):
 
             egocentric_coord = pd.DataFrame(np.array(f['egocentric_coord']).T, columns=columns)
             latents = np.array(f['latents'])

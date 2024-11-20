@@ -64,6 +64,7 @@ def load_preprocessing(input_path, data_all, latents_flag=True, matching_flag=Tr
                 try:
                     temp_data = pd.read_hdf(el, 'matched_calcium')
                 except KeyError:
+                    print(f'Calcium is not present in file {el}, skipping.')
                     continue
             temp_data['id'] = data_all[idx]['id']
             meta_list.append([data_all[idx][el1] for el1 in processing_parameters.meta_fields])
@@ -94,7 +95,7 @@ def load_preprocessing(input_path, data_all, latents_flag=True, matching_flag=Tr
     return data_list, frame_list, meta_list
 
 
-def load_regression(all_paths, variable_list, time_shifts):
+def load_regression(all_paths, variable_list, time_shifts, skip_regressors=False):
     """Load regression files from a list of paths and the databased info"""
     # allocate the outputs
     correlations = []
@@ -105,8 +106,11 @@ def load_regression(all_paths, variable_list, time_shifts):
     animal_list = []
     day_list = []
     joint_list = []
-    # get the regression types
-    regressors = processing_parameters.regressors
+    if skip_regressors:
+        regressors = ['']
+    else:
+        # get the regression types
+        regressors = processing_parameters.regressors
 
     # for all the list items
     for idx0, data_path in enumerate(all_paths):
@@ -155,7 +159,10 @@ def load_regression(all_paths, variable_list, time_shifts):
                     # for all the regression types
                     for reg in regressors:
                         # get the relevant keys
-                        current_regressor = [el for el in current_feature if reg in el]
+                        if reg == '':
+                            current_regressor = current_feature
+                        else:
+                            current_regressor = [el for el in current_feature if reg in el]
                         # for real vs shuffle
                         for rvs in ['real', 'shuffle']:
                             # get the real/shuffle keys
@@ -163,14 +170,14 @@ def load_regression(all_paths, variable_list, time_shifts):
                             # for the time shifts
                             for shift in time_shifts:
                                 # get the current time keys
-                                current_shift = [el for el in current_rvs if str(shift) in el]
+                                current_shift = [el for el in current_rvs if 'shift' + str(shift) in el]
 
                                 # process the performances and weights
                                 if not skip_flag:
-                                    # print(current_shift, reg, rvs, shift, animal, day)
                                     # performance
                                     current_correlation = [el for el in current_shift if
                                                            ('cc' in el) and ('_std' not in el)]
+                                    print(current_correlation, animal, day, reg, rvs, shift)
                                     assert len(current_correlation) == 1, 'more than one item in the cc list'
                                     cc_feature_list.append(
                                         [feature, np.array(h['/regression/' + current_correlation[0]]), reg, rvs,

@@ -47,7 +47,7 @@ rule dlc_extraction:
             info=yaml_to_json,
             dlc_path=config["dlc_path"],
     shell:
-        r'conda activate DLC-GPU & python "{params.dlc_path}" "{input}" "{output}" "{params.info}"'
+        r'conda activate DEEPLABCUT & python "{params.dlc_path}" "{input}" "{output}" "{params.info}"'
 
 
 def dlc_input_selector(wildcards):
